@@ -1,16 +1,25 @@
-//! Exactly seven bounded oracles.
+//! Exactly nine bounded oracles.
 //!
 //! Each oracle is a pure check over bounded inputs — the current world,
 //! the receipt log, and a replayable fixture — and returns a verdict.
-//! `run_all` returns a fixed-size array, so the count of seven is enforced
+//! `run_all` returns a fixed-size array, so the count of nine is enforced
 //! by the type system.
+//!
+//! Oracles 1–2 audit state, 3–6 audit the receipt log, 7 replays the whole
+//! trial through the real implementation, 8 checks the hash chain and that
+//! refusals mutate nothing, and 9 recomputes every expected outcome with
+//! an independent shadow evaluator that never trusts receipt fields — so a
+//! receipt lie that is internally consistent (and would pass 3–6) is still
+//! caught.
+
+use std::collections::BTreeMap;
 
 use crate::boundary::{
-    GatherCommand, MassGrams, OutcomeKind, Receipt, Stamina, StaminaBand, World, YIELD_TABLE_GRAMS,
-    submit,
+    GatherCommand, MassGrams, OutcomeKind, Receipt, STAMINA_COST_BY_BAND, Stamina, StaminaBand,
+    World, YIELD_TABLE_GRAMS, submit,
 };
 
-pub const ORACLE_COUNT: usize = 7;
+pub const ORACLE_COUNT: usize = 9;
 
 pub struct OracleVerdict {
     pub name: &'static str,
@@ -41,6 +50,8 @@ pub fn run_all(ctx: &OracleCtx<'_>) -> [OracleVerdict; ORACLE_COUNT] {
         closed_reasons(ctx),
         cell_bounds(ctx),
         replay_determinism(ctx),
+        refusal_zero_mutation(ctx),
+        shadow_expectation(ctx),
     ]
 }
 
@@ -150,8 +161,8 @@ fn cell_bounds(ctx: &OracleCtx<'_>) -> OracleVerdict {
     )
 }
 
-/// 7. Determinism: replaying the same fixture and commands reproduces the
-///    same receipts and the same final world hash.
+/// 7. Determinism: replaying the same fixture and commands through the
+///    real implementation reproduces the same receipts and final hash.
 fn replay_determinism(ctx: &OracleCtx<'_>) -> OracleVerdict {
     let mut replay_world = (ctx.build_fixture)();
     let replay_lines: Vec<String> = ctx
@@ -170,10 +181,210 @@ fn replay_determinism(ctx: &OracleCtx<'_>) -> OracleVerdict {
     )
 }
 
+/// 8. The hash chain holds and refusals are byte-identical no-ops: each
+///    receipt's before-hash equals the previous after-hash (starting from
+///    the fixture hash), every Refused receipt leaves the hash unchanged,
+///    and every mass-moving receipt changes it.
+fn refusal_zero_mutation(ctx: &OracleCtx<'_>) -> OracleVerdict {
+    let fixture_hash = (ctx.build_fixture)().hash();
+    let mut violations = 0usize;
+    let mut expected_before = fixture_hash;
+    for receipt in ctx.log {
+        if receipt.world_hash_before != expected_before {
+            violations += 1;
+        }
+        match receipt.outcome {
+            OutcomeKind::Refused(_) => {
+                if receipt.world_hash_after != receipt.world_hash_before {
+                    violations += 1;
+                }
+            }
+            _ => {
+                if receipt.world_hash_after == receipt.world_hash_before {
+                    violations += 1;
+                }
+            }
+        }
+        expected_before = receipt.world_hash_after;
+    }
+    OracleVerdict::new(
+        "refusal_zero_mutation",
+        violations == 0,
+        format!("{violations} hash-chain or mutation violations"),
+    )
+}
+
+/// 9. Independent expectation: a shadow evaluator recomputes every step
+///    from the immutable fixture and inputs — its own state tracking, its
+///    own band thresholds, the shared spec tables — and compares against
+///    the receipts. It never trusts a receipt field, so an internally
+///    consistent receipt lie still fails here.
+fn shadow_expectation(ctx: &OracleCtx<'_>) -> OracleVerdict {
+    let mut shadow = ShadowState::from_fixture(&(ctx.build_fixture)());
+    let mut violations = 0usize;
+    if ctx.log.len() != ctx.commands.len() {
+        violations += 1;
+    }
+    for (cmd, receipt) in ctx.commands.iter().zip(ctx.log) {
+        let expected = shadow.step(cmd);
+        if !expected.matches(receipt) {
+            violations += 1;
+        }
+    }
+    OracleVerdict::new(
+        "shadow_expectation",
+        violations == 0,
+        format!("{violations} receipts diverge from the shadow evaluator"),
+    )
+}
+
+/// Independent re-interpretation of the grammar. Deliberately does not use
+/// the owners, the boundary orchestrator, `Stamina::band`, or any receipt
+/// field — plain integers, its own threshold literals, and the shared spec
+/// tables only.
+struct ShadowState {
+    stamina: BTreeMap<u64, u8>,
+    sites: BTreeMap<u64, (usize, u64)>,
+    claims: BTreeMap<u64, (u64, u64, bool)>,
+}
+
+struct ShadowExpectation {
+    outcome_code: &'static str,
+    reason_code: &'static str,
+    witnessed: bool,
+    spent: u8,
+    mass_grams: u64,
+    band_index: Option<usize>,
+    tier_index: Option<usize>,
+}
+
+fn shadow_band_index(points: u8) -> usize {
+    match points {
+        0..=9 => 0,
+        10..=39 => 1,
+        40..=79 => 2,
+        _ => 3,
+    }
+}
+
+impl ShadowState {
+    /// Reads only the fixture's seeded data through read-only iterators.
+    fn from_fixture(fixture: &World) -> Self {
+        Self {
+            stamina: fixture
+                .characters
+                .iter()
+                .map(|(id, s)| (id.0, s.points()))
+                .collect(),
+            sites: fixture
+                .economy
+                .sites_iter()
+                .map(|(id, tier, stock)| (id.0, (tier.index(), stock.grams())))
+                .collect(),
+            claims: fixture
+                .social
+                .claims_iter()
+                .map(|(id, holder, site, witnessed)| (id.0, (holder.0, site.0, witnessed)))
+                .collect(),
+        }
+    }
+
+    fn step(&mut self, cmd: &GatherCommand) -> ShadowExpectation {
+        let witnessed = self
+            .claims
+            .get(&cmd.claim.0)
+            .is_some_and(|(_, _, flag)| *flag);
+        let refuse = |reason: &'static str| ShadowExpectation {
+            outcome_code: "refused",
+            reason_code: reason,
+            witnessed,
+            spent: 0,
+            mass_grams: 0,
+            band_index: None,
+            tier_index: None,
+        };
+
+        // Gate 1: social.
+        let Some(&(holder, claim_site, claim_witnessed)) = self.claims.get(&cmd.claim.0) else {
+            return refuse("unknown_claim");
+        };
+        if holder != cmd.actor.0 {
+            return refuse("claim_not_held_by_actor");
+        }
+        if claim_site != cmd.site.0 {
+            return refuse("claim_site_mismatch");
+        }
+        if !claim_witnessed {
+            return refuse("claim_not_witnessed");
+        }
+        // Gate 2: character.
+        let Some(&points) = self.stamina.get(&cmd.actor.0) else {
+            return refuse("unknown_actor");
+        };
+        let band = shadow_band_index(points);
+        if band == 0 {
+            return refuse("actor_exhausted");
+        }
+        let cost = STAMINA_COST_BY_BAND[band];
+        if points < cost {
+            return refuse("insufficient_stamina");
+        }
+        // Gate 3: economy and the 4x4 cell.
+        let Some(&(tier, stock)) = self.sites.get(&cmd.site.0) else {
+            return refuse("unknown_site");
+        };
+        if stock == 0 {
+            return refuse("site_empty");
+        }
+        let requested = YIELD_TABLE_GRAMS[band][tier];
+        let granted = requested.min(stock);
+        // Apply to shadow state.
+        self.stamina.insert(cmd.actor.0, points - cost);
+        self.sites.insert(cmd.site.0, (tier, stock - granted));
+        let (outcome_code, reason_code) = if granted < requested {
+            ("partial", "site_nearly_depleted")
+        } else {
+            ("accepted", "-")
+        };
+        ShadowExpectation {
+            outcome_code,
+            reason_code,
+            witnessed,
+            spent: cost,
+            mass_grams: granted,
+            band_index: Some(band),
+            tier_index: Some(tier),
+        }
+    }
+}
+
+impl ShadowExpectation {
+    fn matches(&self, receipt: &Receipt) -> bool {
+        let codes_match = receipt.outcome.code() == self.outcome_code
+            && receipt.outcome.reason_code() == self.reason_code
+            && receipt.witnessed == self.witnessed
+            && receipt.stamina_spent == self.spent
+            && receipt.mass_moved.grams() == self.mass_grams;
+        // Band/tier on refusals are informational; on yields they are part
+        // of the claim being audited.
+        let cell_match = match (self.band_index, self.tier_index) {
+            (Some(band), Some(tier)) => {
+                receipt.band.map(|b| b.index()) == Some(band)
+                    && receipt.tier.map(|t| t.index()) == Some(tier)
+            }
+            _ => true,
+        };
+        codes_match && cell_match
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::boundary::{CharacterId, ClaimId, InfraTier, PartialReason, RefusalReason, SiteId};
+    use crate::boundary::{
+        CharacterId, ClaimId, InfraTier, PartialReason, RefusalReason, SiteId, grammar_fingerprint,
+        validate_world_coherence,
+    };
     use crate::character::CharacterOwner;
     use crate::economy::EconomyOwner;
     use crate::social::SocialOwner;
@@ -185,47 +396,40 @@ mod tests {
                 (CharacterId(1), Stamina::new(90).unwrap()),
                 (CharacterId(2), Stamina::new(25).unwrap()),
                 (CharacterId(3), Stamina::new(5).unwrap()),
-            ]),
+            ])
+            .unwrap(),
             economy: EconomyOwner::seed_sites([
                 (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
                 (SiteId(2), InfraTier::Crude, MassGrams::new(300)),
-            ]),
+            ])
+            .unwrap(),
             social: SocialOwner::seed_claims([
                 (ClaimId(1), CharacterId(1), SiteId(1), true),
                 (ClaimId(2), CharacterId(2), SiteId(2), true),
                 (ClaimId(3), CharacterId(2), SiteId(1), false),
                 (ClaimId(4), CharacterId(3), SiteId(2), true),
-            ]),
+            ])
+            .unwrap(),
         }
     }
 
     fn commands() -> Vec<GatherCommand> {
+        let gather = |actor, claim, site| GatherCommand {
+            actor: CharacterId(actor),
+            claim: ClaimId(claim),
+            site: SiteId(site),
+        };
         vec![
-            GatherCommand {
-                actor: CharacterId(1),
-                claim: ClaimId(1),
-                site: SiteId(1),
-            },
-            GatherCommand {
-                actor: CharacterId(2),
-                claim: ClaimId(2),
-                site: SiteId(2),
-            },
-            GatherCommand {
-                actor: CharacterId(2),
-                claim: ClaimId(3),
-                site: SiteId(1),
-            },
-            GatherCommand {
-                actor: CharacterId(3),
-                claim: ClaimId(4),
-                site: SiteId(2),
-            },
+            gather(1, 1, 1),
+            gather(2, 2, 2),
+            gather(2, 3, 1),
+            gather(3, 4, 2),
         ]
     }
 
     fn run_fixture() -> (World, Vec<GatherCommand>, Vec<Receipt>, MassGrams) {
         let mut world = fixture();
+        validate_world_coherence(&world).unwrap();
         let baseline = world.economy.total_mass();
         let cmds = commands();
         let log: Vec<Receipt> = cmds
@@ -255,7 +459,7 @@ mod tests {
     }
 
     #[test]
-    fn all_seven_oracles_pass_on_the_fixture_run() {
+    fn all_nine_oracles_pass_on_the_fixture_run() {
         let (world, cmds, log, baseline) = run_fixture();
         let ctx = OracleCtx {
             world: &world,
@@ -272,6 +476,26 @@ mod tests {
     }
 
     #[test]
+    fn every_receipt_carries_the_grammar_fingerprint() {
+        let (_, _, log, _) = run_fixture();
+        let fingerprint = grammar_fingerprint();
+        assert!(log.iter().all(|r| r.grammar == fingerprint));
+    }
+
+    #[test]
+    fn dangling_claim_is_a_fixture_fault() {
+        let world = World {
+            characters: CharacterOwner::seed([(CharacterId(1), Stamina::new(90).unwrap())])
+                .unwrap(),
+            economy: EconomyOwner::seed_sites([(SiteId(1), InfraTier::Crude, MassGrams::new(100))])
+                .unwrap(),
+            social: SocialOwner::seed_claims([(ClaimId(1), CharacterId(99), SiteId(1), true)])
+                .unwrap(),
+        };
+        assert!(validate_world_coherence(&world).is_err());
+    }
+
+    #[test]
     fn witnessed_gate_oracle_catches_a_doctored_receipt() {
         let (world, cmds, mut log, baseline) = run_fixture();
         log[0].witnessed = false;
@@ -283,6 +507,44 @@ mod tests {
             log: &log,
         };
         assert!(!witnessed_gate(&ctx).pass);
+    }
+
+    /// A consistent lie: the receipt claims the actor was in the Low band
+    /// and moved exactly the Low x Established cell value, with matching
+    /// spent. Every receipt-trusting oracle (3–6) accepts it; only an
+    /// independent recomputation can refuse it.
+    #[test]
+    fn falsification_shadow_oracle_catches_a_consistent_receipt_lie() {
+        let (world, cmds, mut log, baseline) = run_fixture();
+        log[0].band = Some(StaminaBand::Low);
+        log[0].mass_moved = MassGrams::new(600);
+        log[0].stamina_spent = 15;
+        let ctx = OracleCtx {
+            world: &world,
+            baseline_mass: baseline,
+            build_fixture: fixture,
+            commands: &cmds,
+            log: &log,
+        };
+        assert!(witnessed_gate(&ctx).pass);
+        assert!(exhausted_gate(&ctx).pass);
+        assert!(closed_reasons(&ctx).pass);
+        assert!(cell_bounds(&ctx).pass);
+        assert!(!shadow_expectation(&ctx).pass);
+    }
+
+    #[test]
+    fn falsification_zero_mutation_oracle_catches_a_broken_chain() {
+        let (world, cmds, mut log, baseline) = run_fixture();
+        log[2].world_hash_after = log[2].world_hash_after.wrapping_add(1);
+        let ctx = OracleCtx {
+            world: &world,
+            baseline_mass: baseline,
+            build_fixture: fixture,
+            commands: &cmds,
+            log: &log,
+        };
+        assert!(!refusal_zero_mutation(&ctx).pass);
     }
 
     #[test]

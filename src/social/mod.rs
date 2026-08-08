@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::boundary::{CharacterId, ClaimId, Fnv1a, RefusalReason, SiteId};
+use crate::boundary::{CharacterId, ClaimId, FixtureFault, Fnv1a, RefusalReason, SiteId};
 
 struct Claim {
     holder: CharacterId,
@@ -33,24 +33,28 @@ impl WitnessPass {
 }
 
 impl SocialOwner {
+    /// Seeding rejects duplicate IDs — no silent last-write-wins.
     pub fn seed_claims(
         entries: impl IntoIterator<Item = (ClaimId, CharacterId, SiteId, bool)>,
-    ) -> Self {
-        Self {
-            claims: entries
-                .into_iter()
-                .map(|(id, holder, site, witnessed)| {
-                    (
-                        id,
-                        Claim {
-                            holder,
-                            site,
-                            witnessed,
-                        },
-                    )
-                })
-                .collect(),
+    ) -> Result<Self, FixtureFault> {
+        let mut claims = BTreeMap::new();
+        for (id, holder, site, witnessed) in entries {
+            let claim = Claim {
+                holder,
+                site,
+                witnessed,
+            };
+            if claims.insert(id, claim).is_some() {
+                return Err(FixtureFault::DuplicateClaim(id));
+            }
         }
+        Ok(Self { claims })
+    }
+
+    pub fn claims_iter(&self) -> impl Iterator<Item = (ClaimId, CharacterId, SiteId, bool)> + '_ {
+        self.claims
+            .iter()
+            .map(|(id, c)| (*id, c.holder, c.site, c.witnessed))
     }
 
     pub fn is_witnessed(&self, claim: ClaimId) -> Option<bool> {
@@ -99,6 +103,16 @@ mod tests {
             (ClaimId(1), CharacterId(1), SiteId(1), true),
             (ClaimId(3), CharacterId(2), SiteId(1), false),
         ])
+        .unwrap()
+    }
+
+    #[test]
+    fn duplicate_seed_id_is_a_fixture_fault() {
+        let result = SocialOwner::seed_claims([
+            (ClaimId(1), CharacterId(1), SiteId(1), true),
+            (ClaimId(1), CharacterId(2), SiteId(2), false),
+        ]);
+        assert_eq!(result.err(), Some(FixtureFault::DuplicateClaim(ClaimId(1))));
     }
 
     #[test]

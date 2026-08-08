@@ -2,7 +2,7 @@
 //!
 //! Seeds a mechanical-example fixture, submits a fixed command sequence
 //! through the boundary, prints the canonical receipts and deterministic
-//! world hash, then runs the seven bounded oracles. Exits non-zero if any
+//! world hash, then runs the nine bounded oracles. Exits non-zero if any
 //! oracle fails, so `cargo run` is part of the compiler gate.
 //!
 //! The Bevy host is ON HOLD behind the off-by-default `bevy-host` feature
@@ -18,7 +18,7 @@ use std::process::ExitCode;
 
 use boundary::{
     CharacterId, ClaimId, GatherCommand, InfraTier, MassGrams, Receipt, SiteId, Stamina, World,
-    submit,
+    grammar_fingerprint, submit, validate_world_coherence,
 };
 use character::CharacterOwner;
 use economy::EconomyOwner;
@@ -31,15 +31,18 @@ fn fixture() -> World {
     World {
         characters: CharacterOwner::seed([
             (CharacterId(1), Stamina::new(90).expect("within bounds")),
-            (CharacterId(2), Stamina::new(25).expect("within bounds")),
+            (CharacterId(2), Stamina::new(39).expect("within bounds")),
             (CharacterId(3), Stamina::new(5).expect("within bounds")),
-        ]),
+            (CharacterId(4), Stamina::new(12).expect("within bounds")),
+        ])
+        .expect("no duplicate characters"),
         economy: EconomyOwner::seed_sites([
             (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
             (SiteId(2), InfraTier::Crude, MassGrams::new(300)),
             (SiteId(3), InfraTier::Advanced, MassGrams::new(5000)),
             (SiteId(4), InfraTier::None, MassGrams::new(1000)),
-        ]),
+        ])
+        .expect("no duplicate sites"),
         social: SocialOwner::seed_claims([
             (ClaimId(1), CharacterId(1), SiteId(1), true),
             (ClaimId(2), CharacterId(2), SiteId(2), true),
@@ -47,7 +50,9 @@ fn fixture() -> World {
             (ClaimId(4), CharacterId(3), SiteId(2), true),
             (ClaimId(5), CharacterId(1), SiteId(3), true),
             (ClaimId(6), CharacterId(2), SiteId(4), true),
-        ]),
+            (ClaimId(7), CharacterId(4), SiteId(4), true),
+        ])
+        .expect("no duplicate claims"),
     }
 }
 
@@ -70,11 +75,14 @@ fn commands() -> Vec<GatherCommand> {
         gather(1, 1, 2), // refused: claim/site mismatch
         gather(1, 5, 3), // accepted: steady x advanced
         gather(2, 6, 4), // accepted: low x no infrastructure
+        gather(4, 7, 4), // refused: 12 points cannot cover a 15-point spend
     ]
 }
 
 fn main() -> ExitCode {
     let mut world = fixture();
+    validate_world_coherence(&world).expect("fixture is referentially coherent");
+    println!("grammar=0x{:016x}", grammar_fingerprint());
     let baseline_mass = world.economy.total_mass();
     let cmds = commands();
 
@@ -99,6 +107,11 @@ fn main() -> ExitCode {
             println!("site S{} stock_g={}", site.0, stock.grams());
         }
     }
+    println!(
+        "revisions character={} economy={}",
+        world.characters.revision(),
+        world.economy.revision()
+    );
 
     let ctx = OracleCtx {
         world: &world,

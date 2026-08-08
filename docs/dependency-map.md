@@ -130,6 +130,8 @@ flowchart LR
     o5["5 closed_reasons"]
     o6["6 cell_bounds"]
     o7["7 replay_determinism"]
+    o8["8 refusal_zero_mutation"]
+    o9["9 shadow_expectation"]
 
     world --> o1
     world --> o2
@@ -141,12 +143,21 @@ flowchart LR
     world --> o7
     log --> o7
     fix --> o7
+    log --> o8
+    fix --> o8
+    log --> o9
+    fix --> o9
 ```
 
-Oracles 1–2 audit the state, 3–6 audit the receipt log, and 7 replays the
-whole trial from scratch and demands identical receipts and hash. Together
-they cross-check each other: a bug that forges state trips 1/2/7, a bug
-that forges receipts trips 3–6.
+Oracles 1–2 audit the state, 3–6 audit the receipt log, 7 replays the
+whole trial through the real implementation, 8 walks the receipt hash
+chain (refusals must be byte-identical no-ops, yields must change the
+hash), and 9 is an **independent shadow evaluator**: it recomputes every
+expected outcome from the immutable fixture with its own state tracking
+and its own band thresholds, never reading a receipt field. The layers
+catch different lie classes: forged state trips 1/2/7, forged receipts
+trip 3–6/7/8, and an implementation that lies *consistently* — receipts
+and replay agreeing on wrong semantics — trips 9.
 
 ## 6. Where the values live (for hypothesis work)
 
@@ -158,11 +169,20 @@ gate, and the receipts + oracles show the spread immediately:
 | Yield per band × tier | `YIELD_TABLE_GRAMS` in `src/boundary.rs` | 4×4 table, 0–2700 g |
 | Stamina cost per band | `STAMINA_COST_BY_BAND` in `src/boundary.rs` | `[0, 15, 12, 10]` |
 | Band thresholds | `Stamina::band` in `src/boundary.rs` | 0–9 / 10–39 / 40–79 / 80–100 |
-| Fixture (actors, sites, claims, commands) | `fixture()` + `commands()` in `src/main.rs` | 3 actors, 4 sites, 6 claims, 9 commands |
+| Fixture (actors, sites, claims, commands) | `fixture()` + `commands()` in `src/main.rs` | 4 actors, 4 sites, 7 claims, 10 commands |
+
+Every receipt now carries a `grammar=0x…` fingerprint hashed from the
+yield table, the cost table, the realized band mapping over 0–100, and
+the closed reason codes — so a trial record always identifies which
+grammar version produced it. One caveat when experimenting: the shadow
+evaluator (oracle 9) carries its **own** band-threshold literals on
+purpose. Changing thresholds in `Stamina::band` alone turns oracle 9 red
+until the shadow is updated to match — a threshold change must be made
+consciously in both places, which is the point.
 
 Suggested loop for a data-spread hypothesis: edit one table or the
 fixture, run `cargo run`, read the canonical receipt lines as the
-experiment record, and let the seven oracles veto any spread that breaks
+experiment record, and let the nine oracles veto any spread that breaks
 an invariant. The oracle test fixture in `src/oracles.rs` is intentionally
 separate and smaller, so `cargo test` keeps guarding the logic while
 `main.rs` becomes the playground.

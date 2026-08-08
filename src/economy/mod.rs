@@ -1,14 +1,18 @@
 //! Economy owner: the single writer of mass — site stock and inventories.
 //!
 //! Internals are private. The only mutation path is `validate_extract`
-//! (fallible, read-only) followed by `apply_extract` (infallible).
-//! `Extraction` has private fields, so only this module can mint the proof
-//! that an extraction was validated. Mass is `MassGrams` (backed by `u64`),
-//! so negative mass is unrepresentable anywhere in this owner.
+//! (fallible, read-only) followed by `apply_extract`, which consumes the
+//! proof token by value — one token, one apply. The token carries the
+//! owner revision it was minted against; applying a stale token panics,
+//! because that is a boundary bug, never a game outcome. Mass is
+//! `MassGrams` (backed by `u64`), so negative mass is unrepresentable
+//! anywhere in this owner.
 
 use std::collections::BTreeMap;
 
-use crate::boundary::{CharacterId, Fnv1a, InfraTier, MassGrams, RefusalReason, SiteId};
+use crate::boundary::{
+    CharacterId, FixtureFault, Fnv1a, InfraTier, MassGrams, RefusalReason, SiteId,
+};
 
 struct SiteState {
     tier: InfraTier,
@@ -18,14 +22,17 @@ struct SiteState {
 pub struct EconomyOwner {
     sites: BTreeMap<SiteId, SiteState>,
     inventories: BTreeMap<CharacterId, MassGrams>,
+    revision: u64,
 }
 
-/// Proof that an extraction was validated. Private fields: only the economy
-/// owner can construct one. `granted <= stock` held at validation time.
+/// Proof that an extraction was validated against a specific owner
+/// revision, with `granted <= stock` at validation time. Private fields:
+/// only the economy owner can construct one.
 pub struct Extraction {
     site: SiteId,
     to: CharacterId,
     granted: MassGrams,
+    from_revision: u64,
 }
 
 impl Extraction {
@@ -35,14 +42,21 @@ impl Extraction {
 }
 
 impl EconomyOwner {
-    pub fn seed_sites(entries: impl IntoIterator<Item = (SiteId, InfraTier, MassGrams)>) -> Self {
-        Self {
-            sites: entries
-                .into_iter()
-                .map(|(id, tier, stock)| (id, SiteState { tier, stock }))
-                .collect(),
-            inventories: BTreeMap::new(),
+    /// Seeding rejects duplicate IDs — no silent last-write-wins.
+    pub fn seed_sites(
+        entries: impl IntoIterator<Item = (SiteId, InfraTier, MassGrams)>,
+    ) -> Result<Self, FixtureFault> {
+        let mut sites = BTreeMap::new();
+        for (id, tier, stock) in entries {
+            if sites.insert(id, SiteState { tier, stock }).is_some() {
+                return Err(FixtureFault::DuplicateSite(id));
+            }
         }
+        Ok(Self {
+            sites,
+            inventories: BTreeMap::new(),
+            revision: 0,
+        })
     }
 
     pub fn tier(&self, site: SiteId) -> Option<InfraTier> {
@@ -58,6 +72,16 @@ impl EconomyOwner {
             .get(&id)
             .copied()
             .unwrap_or(MassGrams::ZERO)
+    }
+
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    pub fn sites_iter(&self) -> impl Iterator<Item = (SiteId, InfraTier, MassGrams)> + '_ {
+        self.sites
+            .iter()
+            .map(|(id, state)| (*id, state.tier, state.stock))
     }
 
     /// Total mass across sites and inventories; conserved by every apply.
@@ -85,25 +109,37 @@ impl EconomyOwner {
             return Err(RefusalReason::SiteEmpty);
         }
         let granted = requested.min(state.stock);
-        Ok(Extraction { site, to, granted })
+        Ok(Extraction {
+            site,
+            to,
+            granted,
+            from_revision: self.revision,
+        })
     }
 
-    /// Infallible apply: moves granted mass from site stock to the
-    /// receiver's inventory. Total mass is conserved, and the checked
-    /// subtraction (validated as `granted <= stock`) can never go below
-    /// zero — the fallback keeps the apply infallible regardless.
-    pub fn apply_extract(&mut self, extraction: &Extraction) {
-        if let Some(state) = self.sites.get_mut(&extraction.site) {
-            state.stock = state
-                .stock
-                .checked_sub(extraction.granted)
-                .unwrap_or(MassGrams::ZERO);
-        }
+    /// Consumes the token by value: reuse is a compile error. Panics on a
+    /// stale token (minted against an older revision) — a boundary bug,
+    /// never a game outcome. For a fresh validated token the checked
+    /// subtraction cannot fail, and total mass is conserved.
+    pub fn apply_extract(&mut self, extraction: Extraction) {
+        assert_eq!(
+            extraction.from_revision, self.revision,
+            "stale proof token (economy) — boundary bug"
+        );
+        let state = self
+            .sites
+            .get_mut(&extraction.site)
+            .expect("fresh token: validated site exists");
+        state.stock = state
+            .stock
+            .checked_sub(extraction.granted)
+            .expect("fresh token: validated granted <= stock");
         let inventory = self
             .inventories
             .entry(extraction.to)
             .or_insert(MassGrams::ZERO);
         *inventory = inventory.saturating_add(extraction.granted);
+        self.revision += 1;
     }
 
     /// Deterministic: BTreeMaps iterate in key order.
@@ -119,6 +155,8 @@ impl EconomyOwner {
             hasher.update(&id.0.to_be_bytes());
             hasher.update(&inventory.grams().to_be_bytes());
         }
+        hasher.update(b"eco-rev");
+        hasher.update(&self.revision.to_be_bytes());
     }
 }
 
@@ -131,6 +169,16 @@ mod tests {
             (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
             (SiteId(2), InfraTier::Crude, MassGrams::new(300)),
         ])
+        .unwrap()
+    }
+
+    #[test]
+    fn duplicate_seed_id_is_a_fixture_fault() {
+        let result = EconomyOwner::seed_sites([
+            (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
+            (SiteId(1), InfraTier::Crude, MassGrams::new(300)),
+        ]);
+        assert_eq!(result.err(), Some(FixtureFault::DuplicateSite(SiteId(1))));
     }
 
     #[test]
@@ -150,7 +198,7 @@ mod tests {
             .validate_extract(SiteId(2), CharacterId(2), MassGrams::new(400))
             .unwrap();
         assert_eq!(extraction.granted(), MassGrams::new(300));
-        owner.apply_extract(&extraction);
+        owner.apply_extract(extraction);
         assert_eq!(owner.stock(SiteId(2)), Some(MassGrams::ZERO));
         assert_eq!(owner.inventory(CharacterId(2)), MassGrams::new(300));
     }
@@ -161,7 +209,7 @@ mod tests {
         let extraction = owner
             .validate_extract(SiteId(2), CharacterId(2), MassGrams::new(400))
             .unwrap();
-        owner.apply_extract(&extraction);
+        owner.apply_extract(extraction);
         assert_eq!(
             owner
                 .validate_extract(SiteId(2), CharacterId(2), MassGrams::new(1))
@@ -177,7 +225,27 @@ mod tests {
         let extraction = owner
             .validate_extract(SiteId(1), CharacterId(1), MassGrams::new(1800))
             .unwrap();
-        owner.apply_extract(&extraction);
+        owner.apply_extract(extraction);
         assert_eq!(owner.total_mass(), before);
+        assert_eq!(owner.revision(), 1);
+    }
+
+    /// The red form of this test applied one `&Extraction` twice and
+    /// created 1600 g out of thin air (2300 g -> 3900 g). Reusing one
+    /// token is now a compile error (consumed by value); the remaining
+    /// runtime attack — two tokens minted against the same revision —
+    /// must panic loudly instead of silently minting mass.
+    #[test]
+    #[should_panic(expected = "stale proof token")]
+    fn falsification_token_replay_must_not_create_mass() {
+        let mut owner = owner();
+        let first = owner
+            .validate_extract(SiteId(1), CharacterId(1), MassGrams::new(1800))
+            .unwrap();
+        let second = owner
+            .validate_extract(SiteId(1), CharacterId(1), MassGrams::new(1800))
+            .unwrap();
+        owner.apply_extract(first);
+        owner.apply_extract(second);
     }
 }

@@ -4,7 +4,19 @@
 //! active 4x4 design cell (Stamina x GatheringInfrastructure), the closed
 //! outcome/reason vocabulary, canonical receipts, deterministic world
 //! hashing, and the orchestrator that runs *every* validation before any
-//! infallible owner apply.
+//! owner apply.
+//!
+//! Verb policy lives here, not in the owners: the boundary maps stamina to
+//! a band, decides the gather cost, and refuses exhausted actors. Owners
+//! only enforce their own resource semantics (existence, bounds, exact
+//! deltas), so a second verb with a different policy never has to touch an
+//! owner.
+//!
+//! Applies never produce a wrong game outcome: a proof token is consumed
+//! by value (one token, one apply — reuse is a compile error) and carries
+//! the owner revision it was minted against; applying a stale token panics
+//! loudly, because a stale token reaching an apply is a boundary bug, not
+//! a game outcome.
 //!
 //! All fixture and table numbers in this crate are mechanical examples —
 //! they are not balance and not historical truth.
@@ -46,9 +58,10 @@ impl Stamina {
         self.0
     }
 
-    /// Spending can never underflow below zero.
-    pub fn saturating_spend(self, cost: u8) -> Self {
-        Self(self.0.saturating_sub(cost))
+    /// Exact spend: `None` when the cost exceeds the points. There is no
+    /// clamping path — an overdraw is refused at validation, never hidden.
+    pub fn spend_exact(self, cost: u8) -> Option<Self> {
+        self.0.checked_sub(cost).map(Self)
     }
 
     pub fn band(self) -> StaminaBand {
@@ -157,7 +170,7 @@ pub const CELL_COLS: usize = 4;
 /// Gather yield in grams by `[StaminaBand][InfraTier]`.
 /// Mechanical example numbers only — not balance, not historical truth.
 /// The `Exhausted` row is unreachable: validation refuses exhausted actors
-/// before the table is consulted (oracle 4 and oracle 6 check this).
+/// before the table is consulted.
 pub const YIELD_TABLE_GRAMS: [[u64; CELL_COLS]; CELL_ROWS] = [
     [0, 0, 0, 0],
     [250, 400, 600, 900],
@@ -165,8 +178,35 @@ pub const YIELD_TABLE_GRAMS: [[u64; CELL_COLS]; CELL_ROWS] = [
     [750, 1200, 1800, 2700],
 ];
 
-/// Stamina cost of one gather by band. Mechanical example numbers only.
+/// Stamina cost of one gather by band. Verb policy — owned by the
+/// boundary, never by the character owner. Mechanical example numbers.
 pub const STAMINA_COST_BY_BAND: [u8; CELL_ROWS] = [0, 15, 12, 10];
+
+/// Fingerprint of the grammar that produced a receipt: the yield table,
+/// the cost table, the actual band mapping over the full stamina range,
+/// and every closed reason code. Change any of them and every subsequent
+/// receipt carries a different fingerprint, so a trial record always says
+/// which grammar version produced it.
+pub fn grammar_fingerprint() -> u64 {
+    let mut hasher = Fnv1a::default();
+    for row in YIELD_TABLE_GRAMS {
+        for cell in row {
+            hasher.update(&cell.to_be_bytes());
+        }
+    }
+    hasher.update(&STAMINA_COST_BY_BAND);
+    for points in 0..=Stamina::MAX {
+        let stamina = Stamina::new(points).expect("in range by construction");
+        hasher.update(&[stamina.band().index() as u8]);
+    }
+    for reason in RefusalReason::ALL {
+        hasher.update(reason.code().as_bytes());
+    }
+    for reason in PartialReason::ALL {
+        hasher.update(reason.code().as_bytes());
+    }
+    hasher.finish()
+}
 
 // ---------------------------------------------------------------------------
 // Closed outcome and reason vocabulary
@@ -181,11 +221,12 @@ pub enum RefusalReason {
     ClaimSiteMismatch,
     ClaimNotWitnessed,
     ActorExhausted,
+    InsufficientStamina,
     SiteEmpty,
 }
 
 impl RefusalReason {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::UnknownActor,
         Self::UnknownSite,
         Self::UnknownClaim,
@@ -193,6 +234,7 @@ impl RefusalReason {
         Self::ClaimSiteMismatch,
         Self::ClaimNotWitnessed,
         Self::ActorExhausted,
+        Self::InsufficientStamina,
         Self::SiteEmpty,
     ];
 
@@ -205,6 +247,7 @@ impl RefusalReason {
             Self::ClaimSiteMismatch => "claim_site_mismatch",
             Self::ClaimNotWitnessed => "claim_not_witnessed",
             Self::ActorExhausted => "actor_exhausted",
+            Self::InsufficientStamina => "insufficient_stamina",
             Self::SiteEmpty => "site_empty",
         }
     }
@@ -271,6 +314,32 @@ impl OutcomeKind {
     }
 }
 
+/// Faults in seeded data, caught before any trial runs. Closed set: a
+/// fixture either seeds cleanly or names exactly what is incoherent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FixtureFault {
+    DuplicateCharacter(CharacterId),
+    DuplicateSite(SiteId),
+    DuplicateClaim(ClaimId),
+    ClaimHolderUnknown(ClaimId),
+    ClaimSiteUnknown(ClaimId),
+}
+
+/// Referential integrity across owners: every claim must point at a known
+/// holder and a known site. Duplicate IDs are already rejected at seed
+/// time by each owner.
+pub fn validate_world_coherence(world: &World) -> Result<(), FixtureFault> {
+    for (claim, holder, site, _witnessed) in world.social.claims_iter() {
+        if world.characters.stamina(holder).is_none() {
+            return Err(FixtureFault::ClaimHolderUnknown(claim));
+        }
+        if world.economy.tier(site).is_none() {
+            return Err(FixtureFault::ClaimSiteUnknown(claim));
+        }
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Deterministic hashing (FNV-1a 64, no platform or ordering dependence)
 // ---------------------------------------------------------------------------
@@ -308,7 +377,9 @@ pub struct GatherCommand {
 }
 
 /// Canonical receipt for one submitted command. Every field is either a
-/// closed code or a bounded integer, so the canonical line is deterministic.
+/// closed code or a bounded integer, so the canonical line is
+/// deterministic. It records the world hash both before and after the
+/// command and the grammar fingerprint that produced it.
 #[derive(Debug, Clone)]
 pub struct Receipt {
     pub seq: u64,
@@ -322,6 +393,8 @@ pub struct Receipt {
     pub tier: Option<InfraTier>,
     pub stamina_spent: u8,
     pub mass_moved: MassGrams,
+    pub grammar: u64,
+    pub world_hash_before: u64,
     pub world_hash_after: u64,
 }
 
@@ -334,7 +407,8 @@ impl Receipt {
         let tier = self.tier.map_or("-", InfraTier::code);
         format!(
             "seq={} actor=C{} claim=K{} site=S{} outcome={} reason={} witnessed={} \
-             stamina_before={} band={} tier={} spent={} mass_g={} world=0x{:016x}",
+             stamina_before={} band={} tier={} spent={} mass_g={} \
+             grammar=0x{:016x} world_before=0x{:016x} world=0x{:016x}",
             self.seq,
             self.actor.0,
             self.claim.0,
@@ -347,6 +421,8 @@ impl Receipt {
             tier,
             self.stamina_spent,
             self.mass_moved.grams(),
+            self.grammar,
+            self.world_hash_before,
             self.world_hash_after,
         )
     }
@@ -372,11 +448,12 @@ impl World {
 }
 
 // ---------------------------------------------------------------------------
-// Orchestration: validate everything, then apply infallibly
+// Orchestration: validate everything, then apply
 // ---------------------------------------------------------------------------
 
 /// A fully validated gather. Holding one proves that every owner has
-/// approved its part; the applies below cannot fail.
+/// approved its part against its current revision. The tokens inside are
+/// consumed by value when applied — a plan can be applied at most once.
 struct GatherPlan {
     witness: WitnessPass,
     spend: StaminaSpend,
@@ -392,9 +469,19 @@ fn plan_gather(world: &World, cmd: &GatherCommand) -> Result<GatherPlan, Refusal
     let witness = world
         .social
         .validate_witness_gate(cmd.claim, cmd.actor, cmd.site)?;
-    // 2. Character gate: the actor must exist and not be exhausted.
-    let spend = world.characters.validate_spend(cmd.actor)?;
-    let band = spend.band();
+    // 2. Character gate. Verb policy first (boundary): band the actor and
+    //    refuse the exhausted; then resource semantics (owner): exact
+    //    headroom for the verb's cost — no clamping.
+    let stamina = world
+        .characters
+        .stamina(cmd.actor)
+        .ok_or(RefusalReason::UnknownActor)?;
+    let band = stamina.band();
+    if band == StaminaBand::Exhausted {
+        return Err(RefusalReason::ActorExhausted);
+    }
+    let cost = STAMINA_COST_BY_BAND[band.index()];
+    let spend = world.characters.validate_spend(cmd.actor, cost)?;
     // 3. Economy gate: the site must exist and hold stock; the requested
     //    yield comes from the single active 4x4 cell.
     let tier = world
@@ -417,8 +504,12 @@ fn plan_gather(world: &World, cmd: &GatherCommand) -> Result<GatherPlan, Refusal
 }
 
 /// Submit one command through the boundary. All validation happens before
-/// any owner apply; the applies themselves are infallible.
+/// any owner apply; the applies consume their proof tokens by value and
+/// panic only on a stale token, which is a boundary bug, never a game
+/// outcome.
 pub fn submit(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
+    let world_hash_before = world.hash();
+    let grammar = grammar_fingerprint();
     let witnessed = world.social.is_witnessed(cmd.claim).unwrap_or(false);
     let stamina_before = world.characters.stamina(cmd.actor);
 
@@ -435,6 +526,8 @@ pub fn submit(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
             tier: world.economy.tier(cmd.site),
             stamina_spent: 0,
             mass_moved: MassGrams::ZERO,
+            grammar,
+            world_hash_before,
             world_hash_after: world.hash(),
         },
         Ok(plan) => {
@@ -443,14 +536,15 @@ pub fn submit(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
                 .map_or(OutcomeKind::Accepted, OutcomeKind::Partial);
             let stamina_spent = plan.spend.cost();
             let mass_moved = plan.extraction.granted();
-            // Infallible applies — every check already passed.
-            world.characters.apply_spend(&plan.spend);
-            world.economy.apply_extract(&plan.extraction);
+            let claim = plan.witness.claim();
+            // Applies consume the validated tokens by value.
+            world.characters.apply_spend(plan.spend);
+            world.economy.apply_extract(plan.extraction);
             // The social owner's state is unchanged by a gather in this slice.
             Receipt {
                 seq,
                 actor: cmd.actor,
-                claim: plan.witness.claim(),
+                claim,
                 site: cmd.site,
                 outcome,
                 witnessed,
@@ -459,6 +553,8 @@ pub fn submit(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
                 tier: Some(plan.tier),
                 stamina_spent,
                 mass_moved,
+                grammar,
+                world_hash_before,
                 world_hash_after: world.hash(),
             }
         }
@@ -484,6 +580,13 @@ mod tests {
     }
 
     #[test]
+    fn exact_spend_never_clamps() {
+        let stamina = Stamina::new(12).unwrap();
+        assert_eq!(stamina.spend_exact(15), None);
+        assert_eq!(stamina.spend_exact(12), Stamina::new(0));
+    }
+
+    #[test]
     fn bands_cover_full_stamina_range() {
         assert_eq!(Stamina::new(0).unwrap().band(), StaminaBand::Exhausted);
         assert_eq!(Stamina::new(9).unwrap().band(), StaminaBand::Exhausted);
@@ -503,6 +606,11 @@ mod tests {
         for reason in PartialReason::ALL {
             assert_eq!(PartialReason::from_code(reason.code()), Some(reason));
         }
+    }
+
+    #[test]
+    fn grammar_fingerprint_is_stable() {
+        assert_eq!(grammar_fingerprint(), grammar_fingerprint());
     }
 
     #[test]
