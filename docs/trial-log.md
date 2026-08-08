@@ -1,5 +1,30 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-08 — falsification round 2: second verb (`witness`) vs isolation
+
+Full standalone record: `docs/verb-isolation-report.md`. Summary:
+
+- Second verb `witness` added, deliberately inverting every gather
+  pattern: flat cost 5, no exhausted gate, Social+Character only,
+  Economy untouched, zero mass, and the social owner's first mutation
+  path (revision-bound `WitnessGrant`, by-value, stale panics).
+- **Isolation claim held:** `git diff` on `src/character/mod.rs` and
+  `src/economy/mod.rs` is empty — zero lines changed for the new verb.
+  All verb policy lives in the boundary (`Command` dispatch,
+  `plan_witness`, `WITNESS_COST`).
+- **Falsification found and fixed:** the first full run turned oracles 3
+  and 4 red on a legal trial — both had encoded "Accepted ⇒ mass moved",
+  a single-verb assumption. Corrected to key on actual mass movement,
+  which is verb-agnostic and stronger.
+- Closed vocabulary grew consciously: RefusalReason 9 → 11
+  (`claim_already_witnessed`, `cannot_witness_own_claim`), new closed
+  `Verb` enum in every receipt, `WITNESS_COST` folded into the grammar
+  fingerprint.
+- Gate: fmt clean, clippy -D warnings clean, 35/35 tests, run exit 0,
+  all nine oracles PASS across the 16-command two-verb trial.
+- Round-1 HOLD condition (second verb + isolation survives) is met;
+  lifting HOLD remains the author's call.
+
 ## 2026-08-08 — falsification round 1: red first, then green
 
 External review (Codex + author) identified false-green risks in the

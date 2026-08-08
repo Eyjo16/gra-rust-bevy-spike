@@ -114,6 +114,13 @@ flowchart TD
 Nothing mutates until all three gates pass — a refusal at any gate leaves
 the world hash byte-identical.
 
+The second verb, `witness`, follows the same shape with a different
+policy: social gate (claim exists, not own claim, not already witnessed)
+→ character gate (flat `WITNESS_COST`, no exhausted gate) → apply
+(spend stamina, flip the claim's boolean gate). Economy is untouched and
+no mass moves. See `docs/verb-isolation-report.md` for the isolation
+proof.
+
 ## 5. Oracle input map
 
 ```mermaid
@@ -167,9 +174,10 @@ gate, and the receipts + oracles show the spread immediately:
 | What | Where | Currently |
 | --- | --- | --- |
 | Yield per band × tier | `YIELD_TABLE_GRAMS` in `src/boundary.rs` | 4×4 table, 0–2700 g |
-| Stamina cost per band | `STAMINA_COST_BY_BAND` in `src/boundary.rs` | `[0, 15, 12, 10]` |
+| Stamina cost per band (gather) | `STAMINA_COST_BY_BAND` in `src/boundary.rs` | `[0, 15, 12, 10]` |
+| Witness cost (flat) | `WITNESS_COST` in `src/boundary.rs` | `5` |
 | Band thresholds | `Stamina::band` in `src/boundary.rs` | 0–9 / 10–39 / 40–79 / 80–100 |
-| Fixture (actors, sites, claims, commands) | `fixture()` + `commands()` in `src/main.rs` | 4 actors, 4 sites, 7 claims, 10 commands |
+| Fixture (actors, sites, claims, commands) | `fixture()` + `commands()` in `src/main.rs` | 4 actors, 4 sites, 9 claims, 16 commands (two verbs) |
 
 Every receipt now carries a `grammar=0x…` fingerprint hashed from the
 yield table, the cost table, the realized band mapping over 0–100, and

@@ -18,6 +18,10 @@ exactly nine bounded oracles.
    move mass.
 4. **One active 4×4 cell** — Stamina band × GatheringInfrastructure tier is
    the only mechanic interaction in this slice (`YIELD_TABLE_GRAMS`).
+   Two closed verbs share the grammar: `gather` (band-based cost,
+   exhausted gate, moves mass) and `witness` (flat cost, no exhausted
+   gate, flips a claim's boolean gate, moves no mass). All verb policy
+   lives in the boundary — see `docs/verb-isolation-report.md`.
 5. **Accepted / Partial / Refused outcomes** with closed reason enums —
    every reason code round-trips through `from_code`. Overdraw is refused
    (`insufficient_stamina`), never silently clamped.

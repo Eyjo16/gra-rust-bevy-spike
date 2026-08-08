@@ -23,7 +23,7 @@
 
 use crate::character::{CharacterOwner, StaminaSpend};
 use crate::economy::{EconomyOwner, Extraction};
-use crate::social::{SocialOwner, WitnessPass};
+use crate::social::{SocialOwner, WitnessGrant, WitnessPass};
 
 // ---------------------------------------------------------------------------
 // Typed IDs
@@ -182,6 +182,11 @@ pub const YIELD_TABLE_GRAMS: [[u64; CELL_COLS]; CELL_ROWS] = [
 /// boundary, never by the character owner. Mechanical example numbers.
 pub const STAMINA_COST_BY_BAND: [u8; CELL_ROWS] = [0, 15, 12, 10];
 
+/// Stamina cost of witnessing a claim. Deliberately a *different* policy
+/// from gather: flat cost, no band table, and no exhausted gate — an
+/// exhausted character may still attest. Mechanical example number.
+pub const WITNESS_COST: u8 = 5;
+
 /// Fingerprint of the grammar that produced a receipt: the yield table,
 /// the cost table, the actual band mapping over the full stamina range,
 /// and every closed reason code. Change any of them and every subsequent
@@ -195,6 +200,7 @@ pub fn grammar_fingerprint() -> u64 {
         }
     }
     hasher.update(&STAMINA_COST_BY_BAND);
+    hasher.update(&[WITNESS_COST]);
     for points in 0..=Stamina::MAX {
         let stamina = Stamina::new(points).expect("in range by construction");
         hasher.update(&[stamina.band().index() as u8]);
@@ -223,10 +229,12 @@ pub enum RefusalReason {
     ActorExhausted,
     InsufficientStamina,
     SiteEmpty,
+    ClaimAlreadyWitnessed,
+    CannotWitnessOwnClaim,
 }
 
 impl RefusalReason {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 11] = [
         Self::UnknownActor,
         Self::UnknownSite,
         Self::UnknownClaim,
@@ -236,6 +244,8 @@ impl RefusalReason {
         Self::ActorExhausted,
         Self::InsufficientStamina,
         Self::SiteEmpty,
+        Self::ClaimAlreadyWitnessed,
+        Self::CannotWitnessOwnClaim,
     ];
 
     pub fn code(self) -> &'static str {
@@ -249,6 +259,8 @@ impl RefusalReason {
             Self::ActorExhausted => "actor_exhausted",
             Self::InsufficientStamina => "insufficient_stamina",
             Self::SiteEmpty => "site_empty",
+            Self::ClaimAlreadyWitnessed => "claim_already_witnessed",
+            Self::CannotWitnessOwnClaim => "cannot_witness_own_claim",
         }
     }
 
@@ -369,11 +381,39 @@ impl Fnv1a {
 // Commands, receipts, world
 // ---------------------------------------------------------------------------
 
+/// The closed verb vocabulary. Every command is exactly one verb.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verb {
+    Gather,
+    Witness,
+}
+
+impl Verb {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Gather => "gather",
+            Self::Witness => "witness",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct GatherCommand {
     pub actor: CharacterId,
     pub claim: ClaimId,
     pub site: SiteId,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct WitnessCommand {
+    pub witness: CharacterId,
+    pub claim: ClaimId,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Command {
+    Gather(GatherCommand),
+    Witness(WitnessCommand),
 }
 
 /// Canonical receipt for one submitted command. Every field is either a
@@ -383,9 +423,10 @@ pub struct GatherCommand {
 #[derive(Debug, Clone)]
 pub struct Receipt {
     pub seq: u64,
+    pub verb: Verb,
     pub actor: CharacterId,
     pub claim: ClaimId,
-    pub site: SiteId,
+    pub site: Option<SiteId>,
     pub outcome: OutcomeKind,
     pub witnessed: bool,
     pub stamina_before: Option<Stamina>,
@@ -405,14 +446,18 @@ impl Receipt {
             .map_or_else(|| "-".to_owned(), |s| s.points().to_string());
         let band = self.band.map_or("-", StaminaBand::code);
         let tier = self.tier.map_or("-", InfraTier::code);
+        let site = self
+            .site
+            .map_or_else(|| "-".to_owned(), |s| format!("S{}", s.0));
         format!(
-            "seq={} actor=C{} claim=K{} site=S{} outcome={} reason={} witnessed={} \
+            "seq={} verb={} actor=C{} claim=K{} site={} outcome={} reason={} witnessed={} \
              stamina_before={} band={} tier={} spent={} mass_g={} \
              grammar=0x{:016x} world_before=0x{:016x} world=0x{:016x}",
             self.seq,
+            self.verb.code(),
             self.actor.0,
             self.claim.0,
-            self.site.0,
+            site,
             self.outcome.code(),
             self.outcome.reason_code(),
             self.witnessed,
@@ -503,11 +548,39 @@ fn plan_gather(world: &World, cmd: &GatherCommand) -> Result<GatherPlan, Refusal
     })
 }
 
+/// A fully validated witness attestation. Different verb, same doctrine:
+/// every gate passed before any apply, tokens consumed by value.
+struct WitnessPlan {
+    grant: WitnessGrant,
+    spend: StaminaSpend,
+}
+
+fn plan_witness(world: &World, cmd: &WitnessCommand) -> Result<WitnessPlan, RefusalReason> {
+    // 1. Social gate: the claim must exist, not already be witnessed, and
+    //    the witness must not be its holder.
+    let grant = world
+        .social
+        .validate_witness_grant(cmd.claim, cmd.witness)?;
+    // 2. Character gate. Witness verb policy (boundary): flat cost, no
+    //    band table, no exhausted gate — the owner only checks existence
+    //    and exact headroom, exactly as for gather.
+    let spend = world.characters.validate_spend(cmd.witness, WITNESS_COST)?;
+    // 3. Economy: untouched by this verb.
+    Ok(WitnessPlan { grant, spend })
+}
+
 /// Submit one command through the boundary. All validation happens before
 /// any owner apply; the applies consume their proof tokens by value and
 /// panic only on a stale token, which is a boundary bug, never a game
 /// outcome.
-pub fn submit(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
+pub fn submit(world: &mut World, seq: u64, cmd: Command) -> Receipt {
+    match cmd {
+        Command::Gather(gather) => submit_gather(world, seq, gather),
+        Command::Witness(witness) => submit_witness(world, seq, witness),
+    }
+}
+
+fn submit_gather(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
     let world_hash_before = world.hash();
     let grammar = grammar_fingerprint();
     let witnessed = world.social.is_witnessed(cmd.claim).unwrap_or(false);
@@ -516,9 +589,10 @@ pub fn submit(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
     match plan_gather(world, &cmd) {
         Err(reason) => Receipt {
             seq,
+            verb: Verb::Gather,
             actor: cmd.actor,
             claim: cmd.claim,
-            site: cmd.site,
+            site: Some(cmd.site),
             outcome: OutcomeKind::Refused(reason),
             witnessed,
             stamina_before,
@@ -540,12 +614,13 @@ pub fn submit(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
             // Applies consume the validated tokens by value.
             world.characters.apply_spend(plan.spend);
             world.economy.apply_extract(plan.extraction);
-            // The social owner's state is unchanged by a gather in this slice.
+            // The social owner's state is unchanged by a gather.
             Receipt {
                 seq,
+                verb: Verb::Gather,
                 actor: cmd.actor,
                 claim,
-                site: cmd.site,
+                site: Some(cmd.site),
                 outcome,
                 witnessed,
                 stamina_before,
@@ -553,6 +628,60 @@ pub fn submit(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
                 tier: Some(plan.tier),
                 stamina_spent,
                 mass_moved,
+                grammar,
+                world_hash_before,
+                world_hash_after: world.hash(),
+            }
+        }
+    }
+}
+
+fn submit_witness(world: &mut World, seq: u64, cmd: WitnessCommand) -> Receipt {
+    let world_hash_before = world.hash();
+    let grammar = grammar_fingerprint();
+    let witnessed = world.social.is_witnessed(cmd.claim).unwrap_or(false);
+    let stamina_before = world.characters.stamina(cmd.witness);
+    let site = world.social.claim_site(cmd.claim);
+
+    match plan_witness(world, &cmd) {
+        Err(reason) => Receipt {
+            seq,
+            verb: Verb::Witness,
+            actor: cmd.witness,
+            claim: cmd.claim,
+            site,
+            outcome: OutcomeKind::Refused(reason),
+            witnessed,
+            stamina_before,
+            band: stamina_before.map(Stamina::band),
+            tier: None,
+            stamina_spent: 0,
+            mass_moved: MassGrams::ZERO,
+            grammar,
+            world_hash_before,
+            world_hash_after: world.hash(),
+        },
+        Ok(plan) => {
+            let stamina_spent = plan.spend.cost();
+            let claim = plan.grant.claim();
+            // Applies consume the validated tokens by value. This is the
+            // social owner's first mutation path.
+            world.characters.apply_spend(plan.spend);
+            world.social.apply_witness(plan.grant);
+            // The economy owner is untouched by a witness.
+            Receipt {
+                seq,
+                verb: Verb::Witness,
+                actor: cmd.witness,
+                claim,
+                site,
+                outcome: OutcomeKind::Accepted,
+                witnessed,
+                stamina_before,
+                band: stamina_before.map(Stamina::band),
+                tier: None,
+                stamina_spent,
+                mass_moved: MassGrams::ZERO,
                 grammar,
                 world_hash_before,
                 world_hash_after: world.hash(),

@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 
 use crate::boundary::{
-    GatherCommand, MassGrams, OutcomeKind, Receipt, STAMINA_COST_BY_BAND, Stamina, StaminaBand,
-    World, YIELD_TABLE_GRAMS, submit,
+    Command, MassGrams, OutcomeKind, Receipt, STAMINA_COST_BY_BAND, Stamina, StaminaBand, Verb,
+    WITNESS_COST, World, YIELD_TABLE_GRAMS, submit,
 };
 
 pub const ORACLE_COUNT: usize = 9;
@@ -37,7 +37,7 @@ pub struct OracleCtx<'a> {
     pub world: &'a World,
     pub baseline_mass: MassGrams,
     pub build_fixture: fn() -> World,
-    pub commands: &'a [GatherCommand],
+    pub commands: &'a [Command],
     pub log: &'a [Receipt],
 }
 
@@ -90,12 +90,14 @@ fn mass_conserved(ctx: &OracleCtx<'_>) -> OracleVerdict {
 }
 
 /// 3. The witnessed claim is a boolean gate: no receipt moves mass without
-///    a witnessed claim.
+///    a witnessed claim. Keyed on actual mass movement, not outcome kind —
+///    the witness verb is Accepted with zero mass, which the second verb
+///    exposed as a distinct case.
 fn witnessed_gate(ctx: &OracleCtx<'_>) -> OracleVerdict {
     let violations = ctx
         .log
         .iter()
-        .filter(|r| r.outcome.yields_mass() && !r.witnessed)
+        .filter(|r| !r.mass_moved.is_zero() && !r.witnessed)
         .count();
     OracleVerdict::new(
         "witnessed_gate",
@@ -104,13 +106,14 @@ fn witnessed_gate(ctx: &OracleCtx<'_>) -> OracleVerdict {
     )
 }
 
-/// 4. An exhausted actor never yields: every mass-moving receipt sits in a
-///    non-exhausted stamina band.
+/// 4. An exhausted actor never yields mass: every mass-moving receipt sits
+///    in a non-exhausted stamina band. Keyed on actual mass movement — an
+///    exhausted character may still witness (zero mass) by verb policy.
 fn exhausted_gate(ctx: &OracleCtx<'_>) -> OracleVerdict {
     let violations = ctx
         .log
         .iter()
-        .filter(|r| r.outcome.yields_mass())
+        .filter(|r| !r.mass_moved.is_zero())
         .filter(|r| !matches!(r.band, Some(band) if band != StaminaBand::Exhausted))
         .count();
     OracleVerdict::new(
@@ -137,12 +140,14 @@ fn closed_reasons(ctx: &OracleCtx<'_>) -> OracleVerdict {
 
 /// 6. Every yield stays inside the single active 4x4 cell: mass moved never
 ///    exceeds the table value for the recorded band and tier, and an
-///    Accepted outcome matches it exactly.
+///    Accepted outcome matches it exactly. The cell belongs to the gather
+///    verb; witness receipts never move mass (oracle 9 enforces that
+///    independently).
 fn cell_bounds(ctx: &OracleCtx<'_>) -> OracleVerdict {
     let violations = ctx
         .log
         .iter()
-        .filter(|r| r.outcome.yields_mass())
+        .filter(|r| r.verb == Verb::Gather && r.outcome.yields_mass())
         .filter(|r| {
             let (Some(band), Some(tier)) = (r.band, r.tier) else {
                 return true;
@@ -249,6 +254,7 @@ struct ShadowState {
 }
 
 struct ShadowExpectation {
+    verb_code: &'static str,
     outcome_code: &'static str,
     reason_code: &'static str,
     witnessed: bool,
@@ -289,12 +295,20 @@ impl ShadowState {
         }
     }
 
-    fn step(&mut self, cmd: &GatherCommand) -> ShadowExpectation {
+    fn step(&mut self, cmd: &Command) -> ShadowExpectation {
+        match cmd {
+            Command::Gather(gather) => self.step_gather(gather),
+            Command::Witness(witness) => self.step_witness(witness),
+        }
+    }
+
+    fn step_gather(&mut self, cmd: &crate::boundary::GatherCommand) -> ShadowExpectation {
         let witnessed = self
             .claims
             .get(&cmd.claim.0)
             .is_some_and(|(_, _, flag)| *flag);
         let refuse = |reason: &'static str| ShadowExpectation {
+            verb_code: "gather",
             outcome_code: "refused",
             reason_code: reason,
             witnessed,
@@ -347,6 +361,7 @@ impl ShadowState {
             ("accepted", "-")
         };
         ShadowExpectation {
+            verb_code: "gather",
             outcome_code,
             reason_code,
             witnessed,
@@ -356,11 +371,62 @@ impl ShadowState {
             tier_index: Some(tier),
         }
     }
+
+    /// Independent reimplementation of the witness verb: flat cost, no
+    /// exhausted gate, social-then-character order, economy untouched.
+    fn step_witness(&mut self, cmd: &crate::boundary::WitnessCommand) -> ShadowExpectation {
+        let witnessed = self
+            .claims
+            .get(&cmd.claim.0)
+            .is_some_and(|(_, _, flag)| *flag);
+        let refuse = |reason: &'static str| ShadowExpectation {
+            verb_code: "witness",
+            outcome_code: "refused",
+            reason_code: reason,
+            witnessed,
+            spent: 0,
+            mass_grams: 0,
+            band_index: None,
+            tier_index: None,
+        };
+
+        // Gate 1: social.
+        let Some(&(holder, claim_site, claim_witnessed)) = self.claims.get(&cmd.claim.0) else {
+            return refuse("unknown_claim");
+        };
+        if holder == cmd.witness.0 {
+            return refuse("cannot_witness_own_claim");
+        }
+        if claim_witnessed {
+            return refuse("claim_already_witnessed");
+        }
+        // Gate 2: character — flat cost, no exhausted gate.
+        let Some(&points) = self.stamina.get(&cmd.witness.0) else {
+            return refuse("unknown_actor");
+        };
+        if points < WITNESS_COST {
+            return refuse("insufficient_stamina");
+        }
+        // Apply to shadow state: economy untouched.
+        self.stamina.insert(cmd.witness.0, points - WITNESS_COST);
+        self.claims.insert(cmd.claim.0, (holder, claim_site, true));
+        ShadowExpectation {
+            verb_code: "witness",
+            outcome_code: "accepted",
+            reason_code: "-",
+            witnessed,
+            spent: WITNESS_COST,
+            mass_grams: 0,
+            band_index: None,
+            tier_index: None,
+        }
+    }
 }
 
 impl ShadowExpectation {
     fn matches(&self, receipt: &Receipt) -> bool {
-        let codes_match = receipt.outcome.code() == self.outcome_code
+        let codes_match = receipt.verb.code() == self.verb_code
+            && receipt.outcome.code() == self.outcome_code
             && receipt.outcome.reason_code() == self.reason_code
             && receipt.witnessed == self.witnessed
             && receipt.stamina_spent == self.spent
@@ -382,8 +448,8 @@ impl ShadowExpectation {
 mod tests {
     use super::*;
     use crate::boundary::{
-        CharacterId, ClaimId, InfraTier, PartialReason, RefusalReason, SiteId, grammar_fingerprint,
-        validate_world_coherence,
+        CharacterId, ClaimId, GatherCommand, InfraTier, PartialReason, RefusalReason, SiteId,
+        WitnessCommand, grammar_fingerprint, validate_world_coherence,
     };
     use crate::character::CharacterOwner;
     use crate::economy::EconomyOwner;
@@ -413,21 +479,30 @@ mod tests {
         }
     }
 
-    fn commands() -> Vec<GatherCommand> {
-        let gather = |actor, claim, site| GatherCommand {
-            actor: CharacterId(actor),
-            claim: ClaimId(claim),
-            site: SiteId(site),
+    fn commands() -> Vec<Command> {
+        let gather = |actor, claim, site| {
+            Command::Gather(GatherCommand {
+                actor: CharacterId(actor),
+                claim: ClaimId(claim),
+                site: SiteId(site),
+            })
+        };
+        let witness = |witness, claim| {
+            Command::Witness(WitnessCommand {
+                witness: CharacterId(witness),
+                claim: ClaimId(claim),
+            })
         };
         vec![
             gather(1, 1, 1),
             gather(2, 2, 2),
             gather(2, 3, 1),
             gather(3, 4, 2),
+            witness(1, 3),
         ]
     }
 
-    fn run_fixture() -> (World, Vec<GatherCommand>, Vec<Receipt>, MassGrams) {
+    fn run_fixture() -> (World, Vec<Command>, Vec<Receipt>, MassGrams) {
         let mut world = fixture();
         validate_world_coherence(&world).unwrap();
         let baseline = world.economy.total_mass();
@@ -456,6 +531,10 @@ mod tests {
             log[3].outcome,
             OutcomeKind::Refused(RefusalReason::ActorExhausted)
         );
+        assert_eq!(log[4].verb, Verb::Witness);
+        assert_eq!(log[4].outcome, OutcomeKind::Accepted);
+        assert!(!log[4].witnessed, "claim was unwitnessed before the verb");
+        assert_eq!(log[4].mass_moved, MassGrams::ZERO);
     }
 
     #[test]

@@ -17,8 +17,8 @@ mod social;
 use std::process::ExitCode;
 
 use boundary::{
-    CharacterId, ClaimId, GatherCommand, InfraTier, MassGrams, Receipt, SiteId, Stamina, World,
-    grammar_fingerprint, submit, validate_world_coherence,
+    CharacterId, ClaimId, Command, GatherCommand, InfraTier, MassGrams, Receipt, SiteId, Stamina,
+    WitnessCommand, World, grammar_fingerprint, submit, validate_world_coherence,
 };
 use character::CharacterOwner;
 use economy::EconomyOwner;
@@ -51,19 +51,31 @@ fn fixture() -> World {
             (ClaimId(5), CharacterId(1), SiteId(3), true),
             (ClaimId(6), CharacterId(2), SiteId(4), true),
             (ClaimId(7), CharacterId(4), SiteId(4), true),
+            (ClaimId(8), CharacterId(4), SiteId(4), false),
+            (ClaimId(9), CharacterId(1), SiteId(1), false),
         ])
         .expect("no duplicate claims"),
     }
 }
 
-/// A fixed sequence that exercises Accepted, Partial, and every reachable
-/// refusal in the fixture: unwitnessed claim, exhausted actor, empty site,
-/// and claim/site mismatch.
-fn commands() -> Vec<GatherCommand> {
-    let gather = |actor, claim, site| GatherCommand {
-        actor: CharacterId(actor),
-        claim: ClaimId(claim),
-        site: SiteId(site),
+/// A fixed two-verb sequence that exercises Accepted, Partial, and every
+/// reachable refusal in the fixture — including the witness verb's own
+/// refusals and the interplay between the verbs (a witnessed claim
+/// unlocking a gather gate, an exhausted character still allowed to
+/// witness).
+fn commands() -> Vec<Command> {
+    let gather = |actor, claim, site| {
+        Command::Gather(GatherCommand {
+            actor: CharacterId(actor),
+            claim: ClaimId(claim),
+            site: SiteId(site),
+        })
+    };
+    let witness = |witness, claim| {
+        Command::Witness(WitnessCommand {
+            witness: CharacterId(witness),
+            claim: ClaimId(claim),
+        })
     };
     vec![
         gather(1, 1, 1), // accepted: fresh x established
@@ -76,6 +88,12 @@ fn commands() -> Vec<GatherCommand> {
         gather(1, 5, 3), // accepted: steady x advanced
         gather(2, 6, 4), // accepted: low x no infrastructure
         gather(4, 7, 4), // refused: 12 points cannot cover a 15-point spend
+        witness(1, 3),   // accepted: C1 attests C2's claim (flat cost)
+        witness(1, 3),   // refused: claim already witnessed
+        witness(2, 3),   // refused: cannot witness own claim
+        gather(2, 3, 1), // refused: claim now witnessed, but gatherer exhausted
+        witness(3, 8),   // accepted: exhausted C3 may still witness (5 >= 5)
+        witness(3, 9),   // refused: 0 points cannot cover the witness cost
     ]
 }
 
@@ -107,10 +125,17 @@ fn main() -> ExitCode {
             println!("site S{} stock_g={}", site.0, stock.grams());
         }
     }
+    for (claim, holder, site, witnessed) in world.social.claims_iter() {
+        println!(
+            "claim K{} holder=C{} site=S{} witnessed={}",
+            claim.0, holder.0, site.0, witnessed
+        );
+    }
     println!(
-        "revisions character={} economy={}",
+        "revisions character={} economy={} social={}",
         world.characters.revision(),
-        world.economy.revision()
+        world.economy.revision(),
+        world.social.revision()
     );
 
     let ctx = OracleCtx {
