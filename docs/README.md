@@ -28,6 +28,7 @@ decision, migration account, and approval.
 | `trial-log.md` | Append-only evidence | Records decisions, red/green rounds, gates, and environment facts |
 | `verb-isolation-report.md` | Standalone evidence | Records the adversarial second-verb isolation trial |
 | `falsification-defier-audit.md` | Standalone evidence | Separates closed counterexamples from the surviving limits of the current proof |
+| `falsifier-map.md` | Current plan | Executable overnight plan for the audit's open falsifiers (trials 007–009), with standing rules and handoff checklist |
 
 ## Maintenance rule
 

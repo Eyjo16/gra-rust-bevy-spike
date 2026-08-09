@@ -1,5 +1,17 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — falsifier map armed for overnight execution
+
+`docs/falsifier-map.md` turns the audit's open falsifiers into three
+executable trials for an automated collaborator: 007 transition-domain
+pressure (bounded trace parity beyond the fixture), 008 apply-totality
+(the `saturating_add` silent-clamp suspect leads), 009 language-seam
+(pre-boundary normalization, reject-or-byte-identical). Falsifier #1
+was closed by trial/006 this session; #4 and #6 stay contingent by the
+audit's own rule against speculative machinery. Standing rules pin the
+envelope (grammar and fixture frozen, judge bumps declared), red-first
+evidence, zero new dependencies, and no merges before morning review.
+
 ## 2026-08-09 — trial/006-exact-final-state: defier audit falsifier #1
 
 Hypothesis (audit defier 1): hash equality is checksum evidence, not
