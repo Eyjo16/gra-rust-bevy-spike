@@ -97,8 +97,10 @@ impl MassGrams {
         self.0 == 0
     }
 
-    pub fn saturating_add(self, other: Self) -> Self {
-        Self(self.0.saturating_add(other.0))
+    /// Returns `None` instead of silently clamping an unrepresentable
+    /// mass sum. A coherent world proves this cannot fail during apply.
+    pub fn checked_add(self, other: Self) -> Option<Self> {
+        self.0.checked_add(other.0).map(Self)
     }
 
     /// Returns `None` instead of ever producing a below-zero mass.
@@ -338,12 +340,16 @@ pub enum FixtureFault {
     DuplicateClaim(ClaimId),
     ClaimHolderUnknown(ClaimId),
     ClaimSiteUnknown(ClaimId),
+    TotalMassOverflow,
 }
 
-/// Referential integrity across owners: every claim must point at a known
-/// holder and a known site. Duplicate IDs are already rejected at seed
-/// time by each owner.
+/// Cross-owner fixture integrity: total mass must fit its canonical `u64`
+/// representation, and every claim must point at a known holder and site.
+/// Duplicate IDs are already rejected at seed time by each owner.
 pub fn validate_world_coherence(world: &World) -> Result<(), FixtureFault> {
+    if world.economy.checked_total_mass().is_none() {
+        return Err(FixtureFault::TotalMassOverflow);
+    }
     for (claim, holder, site, _witnessed) in world.social.claims_iter() {
         if world.characters.stamina(holder).is_none() {
             return Err(FixtureFault::ClaimHolderUnknown(claim));
@@ -902,6 +908,28 @@ mod tests {
             ])
             .unwrap(),
         }
+    }
+
+    /// Falsifier (trial/008): the representable-mass bound is established
+    /// before commands run. Without this guard, two individually valid
+    /// site stocks can overflow the aggregate and later permit an
+    /// inventory transfer to discard mass silently.
+    #[test]
+    fn falsification_overfull_mass_fixture_is_rejected() {
+        let world = World {
+            characters: CharacterOwner::seed([(CharacterId(1), Stamina::new(90).unwrap())])
+                .unwrap(),
+            economy: EconomyOwner::seed_sites([
+                (SiteId(1), InfraTier::Established, MassGrams::new(u64::MAX)),
+                (SiteId(2), InfraTier::Crude, MassGrams::new(1)),
+            ])
+            .unwrap(),
+            social: SocialOwner::seed_claims([]).unwrap(),
+        };
+        assert_eq!(
+            validate_world_coherence(&world),
+            Err(FixtureFault::TotalMassOverflow)
+        );
     }
 
     /// Falsifier (trial/006): hash equality is checksum evidence, not

@@ -96,6 +96,12 @@ panics all-or-nothing, never as a partial commit. Entity revisions are
 derived bookkeeping, excluded from the world hash; the owner-wide apply
 counters remain hashed.
 
+World coherence also proves exact aggregate mass fits `u64`. Because an
+extraction only transfers that mass, its checked stock/inventory arithmetic
+is total under the bound and is computed before the first write. Saturation
+is forbidden: an overfull fixture is `FixtureFault::TotalMassOverflow`, not a
+smaller world produced by clamping.
+
 ## 4. Flow of one command (validate everything, then apply)
 
 ```mermaid
@@ -182,6 +188,10 @@ trip 3–6/7/8, an implementation that lies *consistently* — receipts and
 replay agreeing on wrong semantics — trips 9, and a final world that
 drifts from the commands trips 10 even when run and replay share the
 same bug (which satisfies 7).
+
+Oracle 2 sums mass with checked arithmetic under the coherence-validated
+aggregate bound. It cannot hide a lost gram by saturating both the baseline
+and current totals to the same `u64::MAX`.
 
 ## 6. Where the values live (for hypothesis work)
 

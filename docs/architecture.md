@@ -50,6 +50,13 @@ host cannot skip validation, manufacture proof tokens, or write owner storage.
 This makes the boundary a proof surface rather than a grammar-shaped API that
 only appears safe.
 
+Seeded worlds pass coherence validation before the first command. In
+particular, aggregate mass must fit the canonical `u64` representation;
+extractions then move mass without creating it, making the bound inductive.
+Post-preflight arithmetic is checked and computed before mutation, so an
+invalid internal caller fails loudly rather than clamping or partially
+applying. This is representability discipline, not a balance limit.
+
 Grammar is useful after the shapes are hard. It names commands and outcomes,
 but executable ownership, transition, and oracle constraints decide whether a
 well-formed expression is true.
@@ -110,8 +117,9 @@ Tests are layered so agreement inside one implementation cannot certify itself:
 3. Oracles audit state, receipts, hash chains, closed vocabularies, and replay.
 4. The independent shadow evaluator recomputes expected semantics without
    trusting receipt fields.
-5. Each host must replay the canonical fixture and match receipts and final
-   world hash from the pure host.
+5. Each host must replay the canonical fixture and match receipts and exact
+   canonical final state from the pure host; the final hash remains its
+   checksum address.
 6. Falsification trials deliberately introduce a new verb, owner, host, or
    seam that should break any hidden assumption.
 
@@ -126,7 +134,8 @@ The first host slice should stay deliberately narrow:
 2. Project owner state into read-only ECS view components.
 3. Submit the existing command sequence through the existing boundary.
 4. Apply projection updates only after a canonical receipt is produced.
-5. Assert receipt-for-receipt and final-hash equality with the pure host.
+5. Assert receipt-for-receipt and exact final-state equality with the pure
+   host, plus matching checksums.
 6. Add one adversarial host test that attempts or simulates an out-of-band ECS
    mutation and demonstrates that it cannot alter canonical truth.
 

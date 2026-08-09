@@ -109,15 +109,22 @@ impl EconomyOwner {
             .map(|(id, state)| (*id, state.tier, state.stock))
     }
 
-    /// Total mass across sites and inventories; conserved by every apply.
+    /// Exact total mass across sites and inventories, or `None` when an
+    /// invalid fixture exceeds the canonical `u64` representation.
+    pub fn checked_total_mass(&self) -> Option<MassGrams> {
+        self.sites
+            .values()
+            .map(|site| site.stock)
+            .chain(self.inventories.values().copied())
+            .try_fold(MassGrams::ZERO, MassGrams::checked_add)
+    }
+
+    /// Total mass in a world that passed `validate_world_coherence`.
+    /// Every extraction only moves mass, so the established bound is
+    /// inductive and this remains representable for the whole run.
     pub fn total_mass(&self) -> MassGrams {
-        let sites = self
-            .sites
-            .values()
-            .fold(MassGrams::ZERO, |acc, s| acc.saturating_add(s.stock));
-        self.inventories
-            .values()
-            .fold(sites, |acc, inv| acc.saturating_add(*inv))
+        self.checked_total_mass()
+            .expect("coherent world: total mass fits u64")
     }
 
     /// Read-only validation: the site must exist and hold stock. Grants the
@@ -154,19 +161,30 @@ impl EconomyOwner {
             self.extraction_is_fresh(&extraction),
             "stale proof token (economy) — boundary bug"
         );
+        // Compute every fallible arithmetic result before the first write.
+        // Coherence establishes total mass <= u64::MAX; extraction only
+        // moves mass, therefore inventory + grant also fits that bound.
         let state = self
             .sites
-            .get_mut(&extraction.site)
+            .get(&extraction.site)
             .expect("fresh token: validated site exists");
-        state.stock = state
+        let next_stock = state
             .stock
             .checked_sub(extraction.granted)
             .expect("fresh token: validated granted <= stock");
-        let inventory = self
+        let next_inventory = self
             .inventories
-            .entry(extraction.to)
-            .or_insert(MassGrams::ZERO);
-        *inventory = inventory.saturating_add(extraction.granted);
+            .get(&extraction.to)
+            .copied()
+            .unwrap_or(MassGrams::ZERO)
+            .checked_add(extraction.granted)
+            .expect("coherent world: inventory addition fits total-mass bound");
+
+        self.sites
+            .get_mut(&extraction.site)
+            .expect("fresh token: validated site exists")
+            .stock = next_stock;
+        self.inventories.insert(extraction.to, next_inventory);
         *self.site_revisions.entry(extraction.site).or_insert(0) += 1;
         *self.inventory_revisions.entry(extraction.to).or_insert(0) += 1;
         self.revision += 1;
@@ -285,5 +303,48 @@ mod tests {
             .unwrap();
         owner.apply_extract(first);
         owner.apply_extract(second);
+    }
+
+    /// Falsifier (trial/008): an invalid overfull fixture can put
+    /// `u64::MAX` grams in one inventory while another site still holds
+    /// one gram. Applying that last gram must fail loudly before any
+    /// mutation; silently clamping the inventory destroys mass while the
+    /// saturating total reports the same value on both sides.
+    #[test]
+    fn falsification_overfull_inventory_must_not_silently_clamp() {
+        let mut owner = EconomyOwner::seed_sites([
+            (SiteId(1), InfraTier::Established, MassGrams::new(u64::MAX)),
+            (SiteId(2), InfraTier::Crude, MassGrams::new(1)),
+        ])
+        .unwrap();
+
+        let fill = owner
+            .validate_extract(SiteId(1), CharacterId(1), MassGrams::new(u64::MAX))
+            .unwrap();
+        owner.apply_extract(fill);
+        let before_hash = {
+            let mut hasher = Fnv1a::default();
+            owner.hash_into(&mut hasher);
+            hasher.finish()
+        };
+
+        let overflow = owner
+            .validate_extract(SiteId(2), CharacterId(1), MassGrams::new(1))
+            .unwrap();
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            owner.apply_extract(overflow);
+        }));
+
+        assert!(
+            outcome.is_err(),
+            "u64::MAX + 1 inventory transfer silently clamped instead of failing"
+        );
+        let mut after = Fnv1a::default();
+        owner.hash_into(&mut after);
+        assert_eq!(
+            after.finish(),
+            before_hash,
+            "failed apply mutated economy before reporting overflow"
+        );
     }
 }
