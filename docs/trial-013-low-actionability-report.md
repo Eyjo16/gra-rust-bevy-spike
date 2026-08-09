@@ -176,3 +176,75 @@ license retuning after reveal.
 Pre-registration complete. Training evidence, verdict, gates, proof envelope,
 and final holdout status will be appended without rewriting this sealed
 section.
+
+## Execution evidence — appended after seal
+
+The disclosed training fixture ran once against unchanged baseline mechanics:
+
+```text
+trial013 training start=9 band=exhausted table_cost=0 exact_headroom=true outcome=refused reason=actor_exhausted spent=0 mass=0 post=9 mutated=false
+trial013 training start=10 band=low table_cost=15 exact_headroom=false outcome=refused reason=insufficient_stamina spent=0 mass=0 post=10 mutated=false
+trial013 training start=14 band=low table_cost=15 exact_headroom=false outcome=refused reason=insufficient_stamina spent=0 mass=0 post=14 mutated=false
+trial013 training start=15 band=low table_cost=15 exact_headroom=true outcome=accepted reason=- spent=15 mass=600 post=0 mutated=true
+trial013 training_summary accepted_low=1/3 low_spent=15 low_mass=600 meaning_signal=none verdict=inconclusive holdout=sealed_unrevealed
+```
+
+Focused green:
+
+```text
+test boundary::tests::trial_013_low_actionability_training_does_not_select_meaning ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 47 filtered out
+```
+
+The behavioral rows match H-A's mechanical prediction byte for byte. That
+falsifies neither installed H-A mechanics nor the implementation of their
+current table. It does not satisfy H-A's semantic selection condition: no
+independent authority in the observation says that bands are descriptive.
+
+H-B's proposed direction remains mechanically plausible, but no training
+field says that `Low` promises an affordance. Accepting H-B because cost 10
+would make starts 10 and 14 act would merely restate the proposal as its own
+evidence—the manufactured discriminator prohibited by the seal.
+
+## Verdict
+
+**INCONCLUSIVE. No hypothesis is promoted to new normative meaning. No value
+moves.**
+
+- H-A remains the currently installed executable behavior, not a newly
+  selected semantic law.
+- H-B remains an unselected candidate; this trial does not mathematically
+  disprove it.
+- `STAMINA_COST_BY_BAND` stays `[0,15,12,10]`.
+- Grammar stays `0x530003916889b952`; the counterfactual
+  `0x757c13702bfc6047` is not installed.
+- Fixture, judge, coherence, seam/encoding, registry/schema, reasons, and
+  receipt contracts remain untouched.
+
+Final holdout status: **SEALED / UNREVEALED / NOT EXECUTED**. The selection
+rule did not accept H-B, so revealing it would be both unnecessary and a
+violation of the pre-registration order. No holdout result was used in this
+verdict.
+
+## Full gate and evidence envelope
+
+```text
+cargo fmt --check                                      PASS
+cargo clippy --all-targets -- -D warnings              PASS
+cargo clippy --all-targets --features bevy-host -- -D warnings
+                                                        PASS
+cargo test                                             48 passed
+cargo test --features bevy-host                        50 passed
+cargo run                                              exit 0; 10/10 oracles
+cargo run --features bevy-host                         exit 0; parity true
+```
+
+```text
+bevy_host_parity receipts_match=true state_match=true world_match=true receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a
+envelope baseline_commit=261f8e3 grammar=0x530003916889b952 fixture=0x3805f1e20c001051 receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a oracles=10v4
+```
+
+Every authority identity and standard-fixture evidence field is unchanged.
+The only executable addition is the test-only disclosed training fixture; no
+holdout code exists in the test suite, preventing accidental reveal by the
+full gate.

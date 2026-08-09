@@ -1,5 +1,29 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — trial/013-low-actionability: INCONCLUSIVE, no value moved
+
+Training matched the pre-registered H-A mechanics exactly: starts 10 and 14
+were Low but refused `insufficient_stamina`; start 15 spent 15 and moved 600 g.
+The observation carried no independent signal that the band name is either a
+description or an affordance. Per the sealed selection rule, current-runtime
+conformance cannot select authorial meaning and the fact that cost 10 would
+create actionability cannot select its own proposal.
+
+Verdict: **INCONCLUSIVE**. H-A remains installed behavior but is not promoted
+as newly selected law; H-B remains an unselected candidate. Low cost stays 15,
+grammar stays `0x530003916889b952`, and every other authority identity remains
+unchanged. Holdout status: **SEALED / UNREVEALED / NOT EXECUTED**. Full
+pre-registration and evidence: `docs/trial-013-low-actionability-report.md`.
+
+Full gate: fmt and strict clippy clean in both feature sets; 48/48 default
+tests and 50/50 `bevy-host` tests passed; both runs exited 0; all ten oracles
+passed; hosted parity reported `receipts_match=true state_match=true
+world_match=true`. Envelope unchanged:
+
+```text
+envelope baseline_commit=261f8e3 grammar=0x530003916889b952 fixture=0x3805f1e20c001051 receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a oracles=10v4
+```
+
 ## 2026-08-09 — trial/013-low-actionability: pre-registered, evidence unopened
 
 Meaning Gate dispatch by explicit author priority. Competing meanings,
