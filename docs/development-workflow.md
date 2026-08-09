@@ -145,6 +145,46 @@ Remote trial branches may be retained while their evidence is useful. Delete
 one only after confirming `master` contains it and no review still references
 it.
 
+## Cross-trial comparison protocol
+
+When several trial branches run concurrently, their evidence must stay
+mutually comparable so that one branch can falsify another's assumptions.
+The grammar fingerprint is the shared language, but not the whole judge —
+it covers tables, bands, costs, and the closed vocabulary, not the oracle
+implementation or the fixture. Every recorded run therefore carries a
+**proof envelope**:
+
+| Field | Source |
+| --- | --- |
+| `baseline_commit` | git, recorded by the runner (`BASELINE_COMMIT` env or log entry) |
+| `grammar` | `grammar_fingerprint()` — tables, bands, closed vocabulary |
+| `fixture` | `fixture_identity()` — seeded world hash + canonical command sequence |
+| `receipts` | `receipt_chain_digest()` — digest of every canonical receipt line |
+| `world` | final world hash |
+| `oracles` | `ORACLE_COUNT` + `ORACLE_SUITE_VERSION` — which judge evaluated the run |
+
+`cargo run` prints the envelope as its final line. Two runs are
+cross-comparable evidence only when `grammar` and `fixture` match; a host
+parity claim must additionally reproduce `receipts` and `world` exactly.
+
+Concurrency rules for a multi-branch sprint:
+
+1. All branches spring from the same recorded `baseline_commit`.
+2. Only a designated value-pressure branch may change the grammar
+   fingerprint; all other branches must hold it constant.
+3. Values may move only under a logged, red-first hypothesis: state why
+   the old value was wrong, capture the red, then move it. Contracts
+   (reason codes, receipt schema, hash chain, registry/schema) change
+   only as declared spec evolution.
+4. Merges are serial. Strengthen the judge first (oracle branches merge
+   before host or semantics branches); value-pressure merges last because
+   it re-baselines everyone. After each merge, every remaining branch
+   rebases onto the new master and re-runs red→green before its own
+   merge — that re-run is the cross-elimination moment.
+5. Every concurrent worktree sets its own build directory (untracked
+   `.cargo/config.toml` with a distinct `build.target-dir`), otherwise
+   Cargo's lock silently serializes "parallel" branches.
+
 ## Review-again rule
 
 A green merge is a new baseline, not final proof. The next cycle should attack
