@@ -63,6 +63,7 @@ or transition means. See `docs/architecture.md` for the layer contract.
 | `src/social/mod.rs` | Social owner (claims, witness gate) |
 | `src/oracles.rs` | The ten bounded oracles, incl. the independent shadow evaluator |
 | `src/main.rs` | Pure-Rust host: fixture trial + oracle gate (non-zero exit on failure) |
+| `src/host_bevy.rs` | Bevy ECS host adapter (`bevy-host` feature): scheduling only, parity-gated |
 | `docs/README.md` | Documentation map and source-of-truth order |
 | `docs/architecture.md` | Truth kernel, Bevy host, and multi-language seam decisions |
 | `docs/development-workflow.md` | Branch, worktree, falsification, review, and merge cycle |
@@ -81,14 +82,24 @@ cargo run
 world hash, an end-of-run state summary (including owner revisions), and
 the ten oracle verdicts; it exits non-zero if any oracle fails.
 
-## Bevy host: next execution layer
+## Bevy host: execution layer under a parity gate
 
 The hold was lifted after the second verb (`witness`) landed without leaking
-verb policy into the established owners. The `bevy`/`bevy_ecs` dependencies
-remain pinned behind the off-by-default `bevy-host` feature deliberately: the
-default gate must keep testing the truth layer without an engine dependency.
+verb policy into the established owners. The dependencies remain pinned
+behind off-by-default features deliberately: `bevy-host` is the ECS-only
+adapter, `bevy-full` layers the whole engine for later rendering work — the
+default gate keeps testing the truth layer without any engine dependency.
 
 Bevy may schedule commands, project truth into ECS views, drive fixtures, and
 render results. It may not define canonical state, bypass the validating
-boundary, or mutate owner state directly. A Bevy-hosted replay must produce
-the same receipts and final world hash as the pure-Rust host.
+boundary, or mutate owner state directly. The parity gate enforces this:
+
+```sh
+cargo run --features bevy-host
+```
+
+replays the whole trial inside a Bevy ECS world (`src/host_bevy.rs`, truth
+hosted as a resource, one command per schedule tick, every write still through
+`submit`) and exits non-zero unless the hosted run reproduces the pure run's
+canonical receipts and final world hash byte-for-byte — the
+`bevy_host_parity` line and the proof envelope record the comparison.

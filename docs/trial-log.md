@@ -1,5 +1,41 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — trial/002-bevy-host-parity: parity PASS
+
+Hypothesis: Bevy can host the existing truth and reproduce identical
+receipts and hashes without adding gameplay semantics.
+
+This is a pass/fail parity experiment, not a red→green fix: no
+behavioral red exists before the host exists, so the falsifier is the
+comparison itself — `src/host_bevy.rs` hosts the truth `World` as an ECS
+resource, submits the identical fixture and 16-command sequence through
+the identical boundary (one command per schedule tick, every write still
+through `submit`), and the run exits non-zero on any divergence.
+
+Evidence (baseline `5e844fa`):
+
+```
+bevy_host_parity receipts_match=true world_match=true
+  receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a
+envelope ... grammar=0x530003916889b952 fixture=0x3805f1e20c001051
+  receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a oracles=10v2
+```
+
+The hosted digests equal the pure run's envelope values exactly, on the
+same grammar and fixture — the host contributed scheduling and nothing
+else. Conscious dependency decision: `bevy-host` now pulls `bevy_ecs`
+only (the parity proof needs scheduling, not a renderer); new
+`bevy-full` feature layers the whole engine on top for later rendering
+work. The default gate remains zero-dependency.
+
+Known frontier deliberately NOT claimed by this trial: truly parallel
+plan+commit inside Bevy systems. Entity-revision tokens and the
+all-or-nothing commit (trial/003) make disjoint plans safe to commit
+from one snapshot, but canonical receipts chain `world_before` →
+`world` sequentially — a parallel commit model needs its own receipt
+semantics before any host may schedule submissions concurrently. That
+is the next falsifiable hypothesis for this seam.
+
 ## 2026-08-09 — trial/003-parallel-plan: red→green
 
 Hypothesis: owner-wide revision binding false-conflicts independent
