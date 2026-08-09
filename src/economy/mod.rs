@@ -92,10 +92,6 @@ impl EconomyOwner {
         self.sites.get(&site).map(|s| s.tier)
     }
 
-    pub fn stock(&self, site: SiteId) -> Option<MassGrams> {
-        self.sites.get(&site).map(|s| s.stock)
-    }
-
     pub fn inventory(&self, id: CharacterId) -> MassGrams {
         self.inventories
             .get(&id)
@@ -206,6 +202,14 @@ mod tests {
         .unwrap()
     }
 
+    fn stock_of(owner: &EconomyOwner, site: SiteId) -> MassGrams {
+        owner
+            .sites_iter()
+            .find(|(id, _, _)| *id == site)
+            .map(|(_, _, stock)| stock)
+            .expect("site exists")
+    }
+
     #[test]
     fn duplicate_seed_id_is_a_fixture_fault() {
         let result = EconomyOwner::seed_sites([
@@ -233,7 +237,7 @@ mod tests {
             .unwrap();
         assert_eq!(extraction.granted(), MassGrams::new(300));
         owner.apply_extract(extraction);
-        assert_eq!(owner.stock(SiteId(2)), Some(MassGrams::ZERO));
+        assert_eq!(stock_of(&owner, SiteId(2)), MassGrams::ZERO);
         assert_eq!(owner.inventory(CharacterId(2)), MassGrams::new(300));
     }
 

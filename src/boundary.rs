@@ -534,6 +534,45 @@ impl World {
         self.social.hash_into(&mut hasher);
         hasher.finish()
     }
+
+    /// Exact canonical serialization of the whole truth state: one line
+    /// per fact, in deterministic owner/key order — the same lines the
+    /// pure host prints after a trial. Exact-equality claims (host
+    /// parity, replay) compare these lines; `hash()` is only their
+    /// address — FNV-1a is not injective, so hash equality alone is
+    /// checksum evidence, never state equality.
+    pub fn canonical_state(&self) -> Vec<String> {
+        let mut lines = Vec::new();
+        for (id, stamina) in self.characters.iter() {
+            lines.push(format!(
+                "character C{} stamina={} inventory_g={}",
+                id.0,
+                stamina.points(),
+                self.economy.inventory(id).grams()
+            ));
+        }
+        for (id, tier, stock) in self.economy.sites_iter() {
+            lines.push(format!(
+                "site S{} tier={} stock_g={}",
+                id.0,
+                tier.code(),
+                stock.grams()
+            ));
+        }
+        for (claim, holder, site, witnessed) in self.social.claims_iter() {
+            lines.push(format!(
+                "claim K{} holder=C{} site=S{} witnessed={}",
+                claim.0, holder.0, site.0, witnessed
+            ));
+        }
+        lines.push(format!(
+            "revisions character={} economy={} social={}",
+            self.characters.revision(),
+            self.economy.revision(),
+            self.social.revision()
+        ));
+        lines
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -859,9 +898,49 @@ mod tests {
             social: SocialOwner::seed_claims([
                 (ClaimId(1), CharacterId(1), SiteId(1), true),
                 (ClaimId(2), CharacterId(2), SiteId(2), true),
+                (ClaimId(3), CharacterId(2), SiteId(1), false),
             ])
             .unwrap(),
         }
+    }
+
+    /// Falsifier (trial/006): hash equality is checksum evidence, not
+    /// state equality — FNV-1a is not injective. Exact-equality claims
+    /// must compare a canonical final-state serialization that is stable
+    /// across identical histories and sees every truth-domain mutation;
+    /// the hash is that serialization's address, nothing more.
+    #[test]
+    fn falsification_canonical_state_must_see_every_domain_mutation() {
+        let mut world = two_actor_world();
+        let seeded = world.canonical_state();
+        assert_eq!(
+            seeded,
+            two_actor_world().canonical_state(),
+            "stable across identical construction"
+        );
+        // A gather moves stamina, site stock, and an inventory.
+        submit(
+            &mut world,
+            1,
+            Command::Gather(GatherCommand {
+                actor: CharacterId(1),
+                claim: ClaimId(1),
+                site: SiteId(1),
+            }),
+        );
+        let after_gather = world.canonical_state();
+        assert_ne!(seeded, after_gather, "a gather must be visible");
+        // A witness flips a claim gate and moves stamina, zero mass.
+        submit(
+            &mut world,
+            2,
+            Command::Witness(WitnessCommand {
+                witness: CharacterId(1),
+                claim: ClaimId(3),
+            }),
+        );
+        let after_witness = world.canonical_state();
+        assert_ne!(after_gather, after_witness, "a witness must be visible");
     }
 
     /// Falsifier (trial/003, part 1): two plans for two different

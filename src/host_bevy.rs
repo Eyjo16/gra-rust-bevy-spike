@@ -75,6 +75,11 @@ mod tests {
 
         let (host_world, host_log) = run_hosted(crate::fixture, &cmds);
 
+        assert_eq!(
+            host_world.canonical_state(),
+            pure_world.canonical_state(),
+            "exact canonical final state"
+        );
         assert_eq!(host_world.hash(), pure_world.hash(), "final world hash");
         let pure_lines: Vec<String> = pure_log.iter().map(Receipt::canonical_line).collect();
         let host_lines: Vec<String> = host_log.iter().map(Receipt::canonical_line).collect();
