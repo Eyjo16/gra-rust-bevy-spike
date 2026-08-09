@@ -1,5 +1,30 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — trial/005-value-pressure: null result, recorded on purpose
+
+Hypothesis: an incoherent result under trials 002–004 is pressure to
+*move a value* under a logged, red-first hypothesis rather than to lock
+it. This branch held the only license to change the grammar fingerprint
+and was merged last by design.
+
+Result: **no value moved, because no incoherence surfaced.** 004 exposed
+an oracle capability gap, 003 exposed conflict-granularity semantics,
+002 passed parity clean — none of them implicated a table value, band
+threshold, cost, or fixture number. Every value therefore remains a
+mechanical example, and the grammar fingerprint
+`0x530003916889b952` has now survived the entire four-trial sprint
+unchanged — which is itself the protocol working, not a formality
+skipped.
+
+The discipline this null result pins down: a value may move only when a
+falsified expectation names it — state why the old value is wrong, write
+the red test the old value fails, then move it and update the shadow
+evaluator's own literals consciously. A value moved without that chain
+is tuning until the oracles go quiet, and it is forbidden even on this
+branch. When a future trial surfaces a concrete incoherence, a fresh
+`trial/00N-value-pressure` spawns with that target named in its first
+log line.
+
 ## 2026-08-09 — trial/002-bevy-host-parity: parity PASS
 
 Hypothesis: Bevy can host the existing truth and reproduce identical
