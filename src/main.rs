@@ -5,12 +5,16 @@
 //! world hash, then runs the ten bounded oracles. Exits non-zero if any
 //! oracle fails, so `cargo run` is part of the compiler gate.
 //!
-//! The Bevy host is ON HOLD behind the off-by-default `bevy-host` feature
-//! until this pure boundary passes the gate.
+//! The Bevy ECS host adapter lives behind the off-by-default `bevy-host`
+//! feature: `cargo run --features bevy-host` additionally replays the
+//! whole trial inside a Bevy ECS world and exits non-zero unless the
+//! hosted run reproduces the pure run's receipts and final hash exactly.
 
 mod boundary;
 mod character;
 mod economy;
+#[cfg(feature = "bevy-host")]
+mod host_bevy;
 mod oracles;
 mod social;
 
@@ -153,6 +157,27 @@ fn main() -> ExitCode {
         let status = if verdict.pass { "PASS" } else { "FAIL" };
         println!("oracle {status} {} ({})", verdict.name, verdict.detail);
         all_pass &= verdict.pass;
+    }
+
+    // Host parity gate (trial/002): the Bevy-hosted replay must reproduce
+    // the pure run's receipts and final hash byte-for-byte, or the host
+    // has acquired semantics of its own.
+    #[cfg(feature = "bevy-host")]
+    {
+        let (host_world, host_log) = host_bevy::run_hosted(fixture, &cmds);
+        let pure_lines: Vec<String> = log.iter().map(Receipt::canonical_line).collect();
+        let host_lines: Vec<String> = host_log.iter().map(Receipt::canonical_line).collect();
+        let receipts_match = host_lines == pure_lines
+            && receipt_chain_digest(&host_log) == receipt_chain_digest(&log);
+        let world_match = host_world.hash() == world.hash();
+        println!(
+            "bevy_host_parity receipts_match={} world_match={} receipts=0x{:016x} world=0x{:016x}",
+            receipts_match,
+            world_match,
+            receipt_chain_digest(&host_log),
+            host_world.hash(),
+        );
+        all_pass &= receipts_match && world_match;
     }
 
     // Proof envelope: the full identity of this run for cross-trial

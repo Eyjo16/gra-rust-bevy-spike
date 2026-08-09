@@ -14,22 +14,23 @@ gra-rust-bevy-spike v0.1.0
 ```
 
 The `bevy-host` feature (OFF by default, host used as an adapter) pulls in
-the full engine — about 1,480 nodes in `cargo tree`. Depth 1–2:
+`bevy_ecs` only — the parity gate needs scheduling and resources, not a
+renderer:
 
 ```
 gra-rust-bevy-spike v0.1.0
-├── bevy v0.19.0
-│   └── bevy_internal v0.19.0        (→ renderer, windowing, assets, …)
 └── bevy_ecs v0.19.0
     ├── bevy_reflect, bevy_tasks, bevy_platform, bevy_ptr, bevy_utils
     ├── serde, thiserror, smallvec, indexmap, fixedbitset, slotmap
     └── … (proc-macros and support crates)
 ```
 
-This is the concrete cost of lifting the HOLD: compile time and surface
-area jump from zero to the whole engine. The truth layer itself never
-references Bevy, so the boundary stays testable at zero-dependency speed
-regardless.
+`bevy-full` layers the whole engine (`bevy` → renderer, windowing,
+assets — about 1,480 nodes) on top of `bevy-host` for later rendering and
+interaction work. This split keeps the concrete cost of each step visible:
+the parity proof costs one ECS crate, the engine costs the rest. The truth
+layer itself never references Bevy — only `src/host_bevy.rs` does — so the
+boundary stays testable at zero-dependency speed regardless.
 
 ## 2. Module graph
 
