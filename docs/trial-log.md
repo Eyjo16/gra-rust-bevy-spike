@@ -1,5 +1,55 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — trial/003-parallel-plan: red→green
+
+Hypothesis: owner-wide revision binding false-conflicts independent
+plans, and the boundary's commit sequence can leave a partial commit
+when only a later owner's token has gone stale.
+
+Preparation (behavior-neutral, before any red): the commit phase was
+extracted into `GatherPlan::apply` / `WitnessPlan::apply` — the one
+place a multi-owner plan mutates the world — so the falsifiers could
+exercise the real commit path with planning separated from application.
+Receipts and hashes unchanged by the refactor.
+
+Red evidence (captured against baseline `466f272`, three failures):
+
+```
+character::falsification_independent_spends_must_not_false_conflict
+  panicked: stale proof token (character) — boundary bug
+    left: 0 / right: 1        <- C2's spend killed by C1's apply
+
+boundary::falsification_independent_plans_against_one_snapshot_must_both_commit
+  panicked: stale proof token (character) — boundary bug
+                              <- two fully disjoint plans false-conflict
+
+boundary::falsification_stale_later_token_must_not_leave_partial_commit
+  first panic:  stale proof token (economy) — boundary bug
+  second panic: stale plan committed partially: the character spend
+                landed without the extraction
+    left:  5778436795119231595   <- world hash CHANGED across a refused
+    right: 4302712438088730884      commit: partial commit
+```
+
+Green, two mechanisms (both required — neither alone passes all three):
+
+1. **Entity-revision binding.** Tokens now bind to the entities they
+   touch: per character (`StaminaSpend`), per site + per inventory
+   (`Extraction`), per claim (`WitnessGrant`). Disjoint plans validated
+   against the same snapshot are independent and both commit; same-entity
+   replay still panics (all prior `should_panic` tests unchanged).
+2. **Two-phase commit.** `GatherPlan::apply` / `WitnessPlan::apply`
+   check every token fresh BEFORE any owner mutates; a stale plan panics
+   with zero mutation — all-or-nothing, verified by hash equality across
+   the refused commit.
+
+Entity revisions are derived bookkeeping, excluded from the world hash;
+owner-wide apply counters remain hashed, so **grammar, fixture,
+receipts, and world hashes are all byte-identical** to the baseline —
+the envelope proves this trial changed conflict semantics without
+touching game semantics. No spec evolution: no new oracles, reasons, or
+receipt fields.
+
 ## 2026-08-09 — trial/004-shadow-final-state: red→green
 
 Hypothesis: final-world truth rested on oracle 7 alone, which replays

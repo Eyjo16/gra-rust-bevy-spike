@@ -3,8 +3,10 @@
 //! Internals are private. The only mutation path is `validate_spend`
 //! (fallible, read-only) followed by `apply_spend`, which consumes the
 //! proof token by value — one token, one apply. The token carries the
-//! owner revision it was minted against; applying a stale token panics,
-//! because that is a boundary bug, never a game outcome.
+//! entity revision it was minted against — the one character it
+//! touches — so spends for different characters never conflict.
+//! Applying a stale token panics, because that is a boundary bug,
+//! never a game outcome.
 //!
 //! This owner is verb-agnostic: the cost arrives as a parameter decided by
 //! the boundary's verb policy. The owner enforces only resource semantics:
@@ -16,11 +18,17 @@ use crate::boundary::{CharacterId, FixtureFault, Fnv1a, RefusalReason, Stamina};
 
 pub struct CharacterOwner {
     stamina: BTreeMap<CharacterId, Stamina>,
+    /// Per-character conflict granularity: a token binds to the revision
+    /// of the one character it touches, so independent plans never
+    /// false-conflict. Derived bookkeeping, not truth state — excluded
+    /// from the world hash (the owner-wide apply counter is hashed).
+    entity_revisions: BTreeMap<CharacterId, u64>,
     revision: u64,
 }
 
-/// Proof that a stamina spend was validated against a specific owner
-/// revision. Private fields: only the character owner can construct one.
+/// Proof that a stamina spend was validated against a specific
+/// character's entity revision. Private fields: only the character owner
+/// can construct one.
 pub struct StaminaSpend {
     id: CharacterId,
     cost: u8,
@@ -46,8 +54,21 @@ impl CharacterOwner {
         }
         Ok(Self {
             stamina,
+            entity_revisions: BTreeMap::new(),
             revision: 0,
         })
+    }
+
+    fn entity_revision(&self, id: CharacterId) -> u64 {
+        self.entity_revisions.get(&id).copied().unwrap_or(0)
+    }
+
+    /// True when the token still matches the revision of the character it
+    /// was validated against. The boundary's commit phase checks every
+    /// token in a plan BEFORE any owner mutates, so a stale plan is
+    /// all-or-nothing.
+    pub fn spend_is_fresh(&self, spend: &StaminaSpend) -> bool {
+        self.entity_revision(spend.id) == spend.from_revision
     }
 
     pub fn stamina(&self, id: CharacterId) -> Option<Stamina> {
@@ -73,17 +94,18 @@ impl CharacterOwner {
         Ok(StaminaSpend {
             id,
             cost,
-            from_revision: self.revision,
+            from_revision: self.entity_revision(id),
         })
     }
 
     /// Consumes the token by value: reuse is a compile error. Panics on a
-    /// stale token (minted against an older revision) — a boundary bug,
-    /// never a game outcome. The exact spend cannot fail for a fresh
-    /// validated token.
+    /// stale token (minted against an older revision of the same
+    /// character) — a boundary bug, never a game outcome. Spends for
+    /// different characters are independent and never conflict. The exact
+    /// spend cannot fail for a fresh validated token.
     pub fn apply_spend(&mut self, spend: StaminaSpend) {
-        assert_eq!(
-            spend.from_revision, self.revision,
+        assert!(
+            self.spend_is_fresh(&spend),
             "stale proof token (character) — boundary bug"
         );
         let stamina = self
@@ -93,6 +115,7 @@ impl CharacterOwner {
         *stamina = stamina
             .spend_exact(spend.cost)
             .expect("fresh token: validated headroom");
+        *self.entity_revisions.entry(spend.id).or_insert(0) += 1;
         self.revision += 1;
     }
 
@@ -166,5 +189,24 @@ mod tests {
         let second = owner.validate_spend(CharacterId(1), 10).unwrap();
         owner.apply_spend(first);
         owner.apply_spend(second);
+    }
+
+    /// Falsifier (trial/003): spends for two DIFFERENT characters
+    /// validated against the same snapshot are independent — neither
+    /// invalidates the other, and both must apply. Owner-wide revision
+    /// binding false-conflicts them.
+    #[test]
+    fn falsification_independent_spends_must_not_false_conflict() {
+        let mut owner = CharacterOwner::seed([
+            (CharacterId(1), Stamina::new(90).unwrap()),
+            (CharacterId(2), Stamina::new(50).unwrap()),
+        ])
+        .unwrap();
+        let plan_a = owner.validate_spend(CharacterId(1), 10).unwrap();
+        let plan_b = owner.validate_spend(CharacterId(2), 5).unwrap();
+        owner.apply_spend(plan_a);
+        owner.apply_spend(plan_b);
+        assert_eq!(owner.stamina(CharacterId(1)).unwrap().points(), 80);
+        assert_eq!(owner.stamina(CharacterId(2)).unwrap().points(), 45);
     }
 }
