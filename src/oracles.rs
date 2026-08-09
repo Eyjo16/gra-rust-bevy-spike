@@ -1,16 +1,18 @@
-//! Exactly nine bounded oracles.
+//! Exactly ten bounded oracles.
 //!
 //! Each oracle is a pure check over bounded inputs — the current world,
 //! the receipt log, and a replayable fixture — and returns a verdict.
-//! `run_all` returns a fixed-size array, so the count of nine is enforced
+//! `run_all` returns a fixed-size array, so the count of ten is enforced
 //! by the type system.
 //!
 //! Oracles 1–2 audit state, 3–6 audit the receipt log, 7 replays the whole
 //! trial through the real implementation, 8 checks the hash chain and that
-//! refusals mutate nothing, and 9 recomputes every expected outcome with
-//! an independent shadow evaluator that never trusts receipt fields — so a
-//! receipt lie that is internally consistent (and would pass 3–6) is still
-//! caught.
+//! refusals mutate nothing, and 9–10 recompute the trial with an
+//! independent shadow evaluator that never trusts receipt fields: 9 checks
+//! every expected receipt, 10 checks the final world state itself — so a
+//! receipt lie that is internally consistent (passing 3–6) fails 9, and a
+//! final world diverging from the commands fails 10 even when run and
+//! replay share the same bug (which satisfies 7).
 
 use std::collections::BTreeMap;
 
@@ -19,14 +21,15 @@ use crate::boundary::{
     WITNESS_COST, World, YIELD_TABLE_GRAMS, submit,
 };
 
-pub const ORACLE_COUNT: usize = 9;
+pub const ORACLE_COUNT: usize = 10;
 
 /// Verifier version for the proof envelope. The oracle *count* is
 /// type-enforced; this constant records which judge evaluated a run and
 /// must be bumped on any change to an oracle's behavior or to the set of
 /// oracles — a run's envelope then names both the language it was judged
 /// in (grammar fingerprint) and the judge that evaluated it.
-pub const ORACLE_SUITE_VERSION: u32 = 1;
+/// v2: added oracle 10 `shadow_final_state`.
+pub const ORACLE_SUITE_VERSION: u32 = 2;
 
 pub struct OracleVerdict {
     pub name: &'static str,
@@ -59,6 +62,7 @@ pub fn run_all(ctx: &OracleCtx<'_>) -> [OracleVerdict; ORACLE_COUNT] {
         replay_determinism(ctx),
         refusal_zero_mutation(ctx),
         shadow_expectation(ctx),
+        shadow_final_state(ctx),
     ]
 }
 
@@ -250,12 +254,32 @@ fn shadow_expectation(ctx: &OracleCtx<'_>) -> OracleVerdict {
     )
 }
 
+/// 10. Independent final-state proof: after stepping every command, the
+///     shadow evaluator's final state must equal the actual final world —
+///     stamina, inventories, site stocks, and claim gates.
+///     `replay_determinism` trusts the implementation twice (run and
+///     replay); this oracle trusts it zero times, so a bug shared by run
+///     and replay still fails here.
+fn shadow_final_state(ctx: &OracleCtx<'_>) -> OracleVerdict {
+    let mut shadow = ShadowState::from_fixture(&(ctx.build_fixture)());
+    for cmd in ctx.commands {
+        let _ = shadow.step(cmd);
+    }
+    let violations = shadow.final_state_divergences(ctx.world);
+    OracleVerdict::new(
+        "shadow_final_state",
+        violations == 0,
+        format!("{violations} truth domains diverge from the shadow final state"),
+    )
+}
+
 /// Independent re-interpretation of the grammar. Deliberately does not use
 /// the owners, the boundary orchestrator, `Stamina::band`, or any receipt
 /// field — plain integers, its own threshold literals, and the shared spec
 /// tables only.
 struct ShadowState {
     stamina: BTreeMap<u64, u8>,
+    inventories: BTreeMap<u64, u64>,
     sites: BTreeMap<u64, (usize, u64)>,
     claims: BTreeMap<u64, (u64, u64, bool)>,
 }
@@ -288,6 +312,11 @@ impl ShadowState {
                 .characters
                 .iter()
                 .map(|(id, s)| (id.0, s.points()))
+                .collect(),
+            inventories: fixture
+                .characters
+                .iter()
+                .map(|(id, _)| (id.0, fixture.economy.inventory(id).grams()))
                 .collect(),
             sites: fixture
                 .economy
@@ -362,6 +391,7 @@ impl ShadowState {
         // Apply to shadow state.
         self.stamina.insert(cmd.actor.0, points - cost);
         self.sites.insert(cmd.site.0, (tier, stock - granted));
+        *self.inventories.entry(cmd.actor.0).or_insert(0) += granted;
         let (outcome_code, reason_code) = if granted < requested {
             ("partial", "site_nearly_depleted")
         } else {
@@ -427,6 +457,37 @@ impl ShadowState {
             band_index: None,
             tier_index: None,
         }
+    }
+
+    /// Counts truth domains (stamina, inventories, sites, claims) where
+    /// the actual world differs from the shadow's final state. Reads the
+    /// world only through the owners' read-only iterators — never a
+    /// receipt, never the implementation's replay.
+    fn final_state_divergences(&self, world: &World) -> usize {
+        let actual_stamina: BTreeMap<u64, u8> = world
+            .characters
+            .iter()
+            .map(|(id, s)| (id.0, s.points()))
+            .collect();
+        let actual_inventories: BTreeMap<u64, u64> = world
+            .characters
+            .iter()
+            .map(|(id, _)| (id.0, world.economy.inventory(id).grams()))
+            .collect();
+        let actual_sites: BTreeMap<u64, (usize, u64)> = world
+            .economy
+            .sites_iter()
+            .map(|(id, tier, stock)| (id.0, (tier.index(), stock.grams())))
+            .collect();
+        let actual_claims: BTreeMap<u64, (u64, u64, bool)> = world
+            .social
+            .claims_iter()
+            .map(|(id, holder, site, witnessed)| (id.0, (holder.0, site.0, witnessed)))
+            .collect();
+        usize::from(actual_stamina != self.stamina)
+            + usize::from(actual_inventories != self.inventories)
+            + usize::from(actual_sites != self.sites)
+            + usize::from(actual_claims != self.claims)
     }
 }
 
@@ -545,7 +606,7 @@ mod tests {
     }
 
     #[test]
-    fn all_nine_oracles_pass_on_the_fixture_run() {
+    fn all_ten_oracles_pass_on_the_fixture_run() {
         let (world, cmds, log, baseline) = run_fixture();
         let ctx = OracleCtx {
             world: &world,
@@ -654,5 +715,44 @@ mod tests {
         let lines_a: Vec<String> = log_a.iter().map(Receipt::canonical_line).collect();
         let lines_b: Vec<String> = log_b.iter().map(Receipt::canonical_line).collect();
         assert_eq!(lines_a, lines_b);
+    }
+
+    /// Falsifier for trial/004. A final world that diverges from what the
+    /// logged commands produce — here via one extra command applied after
+    /// the logged trial — must fail at least one oracle that does NOT
+    /// replay through the implementation under audit. replay_determinism
+    /// runs the same `submit` twice, so an implementation whose run and
+    /// replay share a bug satisfies it; final-state truth needs a judge
+    /// that trusts the implementation zero times.
+    #[test]
+    fn falsification_divergent_final_world_must_fail_an_independent_oracle() {
+        let (mut world, cmds, log, baseline) = run_fixture();
+        // Reachable divergence: one more gather, absent from the log.
+        // Mass is conserved (site stock moves to inventory), so oracle 2
+        // cannot see it either.
+        submit(
+            &mut world,
+            99,
+            Command::Gather(GatherCommand {
+                actor: CharacterId(1),
+                claim: ClaimId(1),
+                site: SiteId(1),
+            }),
+        );
+        let ctx = OracleCtx {
+            world: &world,
+            baseline_mass: baseline,
+            build_fixture: fixture,
+            commands: &cmds,
+            log: &log,
+        };
+        let independent_failures = run_all(&ctx)
+            .iter()
+            .filter(|v| v.name != "replay_determinism" && !v.pass)
+            .count();
+        assert!(
+            independent_failures > 0,
+            "divergent final world was visible only to the self-trusting replay oracle"
+        );
     }
 }

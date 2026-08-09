@@ -1,5 +1,35 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — trial/004-shadow-final-state: red→green
+
+Hypothesis: final-world truth rested on oracle 7 alone, which replays
+through the same implementation it audits — a bug shared by run and
+replay presents a divergent final world no independent oracle sees.
+
+Red evidence (captured against baseline `a91023d` before the fix): the
+falsifier applies one extra gather to the world after the logged trial —
+mass conserved, log untouched, so oracles 1–6 and 8–9 stay green — and
+demands a failure from any oracle other than `replay_determinism`:
+
+```
+falsification_divergent_final_world_must_fail_an_independent_oracle FAILED
+  panicked: divergent final world was visible only to the
+  self-trusting replay oracle
+```
+
+Green: new oracle 10 `shadow_final_state` — the shadow evaluator (already
+independent for receipts) now steps every command and compares its final
+state against the actual world across all four truth domains: stamina,
+inventories, site stocks, claim gates. It reads the world only through
+read-only owner iterators; zero trust in the implementation, receipts, or
+replay. The falsifier and the full gate are green.
+
+Spec evolution (conscious): oracles **nine → ten** (count still
+type-enforced), `ORACLE_SUITE_VERSION` **1 → 2**. Envelope before/after
+the merge proves the protocol's promise: `grammar`, `fixture`,
+`receipts`, and `world` byte-identical, only the judge changed
+(`oracles=9v1` → `oracles=10v2`).
+
 ## 2026-08-09 — sprint armed: four concurrent trials, cross-elimination protocol
 
 Baseline for the whole sprint: `3ce9efc` (master). Protocol recorded in

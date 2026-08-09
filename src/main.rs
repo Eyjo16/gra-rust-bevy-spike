@@ -2,7 +2,7 @@
 //!
 //! Seeds a mechanical-example fixture, submits a fixed command sequence
 //! through the boundary, prints the canonical receipts and deterministic
-//! world hash, then runs the nine bounded oracles. Exits non-zero if any
+//! world hash, then runs the ten bounded oracles. Exits non-zero if any
 //! oracle fails, so `cargo run` is part of the compiler gate.
 //!
 //! The Bevy host is ON HOLD behind the off-by-default `bevy-host` feature
