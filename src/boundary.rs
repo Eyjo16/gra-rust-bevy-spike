@@ -353,6 +353,47 @@ pub fn validate_world_coherence(world: &World) -> Result<(), FixtureFault> {
 }
 
 // ---------------------------------------------------------------------------
+// Proof envelope: the identity of one comparable run
+// ---------------------------------------------------------------------------
+
+/// Identity of a trial's immutable inputs: the seeded world hash plus the
+/// canonical encoding of every command in order. Two runs are
+/// cross-comparable only when fixture identity AND grammar fingerprint
+/// both match — receipts from different fixtures or grammars are evidence
+/// about different experiments.
+pub fn fixture_identity(fixture_hash: u64, cmds: &[Command]) -> u64 {
+    let mut hasher = Fnv1a::default();
+    hasher.update(&fixture_hash.to_be_bytes());
+    for cmd in cmds {
+        match cmd {
+            Command::Gather(g) => {
+                hasher.update(b"gather");
+                hasher.update(&g.actor.0.to_be_bytes());
+                hasher.update(&g.claim.0.to_be_bytes());
+                hasher.update(&g.site.0.to_be_bytes());
+            }
+            Command::Witness(w) => {
+                hasher.update(b"witness");
+                hasher.update(&w.witness.0.to_be_bytes());
+                hasher.update(&w.claim.0.to_be_bytes());
+            }
+        }
+    }
+    hasher.finish()
+}
+
+/// Digest of the whole receipt chain, in order. Together with the final
+/// world hash this seals the run's outcome; a host reproducing the trial
+/// must reproduce this digest byte-for-byte.
+pub fn receipt_chain_digest(log: &[Receipt]) -> u64 {
+    let mut hasher = Fnv1a::default();
+    for receipt in log {
+        hasher.update(receipt.canonical_line().as_bytes());
+    }
+    hasher.finish()
+}
+
+// ---------------------------------------------------------------------------
 // Deterministic hashing (FNV-1a 64, no platform or ordering dependence)
 // ---------------------------------------------------------------------------
 
@@ -740,6 +781,22 @@ mod tests {
     #[test]
     fn grammar_fingerprint_is_stable() {
         assert_eq!(grammar_fingerprint(), grammar_fingerprint());
+    }
+
+    #[test]
+    fn fixture_identity_is_order_and_input_sensitive() {
+        let a = Command::Gather(GatherCommand {
+            actor: CharacterId(1),
+            claim: ClaimId(1),
+            site: SiteId(1),
+        });
+        let b = Command::Witness(WitnessCommand {
+            witness: CharacterId(2),
+            claim: ClaimId(3),
+        });
+        assert_eq!(fixture_identity(7, &[a, b]), fixture_identity(7, &[a, b]));
+        assert_ne!(fixture_identity(7, &[a, b]), fixture_identity(7, &[b, a]));
+        assert_ne!(fixture_identity(7, &[a, b]), fixture_identity(8, &[a, b]));
     }
 
     #[test]

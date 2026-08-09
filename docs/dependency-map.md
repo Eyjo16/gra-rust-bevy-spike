@@ -195,5 +195,23 @@ an invariant. The oracle test fixture in `src/oracles.rs` is intentionally
 separate and smaller, so `cargo test` keeps guarding the logic while
 `main.rs` becomes the playground.
 
+## 7. Proof envelope (cross-trial identity)
+
+The last line of every `cargo run` is the run's proof envelope. Where each
+field is computed:
+
+| Field | Computed by | Lives in |
+| --- | --- | --- |
+| `baseline_commit` | runner (git) via `BASELINE_COMMIT` env | `main.rs` |
+| `grammar` | `grammar_fingerprint()` | `src/boundary.rs` |
+| `fixture` | `fixture_identity(fixture_hash, commands)` | `src/boundary.rs` |
+| `receipts` | `receipt_chain_digest(log)` | `src/boundary.rs` |
+| `world` | `World::hash()` | `src/boundary.rs` |
+| `oracles` | `ORACLE_COUNT` + `ORACLE_SUITE_VERSION` | `src/oracles.rs` |
+
+Runs agree as evidence only when `grammar` and `fixture` match; parity
+hosts must also reproduce `receipts` and `world`. The protocol rules are
+in `docs/development-workflow.md` § Cross-trial comparison protocol.
+
 All numbers above remain mechanical examples — not balance, not
 historical truth — until a hypothesis promotes them.

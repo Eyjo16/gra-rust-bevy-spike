@@ -21,6 +21,13 @@ use crate::boundary::{
 
 pub const ORACLE_COUNT: usize = 9;
 
+/// Verifier version for the proof envelope. The oracle *count* is
+/// type-enforced; this constant records which judge evaluated a run and
+/// must be bumped on any change to an oracle's behavior or to the set of
+/// oracles — a run's envelope then names both the language it was judged
+/// in (grammar fingerprint) and the judge that evaluated it.
+pub const ORACLE_SUITE_VERSION: u32 = 1;
+
 pub struct OracleVerdict {
     pub name: &'static str,
     pub pass: bool,
@@ -449,7 +456,7 @@ mod tests {
     use super::*;
     use crate::boundary::{
         CharacterId, ClaimId, GatherCommand, InfraTier, PartialReason, RefusalReason, SiteId,
-        WitnessCommand, grammar_fingerprint, validate_world_coherence,
+        WitnessCommand, grammar_fingerprint, receipt_chain_digest, validate_world_coherence,
     };
     use crate::character::CharacterOwner;
     use crate::economy::EconomyOwner;
@@ -624,6 +631,19 @@ mod tests {
             log: &log,
         };
         assert!(!refusal_zero_mutation(&ctx).pass);
+    }
+
+    #[test]
+    fn receipt_chain_digest_is_reproducible_and_tamper_sensitive() {
+        let (_, _, log_a, _) = run_fixture();
+        let (_, _, log_b, _) = run_fixture();
+        assert_eq!(receipt_chain_digest(&log_a), receipt_chain_digest(&log_b));
+        let mut doctored = log_a.clone();
+        doctored[0].stamina_spent += 1;
+        assert_ne!(
+            receipt_chain_digest(&log_a),
+            receipt_chain_digest(&doctored)
+        );
     }
 
     #[test]

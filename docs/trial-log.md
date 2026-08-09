@@ -1,5 +1,50 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — sprint armed: four concurrent trials, cross-elimination protocol
+
+Baseline for the whole sprint: `3ce9efc` (master). Protocol recorded in
+`docs/development-workflow.md` § Cross-trial comparison protocol; every
+run now emits a proof envelope
+(`baseline_commit / grammar / fixture / receipts / world / oracles`).
+
+The four trials, each one falsifiable hypothesis, with its named falsifier:
+
+1. `trial/004-shadow-final-state` — **hypothesis:** final-world truth
+   currently rests on oracle 7 alone, which replays through the same
+   implementation it audits; an implementation whose run and replay share
+   a bug can present a divergent final world that no independent oracle
+   sees. **Falsifier:** a divergent final world paired with an
+   internally consistent log must fail at least one oracle *other than*
+   `replay_determinism`. Red today; green when the shadow evaluator's
+   final state is compared against the actual world.
+2. `trial/002-bevy-host-parity` — **hypothesis:** Bevy can host the
+   existing truth and reproduce identical receipts and hashes without
+   adding gameplay semantics. **Falsifier:** envelope comparison — the
+   Bevy-hosted run must reproduce `receipts` and `world` exactly, on the
+   same `grammar` and `fixture`, or the host has acquired semantics.
+3. `trial/003-parallel-plan` — **hypothesis:** owner-wide revisions
+   false-conflict independent plans and can leave a partial commit.
+   **Falsifiers (both red today):** two plans for independent characters
+   validated against the same snapshot must both apply without a stale
+   panic; a stale second-owner token must never leave the first owner's
+   apply committed. Green requires finer conflict granularity and an
+   all-tokens-fresh check before any apply.
+4. `trial/005-value-pressure` — **hypothesis:** an incoherent result
+   under the trials above is pressure to *move a value* under a logged,
+   red-first hypothesis rather than to lock it. This branch is the only
+   one allowed to change the grammar fingerprint, and it merges last.
+   Its concrete target is chosen from whatever incoherence the other
+   three surface — deliberately not predetermined.
+
+Merge order: 004 (strengthen the judge) → 002 and 003 (either order,
+first-green-first) → 005 (re-baselines everyone). After each merge the
+remaining branches rebase and re-run red→green — the cross-elimination
+moment. Envelope fields make any silent divergence visible immediately.
+
+Spec evolution this round (conscious): `cargo run` output gained the
+envelope line; `ORACLE_SUITE_VERSION` (v1) added to name the judge.
+Receipts, grammar, and world hashes are unchanged.
+
 ## 2026-08-09 — architecture decision: Bevy host and worktree loop
 
 - The Bevy HOLD is lifted. The round-2 condition was satisfied: the
