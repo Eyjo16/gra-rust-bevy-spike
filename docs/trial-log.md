@@ -1,5 +1,21 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — trial/013-low-actionability: pre-registered, evidence unopened
+
+Meaning Gate dispatch by explicit author priority. Competing meanings,
+training fixture, exact directional predictions, falsifiers, non-manufactured
+selection rule, authority mapping, and one-time holdout are sealed in
+`docs/trial-013-low-actionability-report.md` before any trial/013 execution.
+
+H-A: bands are descriptive; Low cost remains 15 and starts 10–14 may be
+non-actionable. H-B: entering Low affords gather; Low cost becomes 10. Red
+class is mathematical semantic non-identifiability: runtime consequences of an
+installed value do not themselves identify authorial intent.
+
+Holdout status at this entry: **SEALED / UNREVEALED**. No value or authority
+identity has moved. Baseline grammar `0x530003916889b952`, fixture
+`0x3805f1e20c001051`, judge `10v4`.
+
 ## 2026-08-09 — trial/008-apply-totality: behavioral red → exact bound
 
 Hypothesis (audit defier 4): the trial/003 freshness barrier prevents stale
