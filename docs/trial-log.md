@@ -1,5 +1,52 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — trial/011-threshold-edge-chains: pressure map, values frozen
+
+Hypothesis: isolated band tests do not reveal what threshold, cost, yield, and
+verb policy compose into over repeated transitions. Test starts
+`9,10,14,15,39,40,79,80` were therefore run through real gather and witness
+chains. Full table, exact paths, and interpretation:
+`docs/trial-011-threshold-edge-chains-report.md`.
+
+Red was an honest capability red against otherwise unmodified `f5728d6`:
+
+```text
+error[E0425]: cannot find function `collect_threshold_edge_observations` in this scope
+    --> src/boundary.rs:1032:28
+     |
+1032 |         let observations = collect_threshold_edge_observations();
+     |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+```
+
+Green is a test-only collector over coherent pressure fixtures. It records
+starting band, selected policy cost, exact headroom, first outcome/refusal,
+spent, yield, first post-state, full accepted path, chain length, total yield,
+final stamina, and stopping reason for both verbs.
+
+No contract contradiction surfaced. Gather obeys its exhausted gate and exact
+band-cost headroom; witness obeys its deliberately different flat-cost,
+no-exhausted-gate policy (start 9 witnesses successfully). Pressure signals:
+
+- starts 10–14 are Low/non-exhausted but cannot pay Low's cost 15;
+- 39→40 lowers first cost 15→12 while doubling Established yield 600→1,200;
+  both chains have length two, but total yield rises 1,200→1,800;
+- 79→80 lowers first cost 12→10 while raising first yield 1,200→1,800;
+  both chains have length six, but total yield rises 6,000→6,600.
+
+Pressure verdict: **candidate balance hypotheses named, values frozen**. These
+are real discontinuities but do not say which value is false. No production
+code, table, threshold, cost, yield, standard fixture, grammar, receipt,
+oracle, contract, registry, or schema changed.
+
+Full gate: fmt and strict clippy clean in both feature sets; 43/43 default
+tests and 44/44 `bevy-host` tests passed; both runs exited 0; all ten oracles
+passed; hosted parity reported `receipts_match=true state_match=true
+world_match=true`. The proof envelope remained byte-identical:
+
+```text
+envelope baseline_commit=f5728d6 grammar=0x530003916889b952 fixture=0x3805f1e20c001051 receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a oracles=10v3
+```
+
 ## 2026-08-09 — trial/008-apply-totality: behavioral red → exact bound
 
 Hypothesis (audit defier 4): the trial/003 freshness barrier prevents stale
