@@ -27,6 +27,7 @@ decision, migration account, and approval.
 | `development-workflow.md` | Current process | Defines branches, worktrees, falsification, review, and integration |
 | `trial-log.md` | Append-only evidence | Records decisions, red/green rounds, gates, and environment facts |
 | `verb-isolation-report.md` | Standalone evidence | Records the adversarial second-verb isolation trial |
+| `falsification-defier-audit.md` | Standalone evidence | Separates closed counterexamples from the surviving limits of the current proof |
 
 ## Maintenance rule
 

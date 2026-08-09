@@ -108,6 +108,13 @@ The review asks:
 - Can any new path mutate canonical truth without an owner proof?
 - Do refusal and replay properties still hold?
 - Is an oracle trusting the same fields as the code it claims to check?
+- Is the claim explicitly scoped to the fixtures and traces that could
+  falsify it, or is finite evidence being stated as universal equivalence?
+- Does a planned write bind every mutable entity and predicate whose value
+  made validation pass, rather than only the entities it will mutate?
+- Can any apply step still fail after the all-tokens-fresh preflight?
+- At a language seam, was meaning preserved before the canonical command was
+  constructed, or does parity begin after a lossy normalization?
 - Did a closed vocabulary, contract, or registry change? If so, was that
   change explicitly authorized and versioned?
 - Do current documents and historical evidence say which claims are proven,
@@ -164,8 +171,13 @@ implementation or the fixture. Every recorded run therefore carries a
 | `oracles` | `ORACLE_COUNT` + `ORACLE_SUITE_VERSION` — which judge evaluated the run |
 
 `cargo run` prints the envelope as its final line. Two runs are
-cross-comparable evidence only when `grammar` and `fixture` match; a host
-parity claim must additionally reproduce `receipts` and `world` exactly.
+cross-comparable evidence only when `grammar` and `fixture` match. These
+64-bit hashes are deterministic checksums and comparison indices, not
+collision-free equality proofs. A strong host-parity claim retains and
+compares the exact canonical receipt chain and exact canonical final-state
+serialization; matching `receipts` and `world` envelope fields alone is
+checksum-level evidence. Until exact final-state serialization exists, state
+parity claims must say that they are hash-bounded.
 
 Concurrency rules for a multi-branch sprint:
 
@@ -176,6 +188,9 @@ Concurrency rules for a multi-branch sprint:
    the old value was wrong, capture the red, then move it. Contracts
    (reason codes, receipt schema, hash chain, registry/schema) change
    only as declared spec evolution.
+   For a value claim rather than a mechanical fixture adjustment, also
+   pre-register a directional or metamorphic prediction on an untouched
+   holdout and reveal it once; do not retune after seeing that result.
 4. Merges are serial. Strengthen the judge first (oracle branches merge
    before host or semantics branches); value-pressure merges last because
    it re-baselines everyone. After each merge, every remaining branch
