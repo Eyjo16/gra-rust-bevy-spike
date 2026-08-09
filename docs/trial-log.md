@@ -1,5 +1,38 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — trial/006-exact-final-state: defier audit falsifier #1
+
+Hypothesis (audit defier 1): hash equality is checksum evidence, not
+state equality — FNV-1a is not injective, and both host parity and the
+replay oracle compared final worlds by hash alone.
+
+Red evidence: the falsifier
+`falsification_canonical_state_must_see_every_domain_mutation` demands a
+canonical serialization that is stable across identical histories and
+sees every truth-domain mutation; against the unmodified code it is a
+capability red (compile error `E0599`: no method `canonical_state`) — no
+behavioral red exists without manufacturing an FNV collision, and that
+is exactly the audit's point: the comparison could not even express
+exact equality.
+
+Green: `World::canonical_state()` — one line per fact, deterministic
+owner/key order, the same lines the pure host prints (the end-of-run
+summary now IS the serialization, printed rather than paraphrased).
+Exact-equality claims upgraded to compare it:
+
+- Bevy parity gate: `state_match` compares serializations; the hash
+  remains as checksum address. First hosted run: `receipts_match=true
+  state_match=true world_match=true`.
+- Oracle 7 `replay_determinism`: now `states_match` + `hashes_match` +
+  `receipts_match`.
+
+Spec evolutions (conscious): `ORACLE_SUITE_VERSION` 2 → 3 (oracle 7
+behavior strengthened); run-summary site lines now carry `tier=` since
+tier is truth state (output evolution — receipts, grammar, fixture, and
+world hashes all byte-identical, envelope confirms `oracles=10v3` as the
+only change). `EconomyOwner::stock` removed — the serialization reads
+through `sites_iter`, and a dead accessor is a trap, not an API.
+
 ## 2026-08-09 — adversarial defier audit: proof boundaries recorded
 
 An external hostile review attacked the mathematical claims behind the

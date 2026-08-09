@@ -29,7 +29,10 @@ pub const ORACLE_COUNT: usize = 10;
 /// oracles — a run's envelope then names both the language it was judged
 /// in (grammar fingerprint) and the judge that evaluated it.
 /// v2: added oracle 10 `shadow_final_state`.
-pub const ORACLE_SUITE_VERSION: u32 = 2;
+/// v3: oracle 7 compares the exact canonical final-state serialization,
+/// not only the hash — hash equality is checksum evidence, not state
+/// equality.
+pub const ORACLE_SUITE_VERSION: u32 = 3;
 
 pub struct OracleVerdict {
     pub name: &'static str,
@@ -178,7 +181,9 @@ fn cell_bounds(ctx: &OracleCtx<'_>) -> OracleVerdict {
 }
 
 /// 7. Determinism: replaying the same fixture and commands through the
-///    real implementation reproduces the same receipts and final hash.
+///    real implementation reproduces the same receipts, the same exact
+///    canonical final state, and the same hash. The exact serialization
+///    carries the equality claim; the hash is its checksum address.
 fn replay_determinism(ctx: &OracleCtx<'_>) -> OracleVerdict {
     let mut replay_world = (ctx.build_fixture)();
     let replay_lines: Vec<String> = ctx
@@ -188,12 +193,15 @@ fn replay_determinism(ctx: &OracleCtx<'_>) -> OracleVerdict {
         .map(|(i, cmd)| submit(&mut replay_world, i as u64 + 1, *cmd).canonical_line())
         .collect();
     let original_lines: Vec<String> = ctx.log.iter().map(Receipt::canonical_line).collect();
+    let states_match = replay_world.canonical_state() == ctx.world.canonical_state();
     let hashes_match = replay_world.hash() == ctx.world.hash();
     let lines_match = replay_lines == original_lines;
     OracleVerdict::new(
         "replay_determinism",
-        hashes_match && lines_match,
-        format!("hashes_match={hashes_match} receipts_match={lines_match}"),
+        states_match && hashes_match && lines_match,
+        format!(
+            "states_match={states_match} hashes_match={hashes_match} receipts_match={lines_match}"
+        ),
     )
 }
 

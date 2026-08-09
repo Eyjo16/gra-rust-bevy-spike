@@ -118,31 +118,12 @@ fn main() -> ExitCode {
     }
     println!("world_hash=0x{:016x}", world.hash());
 
-    for (id, stamina) in world.characters.iter() {
-        println!(
-            "character C{} stamina={} inventory_g={}",
-            id.0,
-            stamina.points(),
-            world.economy.inventory(id).grams()
-        );
+    // The end-of-run state summary IS the canonical serialization —
+    // exactly what parity and replay compare, printed rather than
+    // paraphrased.
+    for line in world.canonical_state() {
+        println!("{line}");
     }
-    for site in [SiteId(1), SiteId(2), SiteId(3), SiteId(4)] {
-        if let Some(stock) = world.economy.stock(site) {
-            println!("site S{} stock_g={}", site.0, stock.grams());
-        }
-    }
-    for (claim, holder, site, witnessed) in world.social.claims_iter() {
-        println!(
-            "claim K{} holder=C{} site=S{} witnessed={}",
-            claim.0, holder.0, site.0, witnessed
-        );
-    }
-    println!(
-        "revisions character={} economy={} social={}",
-        world.characters.revision(),
-        world.economy.revision(),
-        world.social.revision()
-    );
 
     let ctx = OracleCtx {
         world: &world,
@@ -169,15 +150,20 @@ fn main() -> ExitCode {
         let host_lines: Vec<String> = host_log.iter().map(Receipt::canonical_line).collect();
         let receipts_match = host_lines == pure_lines
             && receipt_chain_digest(&host_log) == receipt_chain_digest(&log);
+        // Exact serialization carries the equality claim; the hash is
+        // its checksum address (FNV-1a is not injective).
+        let state_match = host_world.canonical_state() == world.canonical_state();
         let world_match = host_world.hash() == world.hash();
         println!(
-            "bevy_host_parity receipts_match={} world_match={} receipts=0x{:016x} world=0x{:016x}",
+            "bevy_host_parity receipts_match={} state_match={} world_match={} \
+             receipts=0x{:016x} world=0x{:016x}",
             receipts_match,
+            state_match,
             world_match,
             receipt_chain_digest(&host_log),
             host_world.hash(),
         );
-        all_pass &= receipts_match && world_match;
+        all_pass &= receipts_match && state_match && world_match;
     }
 
     // Proof envelope: the full identity of this run for cross-trial
