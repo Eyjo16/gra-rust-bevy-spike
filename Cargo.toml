@@ -3,6 +3,13 @@ name = "gra-rust-bevy-spike"
 version = "0.1.0"
 edition = "2024"
 
+# Bevy is an optional execution/testing host for the pure Rust truth layer.
+# The dependencies stay pinned behind an off-by-default feature so the
+# canonical boundary gate remains fast, deterministic, and engine-independent.
+[features]
+default = []
+bevy-host = ["dep:bevy", "dep:bevy_ecs"]
+
 [dependencies]
-bevy = "0.19"
-bevy_ecs = "0.19"
+bevy = { version = "0.19", optional = true }
+bevy_ecs = { version = "0.19", optional = true }

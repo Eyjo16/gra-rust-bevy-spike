@@ -1,3 +1,161 @@
-fn main() {
-    println!("Hello, world!");
+//! Truth-layer slice host (pure Rust).
+//!
+//! Seeds a mechanical-example fixture, submits a fixed command sequence
+//! through the boundary, prints the canonical receipts and deterministic
+//! world hash, then runs the nine bounded oracles. Exits non-zero if any
+//! oracle fails, so `cargo run` is part of the compiler gate.
+//!
+//! The Bevy host is ON HOLD behind the off-by-default `bevy-host` feature
+//! until this pure boundary passes the gate.
+
+mod boundary;
+mod character;
+mod economy;
+mod oracles;
+mod social;
+
+use std::process::ExitCode;
+
+use boundary::{
+    CharacterId, ClaimId, Command, GatherCommand, InfraTier, MassGrams, Receipt, SiteId, Stamina,
+    WitnessCommand, World, grammar_fingerprint, submit, validate_world_coherence,
+};
+use character::CharacterOwner;
+use economy::EconomyOwner;
+use oracles::OracleCtx;
+use social::SocialOwner;
+
+/// Fixture numbers are mechanical examples only — not balance and not
+/// historical truth.
+fn fixture() -> World {
+    World {
+        characters: CharacterOwner::seed([
+            (CharacterId(1), Stamina::new(90).expect("within bounds")),
+            (CharacterId(2), Stamina::new(39).expect("within bounds")),
+            (CharacterId(3), Stamina::new(5).expect("within bounds")),
+            (CharacterId(4), Stamina::new(12).expect("within bounds")),
+        ])
+        .expect("no duplicate characters"),
+        economy: EconomyOwner::seed_sites([
+            (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
+            (SiteId(2), InfraTier::Crude, MassGrams::new(300)),
+            (SiteId(3), InfraTier::Advanced, MassGrams::new(5000)),
+            (SiteId(4), InfraTier::None, MassGrams::new(1000)),
+        ])
+        .expect("no duplicate sites"),
+        social: SocialOwner::seed_claims([
+            (ClaimId(1), CharacterId(1), SiteId(1), true),
+            (ClaimId(2), CharacterId(2), SiteId(2), true),
+            (ClaimId(3), CharacterId(2), SiteId(1), false),
+            (ClaimId(4), CharacterId(3), SiteId(2), true),
+            (ClaimId(5), CharacterId(1), SiteId(3), true),
+            (ClaimId(6), CharacterId(2), SiteId(4), true),
+            (ClaimId(7), CharacterId(4), SiteId(4), true),
+            (ClaimId(8), CharacterId(4), SiteId(4), false),
+            (ClaimId(9), CharacterId(1), SiteId(1), false),
+        ])
+        .expect("no duplicate claims"),
+    }
+}
+
+/// A fixed two-verb sequence that exercises Accepted, Partial, and every
+/// reachable refusal in the fixture — including the witness verb's own
+/// refusals and the interplay between the verbs (a witnessed claim
+/// unlocking a gather gate, an exhausted character still allowed to
+/// witness).
+fn commands() -> Vec<Command> {
+    let gather = |actor, claim, site| {
+        Command::Gather(GatherCommand {
+            actor: CharacterId(actor),
+            claim: ClaimId(claim),
+            site: SiteId(site),
+        })
+    };
+    let witness = |witness, claim| {
+        Command::Witness(WitnessCommand {
+            witness: CharacterId(witness),
+            claim: ClaimId(claim),
+        })
+    };
+    vec![
+        gather(1, 1, 1), // accepted: fresh x established
+        gather(2, 2, 2), // partial: crude site runs short
+        gather(2, 3, 1), // refused: claim not witnessed
+        gather(3, 4, 2), // refused: actor exhausted
+        gather(1, 1, 1), // partial: site nearly depleted
+        gather(1, 1, 1), // refused: site empty
+        gather(1, 1, 2), // refused: claim/site mismatch
+        gather(1, 5, 3), // accepted: steady x advanced
+        gather(2, 6, 4), // accepted: low x no infrastructure
+        gather(4, 7, 4), // refused: 12 points cannot cover a 15-point spend
+        witness(1, 3),   // accepted: C1 attests C2's claim (flat cost)
+        witness(1, 3),   // refused: claim already witnessed
+        witness(2, 3),   // refused: cannot witness own claim
+        gather(2, 3, 1), // refused: claim now witnessed, but gatherer exhausted
+        witness(3, 8),   // accepted: exhausted C3 may still witness (5 >= 5)
+        witness(3, 9),   // refused: 0 points cannot cover the witness cost
+    ]
+}
+
+fn main() -> ExitCode {
+    let mut world = fixture();
+    validate_world_coherence(&world).expect("fixture is referentially coherent");
+    println!("grammar=0x{:016x}", grammar_fingerprint());
+    let baseline_mass = world.economy.total_mass();
+    let cmds = commands();
+
+    let mut log: Vec<Receipt> = Vec::with_capacity(cmds.len());
+    for (i, cmd) in cmds.iter().enumerate() {
+        let receipt = submit(&mut world, i as u64 + 1, *cmd);
+        println!("{}", receipt.canonical_line());
+        log.push(receipt);
+    }
+    println!("world_hash=0x{:016x}", world.hash());
+
+    for (id, stamina) in world.characters.iter() {
+        println!(
+            "character C{} stamina={} inventory_g={}",
+            id.0,
+            stamina.points(),
+            world.economy.inventory(id).grams()
+        );
+    }
+    for site in [SiteId(1), SiteId(2), SiteId(3), SiteId(4)] {
+        if let Some(stock) = world.economy.stock(site) {
+            println!("site S{} stock_g={}", site.0, stock.grams());
+        }
+    }
+    for (claim, holder, site, witnessed) in world.social.claims_iter() {
+        println!(
+            "claim K{} holder=C{} site=S{} witnessed={}",
+            claim.0, holder.0, site.0, witnessed
+        );
+    }
+    println!(
+        "revisions character={} economy={} social={}",
+        world.characters.revision(),
+        world.economy.revision(),
+        world.social.revision()
+    );
+
+    let ctx = OracleCtx {
+        world: &world,
+        baseline_mass,
+        build_fixture: fixture,
+        commands: &cmds,
+        log: &log,
+    };
+    let verdicts = oracles::run_all(&ctx);
+    let mut all_pass = true;
+    for verdict in &verdicts {
+        let status = if verdict.pass { "PASS" } else { "FAIL" };
+        println!("oracle {status} {} ({})", verdict.name, verdict.detail);
+        all_pass &= verdict.pass;
+    }
+
+    if all_pass {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
 }
