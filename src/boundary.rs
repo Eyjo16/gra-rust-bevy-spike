@@ -1183,6 +1183,171 @@ mod tests {
         assert_ne!(after_gather, after_witness, "a witness must be visible");
     }
 
+    fn active_cell_world(band: StaminaBand, tier: InfraTier, stock: u64) -> World {
+        let points = match band {
+            StaminaBand::Low => 39,
+            StaminaBand::Steady => 79,
+            StaminaBand::Fresh => 100,
+            StaminaBand::Exhausted => {
+                panic!("the exhausted row is gated before the yield lookup")
+            }
+        };
+        let world = World {
+            characters: CharacterOwner::seed([(
+                CharacterId(1),
+                Stamina::new(points).expect("representative stamina is in range"),
+            )])
+            .expect("one character is unique"),
+            economy: EconomyOwner::seed_sites([(SiteId(1), tier, MassGrams::new(stock))])
+                .expect("one site is unique"),
+            social: SocialOwner::seed_claims([(ClaimId(1), CharacterId(1), SiteId(1), true)])
+                .expect("one claim is unique"),
+        };
+        validate_world_coherence(&world).expect("purpose-built cell fixture is coherent");
+        world
+    }
+
+    fn submit_active_cell(world: &mut World) -> Receipt {
+        submit(
+            world,
+            1,
+            Command::Gather(GatherCommand {
+                actor: CharacterId(1),
+                claim: ClaimId(1),
+                site: SiteId(1),
+            }),
+        )
+    }
+
+    fn assert_cell_mass_landed(world: &World, expected_inventory: u64) {
+        assert_eq!(
+            world.economy.inventory(CharacterId(1)),
+            MassGrams::new(expected_inventory)
+        );
+        let remaining_stock = world
+            .economy
+            .sites_iter()
+            .next()
+            .map(|(_, _, stock)| stock)
+            .expect("the purpose-built site exists");
+        assert_eq!(remaining_stock, MassGrams::ZERO);
+    }
+
+    /// Falsifier (trial/010): every non-exhausted band/tier cell must be
+    /// reachable through real gather execution at its exact-full,
+    /// one-gram-short partial, and empty-stock boundaries.
+    #[test]
+    fn falsification_all_active_cells_are_reachable() {
+        let bands = [StaminaBand::Low, StaminaBand::Steady, StaminaBand::Fresh];
+        let tiers = [
+            InfraTier::None,
+            InfraTier::Crude,
+            InfraTier::Established,
+            InfraTier::Advanced,
+        ];
+        let mut cells_reached = 0;
+        let mut full_cases = 0;
+        let mut partial_cases = 0;
+        let mut empty_cases = 0;
+
+        for band in bands {
+            for tier in tiers {
+                let expected_yield = YIELD_TABLE_GRAMS[band.index()][tier.index()];
+                let expected_cost = STAMINA_COST_BY_BAND[band.index()];
+                assert!(
+                    expected_yield > 0,
+                    "every active cell needs a nonzero partial boundary"
+                );
+
+                // Exact requested stock is the Accepted/Partial boundary:
+                // equality grants the full cell yield and remains Accepted.
+                let mut full_world = active_cell_world(band, tier, expected_yield);
+                let full = submit_active_cell(&mut full_world);
+                assert_eq!(
+                    full.outcome,
+                    OutcomeKind::Accepted,
+                    "exact-full cell {}/{}",
+                    band.code(),
+                    tier.code()
+                );
+                assert_eq!(full.band, Some(band));
+                assert_eq!(full.tier, Some(tier));
+                assert_eq!(full.stamina_spent, expected_cost);
+                assert_eq!(full.mass_moved, MassGrams::new(expected_yield));
+                assert_cell_mass_landed(&full_world, expected_yield);
+                assert_eq!(
+                    full_world.economy.total_mass(),
+                    MassGrams::new(expected_yield)
+                );
+                full_cases += 1;
+
+                // One gram below the requested cell value must expose the
+                // partial boundary without changing the value under test.
+                let partial_stock = expected_yield - 1;
+                let mut partial_world = active_cell_world(band, tier, partial_stock);
+                let partial = submit_active_cell(&mut partial_world);
+                assert_eq!(
+                    partial.outcome,
+                    OutcomeKind::Partial(PartialReason::SiteNearlyDepleted),
+                    "one-short cell {}/{}",
+                    band.code(),
+                    tier.code()
+                );
+                assert_eq!(partial.band, Some(band));
+                assert_eq!(partial.tier, Some(tier));
+                assert_eq!(partial.stamina_spent, expected_cost);
+                assert_eq!(partial.mass_moved, MassGrams::new(partial_stock));
+                assert_cell_mass_landed(&partial_world, partial_stock);
+                assert_eq!(
+                    partial_world.economy.total_mass(),
+                    MassGrams::new(partial_stock)
+                );
+                partial_cases += 1;
+
+                // Empty stock is reached only after the coherent social,
+                // band/cost, tier, and yield-selection path. It refuses
+                // before apply, so the world stays byte-identical.
+                let mut empty_world = active_cell_world(band, tier, 0);
+                let empty_before = empty_world.canonical_state();
+                let empty = submit_active_cell(&mut empty_world);
+                assert_eq!(
+                    empty.outcome,
+                    OutcomeKind::Refused(RefusalReason::SiteEmpty),
+                    "empty cell {}/{}",
+                    band.code(),
+                    tier.code()
+                );
+                assert_eq!(empty.band, Some(band));
+                assert_eq!(empty.tier, Some(tier));
+                assert_eq!(empty.stamina_spent, 0);
+                assert_eq!(empty.mass_moved, MassGrams::ZERO);
+                assert_eq!(empty_world.canonical_state(), empty_before);
+                empty_cases += 1;
+
+                println!(
+                    "active_cell band={} tier={} yield_g={} gather_cost={} \
+                     full=accepted partial_g={} empty=site_empty",
+                    band.code(),
+                    tier.code(),
+                    expected_yield,
+                    expected_cost,
+                    partial_stock
+                );
+                cells_reached += 1;
+            }
+        }
+
+        assert_eq!(cells_reached, 12);
+        assert_eq!(full_cases, 12);
+        assert_eq!(partial_cases, 12);
+        assert_eq!(empty_cases, 12);
+        println!(
+            "active_cell_reachability cells={cells_reached}/12 cases={} \
+             full={full_cases} partial={partial_cases} empty={empty_cases}",
+            full_cases + partial_cases + empty_cases
+        );
+    }
+
     /// Falsifier (trial/003, part 1): two plans for two different
     /// characters at two different sites, validated against the same
     /// snapshot, are fully independent — neither invalidates the other,
