@@ -1,8 +1,8 @@
 # Dependency and tool-tree map — truth-layer slice 001
 
 Six views: the cargo tree, the module graph, the ownership tree, the flow
-of one command, the oracle input map, and — for tomorrow's hypothesis
-work — exactly where the tunable values live.
+of one command, the oracle input map, and exactly where the tunable values
+live for hypothesis work.
 
 ## 1. Cargo dependency tree
 
@@ -13,8 +13,8 @@ dependencies** — `cargo tree` is one line:
 gra-rust-bevy-spike v0.1.0
 ```
 
-The `bevy-host` feature (OFF by default, host on HOLD) pulls in the full
-engine — about 1,480 nodes in `cargo tree`. Depth 1–2:
+The `bevy-host` feature (OFF by default, host used as an adapter) pulls in
+the full engine — about 1,480 nodes in `cargo tree`. Depth 1–2:
 
 ```
 gra-rust-bevy-spike v0.1.0
@@ -40,7 +40,7 @@ only on those primitives — never on another owner:
 ```mermaid
 flowchart TD
     main["main.rs<br/>fixture + trial + gate"]
-    oracles["oracles.rs<br/>7 bounded checks"]
+    oracles["oracles.rs<br/>9 bounded checks"]
     boundary["boundary.rs<br/>primitives + orchestrator"]
     character["character/<br/>stamina owner"]
     economy["economy/<br/>mass owner"]
@@ -81,10 +81,10 @@ flowchart TD
     world --> soc --> claims
 ```
 
-Every leaf is private to its module. The only mutation paths are
-`apply_spend` (character) and `apply_extract` (economy) — both take a
-proof token with private fields, so only a validation inside the same
-owner can mint the right to write. Social has no apply in this slice.
+Every leaf is private to its module. Mutation paths are `apply_spend`
+(character), `apply_extract` (economy), and `apply_witness` (social).
+Each takes a proof token with private fields, so only validation inside
+the same owner can mint the right to write.
 
 ## 4. Flow of one command (validate everything, then apply)
 

@@ -1,5 +1,26 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — architecture decision: Bevy host and worktree loop
+
+- The Bevy HOLD is lifted. The round-2 condition was satisfied: the
+  adversarial second verb landed without leaking policy into established
+  owners, and the hidden single-verb assumptions surfaced in the oracles.
+- Bevy is assigned a narrower role than the truth layer: execution,
+  scheduling, ECS projection, interaction, rendering, and additional test
+  surfaces. It must submit commands through the same boundary and reproduce
+  the pure host's canonical receipts and final hash.
+- The pure-Rust truth layer remains the semantic authority below every host.
+  Registry/schema contracts remain higher authority when present; this
+  decision changes no registry or schema.
+- Multi-language work is allowed only across explicit, versioned seams. A
+  language or tool may express a form where it is clearest, but it may not
+  acquire a second mutation path into canonical truth.
+- `docs/architecture.md` records the refined layer model and host acceptance
+  criteria. `docs/development-workflow.md` records the repeatable branch and
+  worktree cycle for hypothesis, red-first falsification, implementation,
+  review, integration, and cleanup.
+- No runtime semantics changed in this decision round.
+
 ## 2026-08-08 — falsification round 2: second verb (`witness`) vs isolation
 
 Full standalone record: `docs/verb-isolation-report.md`. Summary:

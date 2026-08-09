@@ -4,6 +4,11 @@ A pure-Rust scaffold for the game's truth layer: three single-writer owners,
 a validating boundary, canonical receipts, deterministic world hashes, and
 exactly nine bounded oracles.
 
+Bevy is the next execution and testing host, not the source of game truth.
+The pure boundary remains independently runnable so host code can be changed,
+replaced, or written in another language without changing what a valid state
+or transition means. See `docs/architecture.md` for the layer contract.
+
 > All numbers in the yield/cost tables and fixtures are **mechanical
 > examples** — they are not balance and not historical truth.
 
@@ -58,6 +63,9 @@ exactly nine bounded oracles.
 | `src/social/mod.rs` | Social owner (claims, witness gate) |
 | `src/oracles.rs` | The nine bounded oracles, incl. the independent shadow evaluator |
 | `src/main.rs` | Pure-Rust host: fixture trial + oracle gate (non-zero exit on failure) |
+| `docs/README.md` | Documentation map and source-of-truth order |
+| `docs/architecture.md` | Truth kernel, Bevy host, and multi-language seam decisions |
+| `docs/development-workflow.md` | Branch, worktree, falsification, review, and merge cycle |
 | `docs/trial-log.md` | Decision and verification log |
 
 ## The compiler gate
@@ -73,9 +81,14 @@ cargo run
 world hash, an end-of-run state summary (including owner revisions), and
 the nine oracle verdicts; it exits non-zero if any oracle fails.
 
-## Bevy host: ON HOLD
+## Bevy host: next execution layer
 
-The Bevy host stays on hold until the pure Rust boundary passes the gate.
-The `bevy`/`bevy_ecs` dependencies remain pinned behind the off-by-default
-`bevy-host` feature, so the default build is the pure boundary. Nothing in
-the truth layer references Bevy.
+The hold was lifted after the second verb (`witness`) landed without leaking
+verb policy into the established owners. The `bevy`/`bevy_ecs` dependencies
+remain pinned behind the off-by-default `bevy-host` feature deliberately: the
+default gate must keep testing the truth layer without an engine dependency.
+
+Bevy may schedule commands, project truth into ECS views, drive fixtures, and
+render results. It may not define canonical state, bypass the validating
+boundary, or mutate owner state directly. A Bevy-hosted replay must produce
+the same receipts and final world hash as the pure-Rust host.
