@@ -40,7 +40,7 @@ only on those primitives — never on another owner:
 ```mermaid
 flowchart TD
     main["main.rs<br/>fixture + trial + gate"]
-    oracles["oracles.rs<br/>9 bounded checks"]
+    oracles["oracles.rs<br/>10 bounded checks"]
     boundary["boundary.rs<br/>primitives + orchestrator"]
     character["character/<br/>stamina owner"]
     economy["economy/<br/>mass owner"]
@@ -139,6 +139,7 @@ flowchart LR
     o7["7 replay_determinism"]
     o8["8 refusal_zero_mutation"]
     o9["9 shadow_expectation"]
+    o10["10 shadow_final_state"]
 
     world --> o1
     world --> o2
@@ -154,17 +155,23 @@ flowchart LR
     fix --> o8
     log --> o9
     fix --> o9
+    world --> o10
+    fix --> o10
 ```
 
 Oracles 1–2 audit the state, 3–6 audit the receipt log, 7 replays the
 whole trial through the real implementation, 8 walks the receipt hash
 chain (refusals must be byte-identical no-ops, yields must change the
-hash), and 9 is an **independent shadow evaluator**: it recomputes every
-expected outcome from the immutable fixture with its own state tracking
-and its own band thresholds, never reading a receipt field. The layers
-catch different lie classes: forged state trips 1/2/7, forged receipts
-trip 3–6/7/8, and an implementation that lies *consistently* — receipts
-and replay agreeing on wrong semantics — trips 9.
+hash), and 9–10 are the **independent shadow evaluator**: it recomputes
+the whole trial from the immutable fixture with its own state tracking
+and its own band thresholds, never reading a receipt field — 9 compares
+every expected receipt, 10 compares the shadow's final state against the
+actual world (stamina, inventories, stocks, claim gates). The layers
+catch different lie classes: forged state trips 1/2/7/10, forged receipts
+trip 3–6/7/8, an implementation that lies *consistently* — receipts and
+replay agreeing on wrong semantics — trips 9, and a final world that
+drifts from the commands trips 10 even when run and replay share the
+same bug (which satisfies 7).
 
 ## 6. Where the values live (for hypothesis work)
 
@@ -190,7 +197,7 @@ consciously in both places, which is the point.
 
 Suggested loop for a data-spread hypothesis: edit one table or the
 fixture, run `cargo run`, read the canonical receipt lines as the
-experiment record, and let the nine oracles veto any spread that breaks
+experiment record, and let the ten oracles veto any spread that breaks
 an invariant. The oracle test fixture in `src/oracles.rs` is intentionally
 separate and smaller, so `cargo test` keeps guarding the logic while
 `main.rs` becomes the playground.
