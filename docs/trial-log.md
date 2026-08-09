@@ -17,8 +17,6 @@ test economy::tests::falsification_overfull_inventory_must_not_silently_clamp ..
 
 thread 'economy::tests::falsification_overfull_inventory_must_not_silently_clamp' panicked at src/economy/mod.rs:324:9:
 u64::MAX + 1 inventory transfer silently clamped instead of failing
-
-test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 42 filtered out
 ```
 
 The old apply silently destroyed the last gram, while old `total_mass`
@@ -50,6 +48,53 @@ world_match=true`. Evidence envelope:
 envelope baseline_commit=f5728d6 grammar=0x530003916889b952 fixture=0x3805f1e20c001051 receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a oracles=10v4
 ```
 
+## 2026-08-09 — trial/009-language-seam: red→green
+
+Hypothesis (audit defier 5): a foreign source can lose meaning before a
+typed `Command` exists, so receipt and host parity can both stay green after
+a lossy or ambiguous source normalization.
+
+Observation point: `Command::canonical_bytes()`. This is the exact byte
+encoding already embedded inside `fixture_identity`, extracted without
+changing it. Language/host parity claims begin only after an adapter has
+produced these bytes; they do not prove that source text reached them
+without loss.
+
+Behavioral red, captured with the minimal hand-written text parser still
+using Rust's `u64::from_str` behavior:
+
+```text
+running 1 test
+test boundary::tests::falsification_text_seam_rejects_leading_plus ... FAILED
+
+thread 'boundary::tests::falsification_text_seam_rejects_leading_plus' panicked:
+leading plus silently normalized before canonical command bytes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 42 filtered out
+```
+
+Green: test-only `parse_text_command` now accepts only ASCII, canonical
+decimal integers (no sign, no leading zero except `0`) and the exact field
+order/spacing of the two named command forms. Its closed `TextCommandFault`
+vocabulary rejects non-ASCII/BOM input, non-canonical whitespace and
+integers, overflow, missing/extra/reordered/duplicate/unknown fields, and
+empty values. Canonical gather/witness lines and `u64::MAX` must produce
+bytes identical to hand-constructed commands. The three seam tests pass.
+
+Proof envelope after green (baseline `f5728d6`):
+
+```text
+envelope baseline_commit=f5728d6 grammar=0x530003916889b952
+  fixture=0x3805f1e20c001051 receipts=0x6c5b0e011471d985
+  world=0x36221d3fdb8aed9a oracles=10v3
+```
+
+No registry/schema, grammar, receipt, fixture, oracle, dependency, or
+balance-value change. The pressure verdict is **representation, not
+balance**: the red occurred before any game value entered transition
+semantics, so moving a yield, cost, band, or fixture number would conceal
+the defect rather than answer it. Full evidence and limits:
+`docs/trial-009-language-seam-report.md`.
 ## 2026-08-09 — falsifier map armed for overnight execution
 
 `docs/falsifier-map.md` turns the audit's open falsifiers into three
