@@ -32,7 +32,10 @@ pub const ORACLE_COUNT: usize = 10;
 /// v3: oracle 7 compares the exact canonical final-state serialization,
 /// not only the hash — hash equality is checksum evidence, not state
 /// equality.
-pub const ORACLE_SUITE_VERSION: u32 = 3;
+/// v4: oracle 2's mass total is exact checked arithmetic under the
+/// coherence-validated aggregate bound; saturation can no longer make a
+/// mass-loss defect appear conserved.
+pub const ORACLE_SUITE_VERSION: u32 = 4;
 
 pub struct OracleVerdict {
     pub name: &'static str,
@@ -89,7 +92,9 @@ fn stamina_in_bounds(ctx: &OracleCtx<'_>) -> OracleVerdict {
     )
 }
 
-/// 2. Total mass (sites + inventories) equals the fixture baseline.
+/// 2. Exact total mass (sites + inventories) equals the fixture baseline.
+///    Fixture coherence proves both sums fit `u64`; no saturating arithmetic
+///    can make an overflow-driven mass loss look conserved.
 fn mass_conserved(ctx: &OracleCtx<'_>) -> OracleVerdict {
     let current = ctx.world.economy.total_mass();
     OracleVerdict::new(

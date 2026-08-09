@@ -1,5 +1,55 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — trial/008-apply-totality: behavioral red → exact bound
+
+Hypothesis (audit defier 4): the trial/003 freshness barrier prevents stale
+partial commits, but post-preflight apply is total only if validated inputs
+cannot overflow or discover a new guard. Full evidence and totality table:
+`docs/trial-008-apply-totality-report.md`.
+
+The suspected red was real and reachable through the public economy owner
+token API. Seed S1=`u64::MAX`, S2=1; transfer S1 into C1's inventory, then
+transfer S2's gram into the same inventory. Against unmodified runtime:
+
+```text
+running 1 test
+test economy::tests::falsification_overfull_inventory_must_not_silently_clamp ... FAILED
+
+thread 'economy::tests::falsification_overfull_inventory_must_not_silently_clamp' panicked at src/economy/mod.rs:324:9:
+u64::MAX + 1 inventory transfer silently clamped instead of failing
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 42 filtered out
+```
+
+The old apply silently destroyed the last gram, while old `total_mass`
+saturated to the same `u64::MAX` before and after; oracle 2 could therefore
+false-green the loss.
+
+Green: `FixtureFault::TotalMassOverflow` makes the overfull world invalid at
+coherence validation; all mass aggregation and inventory addition use checked
+arithmetic; `apply_extract` computes both arithmetic results before its first
+write. Focused result: two falsifiers passed, with the bypass case panicking
+loudly before mutation. This is a declared closed fixture-fault vocabulary
+evolution and oracle 2 judge strengthening, so `ORACLE_SUITE_VERSION` is
+3 → 4. Receipts, grammar, fixture values, registry, and schema are unchanged.
+
+Pressure verdict: **runtime-bound / contract-vocabulary pressure, not balance
+pressure**. No value moved. Revision overflow remains physically unreachable
+in one process (2^64 successful applies; >584 years even at one per
+nanosecond), though that is an execution-bound argument rather than a
+finite-state proof. Standard allocator failure also remains outside the game
+transition model. The valid-world apply path has no reachable post-preflight
+guard left under exclusive serial `&mut World`.
+
+Full gate: fmt and strict clippy clean in both feature sets; 44/44 default
+tests and 45/45 `bevy-host` tests passed; both runs exited 0; all ten oracles
+passed; hosted parity reported `receipts_match=true state_match=true
+world_match=true`. Evidence envelope:
+
+```text
+envelope baseline_commit=f5728d6 grammar=0x530003916889b952 fixture=0x3805f1e20c001051 receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a oracles=10v4
+```
+
 ## 2026-08-09 — falsifier map armed for overnight execution
 
 `docs/falsifier-map.md` turns the audit's open falsifiers into three
