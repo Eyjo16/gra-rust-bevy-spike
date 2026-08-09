@@ -1,5 +1,22 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — trial/012-confluence-shape: hypothesis falsified
+
+Hypothesis: the active `StaminaBand × InfraTier` yield cell expresses a
+genuine non-separable interaction rather than two independent multiplicative
+axes. This was a trial hypothesis, never a contract or value-change license.
+
+Red-first probe: over the three reachable yield rows, compute every exact
+`2×2` minor with `u128` cross-products and demand at least one non-zero minor.
+For a non-zero matrix that is exactly the test for rank greater than one.
+
+```text
+running 1 test
+test boundary::tests::falsification_active_cell_must_contain_nonseparable_interaction ... FAILED
+
+thread 'boundary::tests::falsification_active_cell_must_contain_nonseparable_interaction' panicked:
+all 18 active 2x2 minors are zero; exact factorization is [1, 2, 3] outer
+[250, 400, 600, 900] — the table is rank one
 ## 2026-08-09 — trial/008-apply-totality: behavioral red → exact bound
 
 Hypothesis (audit defier 4): the trial/003 freshness barrier prevents stale
@@ -73,6 +90,7 @@ leading plus silently normalized before canonical command bytes
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 42 filtered out
 ```
 
+<<<<<<< HEAD
 Green: test-only `parse_text_command` now accepts only ASCII, canonical
 decimal integers (no sign, no leading zero except `0`) and the exact field
 order/spacing of the two named command forms. Its closed `TextCommandFault`
@@ -82,6 +100,24 @@ empty values. Canonical gather/witness lines and `u64::MAX` must produce
 bytes identical to hand-constructed commands. The three seam tests pass.
 
 Proof envelope after green (baseline `f5728d6`):
+=======
+Result: the hypothesis is falsified. The active table has exact rank one:
+stamina multiplies the entire infrastructure curve by `1`, `2`, or `3`, and
+infrastructure applies the same proportional uplift at every stamina band.
+Absolute gains compound, but there is no extra cell-specific confluence term.
+
+The intentionally failing probe was removed from the final branch. No
+production value was moved to force green, and no passing assertion was left
+behind to freeze rank one as a false guardrail. Runtime semantics, contracts,
+registry/schema, grammar, fixture, receipts, oracles, and dependencies remain
+unchanged. Full analysis, efficiency consequences, degrees of freedom, and
+the semantic/holdout decision required before any value may move:
+`docs/trial-012-confluence-shape-report.md`.
+
+Final gate: format and strict Clippy clean under both feature sets; 42/42
+default tests and 43/43 `bevy-host` tests; hosted run exit 0 with
+`receipts_match=true state_match=true world_match=true`. Frozen envelope:
+>>>>>>> 42c2f40 (Record trial/012 confluence shape falsification)
 
 ```text
 envelope baseline_commit=f5728d6 grammar=0x530003916889b952
@@ -89,6 +125,7 @@ envelope baseline_commit=f5728d6 grammar=0x530003916889b952
   world=0x36221d3fdb8aed9a oracles=10v3
 ```
 
+<<<<<<< HEAD
 No registry/schema, grammar, receipt, fixture, oracle, dependency, or
 balance-value change. The pressure verdict is **representation, not
 balance**: the red occurred before any game value entered transition
@@ -145,6 +182,8 @@ Cross-elimination replay before integration: rebased after trials 008 and
 under judge `10v4`; default tests were 47/47 and `bevy-host` tests 49/49.
 Grammar, fixture, receipts, and world fingerprints stayed byte-identical.
 
+=======
+>>>>>>> 42c2f40 (Record trial/012 confluence shape falsification)
 ## 2026-08-09 — falsifier map armed for overnight execution
 
 `docs/falsifier-map.md` turns the audit's open falsifiers into three
