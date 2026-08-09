@@ -374,19 +374,7 @@ pub fn fixture_identity(fixture_hash: u64, cmds: &[Command]) -> u64 {
     let mut hasher = Fnv1a::default();
     hasher.update(&fixture_hash.to_be_bytes());
     for cmd in cmds {
-        match cmd {
-            Command::Gather(g) => {
-                hasher.update(b"gather");
-                hasher.update(&g.actor.0.to_be_bytes());
-                hasher.update(&g.claim.0.to_be_bytes());
-                hasher.update(&g.site.0.to_be_bytes());
-            }
-            Command::Witness(w) => {
-                hasher.update(b"witness");
-                hasher.update(&w.witness.0.to_be_bytes());
-                hasher.update(&w.claim.0.to_be_bytes());
-            }
-        }
+        hasher.update(&cmd.canonical_bytes());
     }
     hasher.finish()
 }
@@ -464,6 +452,115 @@ pub struct WitnessCommand {
 pub enum Command {
     Gather(GatherCommand),
     Witness(WitnessCommand),
+}
+
+impl Command {
+    /// The language-seam observation point. Foreign input has preserved
+    /// command meaning only once it produces these bytes; receipt and host
+    /// parity claims begin after this boundary, never before it.
+    pub fn canonical_bytes(&self) -> Vec<u8> {
+        match self {
+            Self::Gather(gather) => {
+                let mut bytes = Vec::with_capacity(30);
+                bytes.extend_from_slice(b"gather");
+                bytes.extend_from_slice(&gather.actor.0.to_be_bytes());
+                bytes.extend_from_slice(&gather.claim.0.to_be_bytes());
+                bytes.extend_from_slice(&gather.site.0.to_be_bytes());
+                bytes
+            }
+            Self::Witness(witness) => {
+                let mut bytes = Vec::with_capacity(23);
+                bytes.extend_from_slice(b"witness");
+                bytes.extend_from_slice(&witness.witness.0.to_be_bytes());
+                bytes.extend_from_slice(&witness.claim.0.to_be_bytes());
+                bytes
+            }
+        }
+    }
+}
+
+/// Closed failures for the deliberately small text ingestion seam. The
+/// parser either names one of these failures or returns a command whose
+/// canonical bytes are the boundary artifact; it never coerces input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(test)]
+pub enum TextCommandFault {
+    EmptyLine,
+    NonAscii,
+    NonCanonicalWhitespace,
+    UnknownVerb,
+    WrongFieldCount,
+    UnexpectedField,
+    EmptyValue,
+    NonCanonicalInteger,
+    IntegerOutOfRange,
+}
+
+/// Parse the minimal external command spelling used to test the language
+/// seam: `gather actor=1 claim=1 site=1` or
+/// `witness witness=3 claim=8`.
+#[cfg(test)]
+pub fn parse_text_command(line: &str) -> Result<Command, TextCommandFault> {
+    if line.is_empty() {
+        return Err(TextCommandFault::EmptyLine);
+    }
+    if !line.is_ascii() {
+        return Err(TextCommandFault::NonAscii);
+    }
+    if line.trim() != line || line.contains("  ") || line.contains(['\t', '\r', '\n']) {
+        return Err(TextCommandFault::NonCanonicalWhitespace);
+    }
+
+    let fields: Vec<&str> = line.split(' ').collect();
+    match fields.first().copied() {
+        Some("gather") => {
+            if fields.len() != 4 {
+                return Err(TextCommandFault::WrongFieldCount);
+            }
+            Ok(Command::Gather(GatherCommand {
+                actor: CharacterId(parse_text_u64(field_value(fields[1], "actor")?)?),
+                claim: ClaimId(parse_text_u64(field_value(fields[2], "claim")?)?),
+                site: SiteId(parse_text_u64(field_value(fields[3], "site")?)?),
+            }))
+        }
+        Some("witness") => {
+            if fields.len() != 3 {
+                return Err(TextCommandFault::WrongFieldCount);
+            }
+            Ok(Command::Witness(WitnessCommand {
+                witness: CharacterId(parse_text_u64(field_value(fields[1], "witness")?)?),
+                claim: ClaimId(parse_text_u64(field_value(fields[2], "claim")?)?),
+            }))
+        }
+        Some(_) => Err(TextCommandFault::UnknownVerb),
+        None => Err(TextCommandFault::EmptyLine),
+    }
+}
+
+#[cfg(test)]
+fn field_value<'a>(field: &'a str, expected: &str) -> Result<&'a str, TextCommandFault> {
+    let Some((name, value)) = field.split_once('=') else {
+        return Err(TextCommandFault::UnexpectedField);
+    };
+    if name != expected {
+        return Err(TextCommandFault::UnexpectedField);
+    }
+    if value.is_empty() {
+        return Err(TextCommandFault::EmptyValue);
+    }
+    Ok(value)
+}
+
+#[cfg(test)]
+fn parse_text_u64(value: &str) -> Result<u64, TextCommandFault> {
+    if !value.bytes().all(|byte| byte.is_ascii_digit())
+        || (value.len() > 1 && value.starts_with('0'))
+    {
+        return Err(TextCommandFault::NonCanonicalInteger);
+    }
+    value
+        .parse::<u64>()
+        .map_err(|_| TextCommandFault::IntegerOutOfRange)
 }
 
 /// Canonical receipt for one submitted command. Every field is either a
@@ -874,6 +971,121 @@ mod tests {
         assert_eq!(fixture_identity(7, &[a, b]), fixture_identity(7, &[a, b]));
         assert_ne!(fixture_identity(7, &[a, b]), fixture_identity(7, &[b, a]));
         assert_ne!(fixture_identity(7, &[a, b]), fixture_identity(8, &[a, b]));
+    }
+
+    /// Falsifier (trial/009): Rust's integer parser accepts a leading `+`,
+    /// silently normalizing a non-canonical source spelling before the
+    /// command observation point.
+    #[test]
+    fn falsification_text_seam_rejects_leading_plus() {
+        assert!(
+            matches!(
+                parse_text_command("gather actor=+1 claim=1 site=1"),
+                Err(TextCommandFault::NonCanonicalInteger)
+            ),
+            "leading plus silently normalized before canonical command bytes"
+        );
+    }
+
+    #[test]
+    fn text_seam_accepts_only_canonical_command_meaning() {
+        let gather = Command::Gather(GatherCommand {
+            actor: CharacterId(1),
+            claim: ClaimId(2),
+            site: SiteId(3),
+        });
+        let parsed_gather =
+            parse_text_command("gather actor=1 claim=2 site=3").expect("canonical gather spelling");
+        assert_eq!(parsed_gather.canonical_bytes(), gather.canonical_bytes());
+
+        let witness = Command::Witness(WitnessCommand {
+            witness: CharacterId(3),
+            claim: ClaimId(8),
+        });
+        let parsed_witness =
+            parse_text_command("witness witness=3 claim=8").expect("canonical witness spelling");
+        assert_eq!(parsed_witness.canonical_bytes(), witness.canonical_bytes());
+
+        let max = Command::Witness(WitnessCommand {
+            witness: CharacterId(u64::MAX),
+            claim: ClaimId(8),
+        });
+        let parsed_max = parse_text_command("witness witness=18446744073709551615 claim=8")
+            .expect("u64::MAX has a canonical decimal spelling");
+        assert_eq!(parsed_max.canonical_bytes(), max.canonical_bytes());
+    }
+
+    #[test]
+    fn text_seam_rejects_noncanonical_or_ambiguous_sources() {
+        let cases = [
+            ("", TextCommandFault::EmptyLine),
+            (
+                "dance actor=1 claim=1 site=1",
+                TextCommandFault::UnknownVerb,
+            ),
+            (
+                "gather actor=+1 claim=1 site=1",
+                TextCommandFault::NonCanonicalInteger,
+            ),
+            (
+                "gather actor=-1 claim=1 site=1",
+                TextCommandFault::NonCanonicalInteger,
+            ),
+            (
+                "gather actor=01 claim=1 site=1",
+                TextCommandFault::NonCanonicalInteger,
+            ),
+            ("gather actor=１ claim=1 site=1", TextCommandFault::NonAscii),
+            (
+                "gather actor=18446744073709551616 claim=1 site=1",
+                TextCommandFault::IntegerOutOfRange,
+            ),
+            (
+                "gather claim=1 actor=1 site=1",
+                TextCommandFault::UnexpectedField,
+            ),
+            (
+                "gather actor=1 actor=1 site=1",
+                TextCommandFault::UnexpectedField,
+            ),
+            (
+                "gather actor=1 claim=1 zone=1",
+                TextCommandFault::UnexpectedField,
+            ),
+            ("gather actor=1 claim=1", TextCommandFault::WrongFieldCount),
+            (
+                "gather actor=1 claim=1 site=1 mode=fast",
+                TextCommandFault::WrongFieldCount,
+            ),
+            ("gather actor= claim=1 site=1", TextCommandFault::EmptyValue),
+            (
+                "\u{feff}gather actor=1 claim=1 site=1",
+                TextCommandFault::NonAscii,
+            ),
+            (
+                " gather actor=1 claim=1 site=1",
+                TextCommandFault::NonCanonicalWhitespace,
+            ),
+            (
+                "gather actor=1  claim=1 site=1",
+                TextCommandFault::NonCanonicalWhitespace,
+            ),
+            (
+                "gather\tactor=1 claim=1 site=1",
+                TextCommandFault::NonCanonicalWhitespace,
+            ),
+            (
+                "gather actor=1 claim=1 site=1\n",
+                TextCommandFault::NonCanonicalWhitespace,
+            ),
+        ];
+
+        for (source, expected) in cases {
+            assert!(
+                matches!(parse_text_command(source), Err(actual) if actual == expected),
+                "source {source:?} was not rejected as {expected:?}"
+            );
+        }
     }
 
     #[test]

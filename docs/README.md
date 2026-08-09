@@ -31,6 +31,7 @@ decision, migration account, and approval.
 | `falsification-defier-audit.md` | Standalone evidence | Separates closed counterexamples from the surviving limits of the current proof |
 | `falsifier-map.md` | Current plan | Executable overnight plan for the audit's open falsifiers (trials 007–009), with standing rules and handoff checklist |
 | `trial-008-apply-totality-report.md` | Standalone evidence | Records the reachable mass-clamp red, aggregate-bound fix, apply totality audit, and pressure verdict |
+| `trial-009-language-seam-report.md` | Standalone evidence | Records the pre-command normalization red, canonical-byte observation point, adversarial matrix, and pressure verdict |
 
 ## Maintenance rule
 

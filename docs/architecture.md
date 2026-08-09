@@ -108,6 +108,14 @@ owner decides whether it is valid.
 
 The governing principle is not language uniformity but preserved meaning.
 
+For command ingestion, the named observation point is
+`Command::canonical_bytes()`: receipt, replay, and host-parity evidence begins
+only after those bytes exist. A source adapter must reject ambiguous or
+non-canonical representations, or demonstrate that an accepted spelling
+produces bytes identical to the intended typed command. Agreement downstream
+of this point cannot prove that units, signs, numeric spellings, or text
+encoding were preserved upstream.
+
 ## Testing ladder
 
 Tests are layered so agreement inside one implementation cannot certify itself:
