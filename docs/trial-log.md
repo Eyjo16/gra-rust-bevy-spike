@@ -57,7 +57,8 @@ Full matrix, evidence boundary, and overview:
 contract, grammar, standard fixture, value, receipt, runtime,
 dependency, oracle, or judge version changed. The standard envelope
 remains `grammar=0x530003916889b952 fixture=0x3805f1e20c001051
-oracles=10v3`.
+oracles=10v4` (judge advanced by trials 007-009; unchanged by this
+trial).
 
 ## 2026-08-09 — trial/008-apply-totality: behavioral red → exact bound
 

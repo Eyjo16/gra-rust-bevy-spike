@@ -140,8 +140,13 @@ receipt, runtime path, dependency, oracle, or oracle version changed.
 The standard envelope remains:
 
 ```text
-grammar=0x530003916889b952 fixture=0x3805f1e20c001051 oracles=10v3
+grammar=0x530003916889b952 fixture=0x3805f1e20c001051 oracles=10v4
 ```
+
+(The judge advanced to `10v4` when trials 007-009 integrated; this trial
+changed nothing about it. The gate blocks below are the historical
+first-run evidence under `10v3`, replayed green under `10v4` as recorded
+in the neutralized-branch note.)
 
 ## Gate
 
