@@ -95,6 +95,51 @@ balance**: the red occurred before any game value entered transition
 semantics, so moving a yield, cost, band, or fixture number would conceal
 the defect rather than answer it. Full evidence and limits:
 `docs/trial-009-language-seam-report.md`.
+
+## 2026-08-09 — trial/007-transition-domain: bounded parity PASS
+
+Hypothesis (audit defier 2): trial/002's agreement on one recorded
+16-command history does not establish universal transition-function
+equivalence. A host difference can hide at the first unvisited
+state/command pair.
+
+Red evidence against unmodified `f5728d6` was an honest capability red:
+
+```text
+error[E0425]: cannot find function `bounded_transition_domain_parity` in this scope
+  --> src/host_bevy.rs:93:9
+   |
+93 |         bounded_transition_domain_parity();
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `gra-rust-bevy-spike` (bin "gra-rust-bevy-spike" test) due to 1 previous error
+```
+
+Green: the feature-gated harness generated 1,000 deterministic traces
+of depth 32 from seed `0x007007006d617065`. It visited every one of the
+300 enumerated command forms over actors 1–4 plus unknown 9, claims 1–9
+plus unknown 99, and sites 1–4 plus unknown 9. All 32,000 pure/Bevy
+transitions produced exact canonical receipt chains and exact final
+canonical states (`receipts_match=true state_match=true
+world_match=true`). A divergence path is armed to shrink by command
+removal and print a one-minimal counterexample; none appeared.
+
+Pressure verdict: **no value earned permission to move.** Six of sixteen
+yield cells were actually consulted; all four bands and tiers merely
+appeared in receipt context. The steady cost row was consulted once,
+and `unknown_site` was not boundary-reachable under the coherent
+claim-first gate. This maps where future purpose-built fixtures can
+apply balance pressure; it is not evidence that the reached values are
+balanced.
+
+Exact coverage counts, the claim boundary, risks, and the complete
+pressure map are in `docs/transition-domain-report.md`. No registry,
+schema, contract, grammar, fixture, value, receipt, runtime, dependency,
+oracle, or judge version changed. The standard envelope remains
+`grammar=0x530003916889b952 fixture=0x3805f1e20c001051
+oracles=10v3`.
+
 ## 2026-08-09 — falsifier map armed for overnight execution
 
 `docs/falsifier-map.md` turns the audit's open falsifiers into three
