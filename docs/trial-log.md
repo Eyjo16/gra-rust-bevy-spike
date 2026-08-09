@@ -1,5 +1,30 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — adversarial defier audit: proof boundaries recorded
+
+An external hostile review attacked the mathematical claims behind the
+four-trial sprint with model-preserving counterexamples. Full record:
+`docs/falsification-defier-audit.md`.
+
+Result: no new runtime defect and no contract, registry, schema, grammar,
+oracle, fixture, or value change. Trials 003–004 had already closed the
+concrete owner-wide false conflict, stale-token partial commit, shared
+run/replay bug, and receipt-only final-state gap.
+
+The surviving defiers bound what may honestly be claimed: equality on one
+fixture is not universal transition equivalence; FNV equality is checksum
+evidence rather than state equality; future cross-entity invariants require
+complete read-set or predicate-version binding; rollback-free preflight also
+requires post-check apply totality; language seams can lose meaning before
+the canonical command exists; and red-first value changes still need a sealed
+holdout to resist overfitting. The branch workflow cross-eliminates
+implementation hypotheses, but its shared fixture and judge mean the four
+trials are not four logically independent proofs.
+
+`docs/development-workflow.md` now carries those review questions and the
+strong-versus-checksum reading of the proof envelope. Current receipt and
+world hashes remain byte-identical to baseline `08db100`.
+
 ## 2026-08-09 — trial/005-value-pressure: null result, recorded on purpose
 
 Hypothesis: an incoherent result under trials 002–004 is pressure to
