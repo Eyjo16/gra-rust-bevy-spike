@@ -3,8 +3,10 @@
 //! Internals are private. The only mutation path is `validate_extract`
 //! (fallible, read-only) followed by `apply_extract`, which consumes the
 //! proof token by value — one token, one apply. The token carries the
-//! owner revision it was minted against; applying a stale token panics,
-//! because that is a boundary bug, never a game outcome. Mass is
+//! entity revisions it was minted against — the site it drains and
+//! the inventory it fills — so extractions touching disjoint entities
+//! never conflict. Applying a stale token panics, because that is a
+//! boundary bug, never a game outcome. Mass is
 //! `MassGrams` (backed by `u64`), so negative mass is unrepresentable
 //! anywhere in this owner.
 
@@ -22,17 +24,26 @@ struct SiteState {
 pub struct EconomyOwner {
     sites: BTreeMap<SiteId, SiteState>,
     inventories: BTreeMap<CharacterId, MassGrams>,
+    /// Per-entity conflict granularity: an extraction binds to the one
+    /// site and the one inventory it touches, so extractions at
+    /// different sites for different actors never false-conflict.
+    /// Derived bookkeeping, not truth state — excluded from the world
+    /// hash (the owner-wide apply counter is hashed).
+    site_revisions: BTreeMap<SiteId, u64>,
+    inventory_revisions: BTreeMap<CharacterId, u64>,
     revision: u64,
 }
 
-/// Proof that an extraction was validated against a specific owner
-/// revision, with `granted <= stock` at validation time. Private fields:
-/// only the economy owner can construct one.
+/// Proof that an extraction was validated against specific entity
+/// revisions of the site it drains and the inventory it fills, with
+/// `granted <= stock` at validation time. Private fields: only the
+/// economy owner can construct one.
 pub struct Extraction {
     site: SiteId,
     to: CharacterId,
     granted: MassGrams,
-    from_revision: u64,
+    from_site_revision: u64,
+    from_inventory_revision: u64,
 }
 
 impl Extraction {
@@ -55,8 +66,26 @@ impl EconomyOwner {
         Ok(Self {
             sites,
             inventories: BTreeMap::new(),
+            site_revisions: BTreeMap::new(),
+            inventory_revisions: BTreeMap::new(),
             revision: 0,
         })
+    }
+
+    fn site_revision(&self, site: SiteId) -> u64 {
+        self.site_revisions.get(&site).copied().unwrap_or(0)
+    }
+
+    fn inventory_revision(&self, id: CharacterId) -> u64 {
+        self.inventory_revisions.get(&id).copied().unwrap_or(0)
+    }
+
+    /// True when the token still matches the revisions of both entities
+    /// it touches. The boundary's commit phase checks every token in a
+    /// plan BEFORE any owner mutates, so a stale plan is all-or-nothing.
+    pub fn extraction_is_fresh(&self, extraction: &Extraction) -> bool {
+        self.site_revision(extraction.site) == extraction.from_site_revision
+            && self.inventory_revision(extraction.to) == extraction.from_inventory_revision
     }
 
     pub fn tier(&self, site: SiteId) -> Option<InfraTier> {
@@ -113,17 +142,20 @@ impl EconomyOwner {
             site,
             to,
             granted,
-            from_revision: self.revision,
+            from_site_revision: self.site_revision(site),
+            from_inventory_revision: self.inventory_revision(to),
         })
     }
 
     /// Consumes the token by value: reuse is a compile error. Panics on a
-    /// stale token (minted against an older revision) — a boundary bug,
-    /// never a game outcome. For a fresh validated token the checked
-    /// subtraction cannot fail, and total mass is conserved.
+    /// stale token (an older revision of the same site or inventory) — a
+    /// boundary bug, never a game outcome. Extractions touching disjoint
+    /// entities are independent and never conflict. For a fresh validated
+    /// token the checked subtraction cannot fail, and total mass is
+    /// conserved.
     pub fn apply_extract(&mut self, extraction: Extraction) {
-        assert_eq!(
-            extraction.from_revision, self.revision,
+        assert!(
+            self.extraction_is_fresh(&extraction),
             "stale proof token (economy) — boundary bug"
         );
         let state = self
@@ -139,6 +171,8 @@ impl EconomyOwner {
             .entry(extraction.to)
             .or_insert(MassGrams::ZERO);
         *inventory = inventory.saturating_add(extraction.granted);
+        *self.site_revisions.entry(extraction.site).or_insert(0) += 1;
+        *self.inventory_revisions.entry(extraction.to).or_insert(0) += 1;
         self.revision += 1;
     }
 

@@ -14,9 +14,12 @@
 //!
 //! Applies never produce a wrong game outcome: a proof token is consumed
 //! by value (one token, one apply — reuse is a compile error) and carries
-//! the owner revision it was minted against; applying a stale token panics
-//! loudly, because a stale token reaching an apply is a boundary bug, not
-//! a game outcome.
+//! the entity revisions it was minted against, so plans touching disjoint
+//! entities never false-conflict. A plan's commit phase checks every
+//! token fresh BEFORE any owner mutates — a stale plan panics loudly and
+//! all-or-nothing, because a stale token reaching a commit is a boundary
+//! bug, not a game outcome, and a partial commit is a world state no
+//! receipt accounts for.
 //!
 //! All fixture and table numbers in this crate are mechanical examples —
 //! they are not balance and not historical truth.
@@ -549,6 +552,23 @@ struct GatherPlan {
     tier: InfraTier,
 }
 
+impl GatherPlan {
+    /// Commit phase for a planned gather: the one place a multi-owner
+    /// plan mutates the world. Consumes the plan by value — at most one
+    /// commit per plan. Two-phase: every token is checked fresh BEFORE
+    /// any owner mutates, so a stale plan panics all-or-nothing — a
+    /// partial commit is a world state no receipt accounts for.
+    fn apply(self, world: &mut World) {
+        assert!(
+            world.characters.spend_is_fresh(&self.spend)
+                && world.economy.extraction_is_fresh(&self.extraction),
+            "stale plan token — boundary bug (commit refused before any mutation)"
+        );
+        world.characters.apply_spend(self.spend);
+        world.economy.apply_extract(self.extraction);
+    }
+}
+
 fn plan_gather(world: &World, cmd: &GatherCommand) -> Result<GatherPlan, RefusalReason> {
     // 1. Social gate: the claim must exist, be held by the actor, cover the
     //    site, and be witnessed (boolean gate).
@@ -594,6 +614,20 @@ fn plan_gather(world: &World, cmd: &GatherCommand) -> Result<GatherPlan, Refusal
 struct WitnessPlan {
     grant: WitnessGrant,
     spend: StaminaSpend,
+}
+
+impl WitnessPlan {
+    /// Commit phase for a planned witness attestation; same two-phase
+    /// doctrine as `GatherPlan::apply`.
+    fn apply(self, world: &mut World) {
+        assert!(
+            world.characters.spend_is_fresh(&self.spend)
+                && world.social.grant_is_fresh(&self.grant),
+            "stale plan token — boundary bug (commit refused before any mutation)"
+        );
+        world.characters.apply_spend(self.spend);
+        world.social.apply_witness(self.grant);
+    }
 }
 
 fn plan_witness(world: &World, cmd: &WitnessCommand) -> Result<WitnessPlan, RefusalReason> {
@@ -652,10 +686,10 @@ fn submit_gather(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
             let stamina_spent = plan.spend.cost();
             let mass_moved = plan.extraction.granted();
             let claim = plan.witness.claim();
-            // Applies consume the validated tokens by value.
-            world.characters.apply_spend(plan.spend);
-            world.economy.apply_extract(plan.extraction);
+            let (band, tier) = (plan.band, plan.tier);
+            // The commit phase consumes the plan and its tokens by value.
             // The social owner's state is unchanged by a gather.
+            plan.apply(world);
             Receipt {
                 seq,
                 verb: Verb::Gather,
@@ -665,8 +699,8 @@ fn submit_gather(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
                 outcome,
                 witnessed,
                 stamina_before,
-                band: Some(plan.band),
-                tier: Some(plan.tier),
+                band: Some(band),
+                tier: Some(tier),
                 stamina_spent,
                 mass_moved,
                 grammar,
@@ -705,11 +739,9 @@ fn submit_witness(world: &mut World, seq: u64, cmd: WitnessCommand) -> Receipt {
         Ok(plan) => {
             let stamina_spent = plan.spend.cost();
             let claim = plan.grant.claim();
-            // Applies consume the validated tokens by value. This is the
-            // social owner's first mutation path.
-            world.characters.apply_spend(plan.spend);
-            world.social.apply_witness(plan.grant);
+            // The commit phase consumes the plan and its tokens by value.
             // The economy owner is untouched by a witness.
+            plan.apply(world);
             Receipt {
                 seq,
                 verb: Verb::Witness,
@@ -807,5 +839,109 @@ mod tests {
         let mut again = Fnv1a::default();
         again.update(b"truth");
         assert_eq!(first, again.finish());
+    }
+
+    /// Two actors, two sites, both claims witnessed — the smallest world
+    /// where two plans can be fully independent. Mechanical example
+    /// numbers only.
+    fn two_actor_world() -> World {
+        World {
+            characters: CharacterOwner::seed([
+                (CharacterId(1), Stamina::new(90).unwrap()),
+                (CharacterId(2), Stamina::new(50).unwrap()),
+            ])
+            .unwrap(),
+            economy: EconomyOwner::seed_sites([
+                (SiteId(1), InfraTier::Established, MassGrams::new(5000)),
+                (SiteId(2), InfraTier::Crude, MassGrams::new(3000)),
+            ])
+            .unwrap(),
+            social: SocialOwner::seed_claims([
+                (ClaimId(1), CharacterId(1), SiteId(1), true),
+                (ClaimId(2), CharacterId(2), SiteId(2), true),
+            ])
+            .unwrap(),
+        }
+    }
+
+    /// Falsifier (trial/003, part 1): two plans for two different
+    /// characters at two different sites, validated against the same
+    /// snapshot, are fully independent — neither invalidates the other,
+    /// and both must commit without a stale panic.
+    #[test]
+    fn falsification_independent_plans_against_one_snapshot_must_both_commit() {
+        let mut world = two_actor_world();
+        let plan_a = plan_gather(
+            &world,
+            &GatherCommand {
+                actor: CharacterId(1),
+                claim: ClaimId(1),
+                site: SiteId(1),
+            },
+        )
+        .expect("plan A validates");
+        let plan_b = plan_gather(
+            &world,
+            &GatherCommand {
+                actor: CharacterId(2),
+                claim: ClaimId(2),
+                site: SiteId(2),
+            },
+        )
+        .expect("plan B validates against the same snapshot");
+        plan_a.apply(&mut world);
+        plan_b.apply(&mut world);
+        assert_eq!(
+            world.characters.stamina(CharacterId(1)).unwrap().points(),
+            80
+        );
+        assert_eq!(
+            world.characters.stamina(CharacterId(2)).unwrap().points(),
+            38
+        );
+        assert_eq!(
+            world.economy.inventory(CharacterId(1)),
+            MassGrams::new(1800)
+        );
+        assert_eq!(world.economy.inventory(CharacterId(2)), MassGrams::new(800));
+    }
+
+    /// Falsifier (trial/003, part 2): when a later owner's token in a
+    /// plan has gone stale, the commit must be all-or-nothing. A partial
+    /// commit — the character spend landing while the extraction panics —
+    /// is a world state no receipt accounts for.
+    #[test]
+    fn falsification_stale_later_token_must_not_leave_partial_commit() {
+        let mut world = two_actor_world();
+        let plan = plan_gather(
+            &world,
+            &GatherCommand {
+                actor: CharacterId(1),
+                claim: ClaimId(1),
+                site: SiteId(1),
+            },
+        )
+        .expect("plan validates");
+        // An economy-only commit lands between planning and committing:
+        // C2 extracts from the same site, staling the plan's extraction
+        // token but not its character token.
+        let other = world
+            .economy
+            .validate_extract(SiteId(1), CharacterId(2), MassGrams::new(100))
+            .unwrap();
+        world.economy.apply_extract(other);
+        let hash_before_commit = world.hash();
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            plan.apply(&mut world);
+        }));
+        assert!(
+            outcome.is_err(),
+            "the economy token is stale — the plan must refuse to commit"
+        );
+        assert_eq!(
+            world.hash(),
+            hash_before_commit,
+            "stale plan committed partially: the character spend landed without the extraction"
+        );
     }
 }

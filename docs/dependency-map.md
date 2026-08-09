@@ -86,6 +86,15 @@ Every leaf is private to its module. Mutation paths are `apply_spend`
 Each takes a proof token with private fields, so only validation inside
 the same owner can mint the right to write.
 
+Tokens bind to **entity revisions** — the one character, the one claim,
+or the site + inventory pair they touch — so plans over disjoint
+entities validated against the same snapshot never false-conflict. The
+boundary's commit phase (`GatherPlan::apply`, `WitnessPlan::apply`)
+re-checks every token fresh before any owner mutates: a stale plan
+panics all-or-nothing, never as a partial commit. Entity revisions are
+derived bookkeeping, excluded from the world hash; the owner-wide apply
+counters remain hashed.
+
 ## 4. Flow of one command (validate everything, then apply)
 
 ```mermaid

@@ -5,8 +5,9 @@
 //! is a boolean gate, and an unwitnessed claim can never yield mass. The
 //! witness verb is this owner's one mutation path: `validate_witness_grant`
 //! (fallible, read-only) followed by `apply_witness`, which consumes the
-//! `WitnessGrant` token by value — one token, one apply, revision-bound,
-//! stale tokens panic. Same doctrine as the other two owners.
+//! `WitnessGrant` token by value — one token, one apply, bound to the
+//! entity revision of the one claim it flips, stale tokens panic. Same
+//! doctrine as the other two owners.
 
 use std::collections::BTreeMap;
 
@@ -20,6 +21,11 @@ struct Claim {
 
 pub struct SocialOwner {
     claims: BTreeMap<ClaimId, Claim>,
+    /// Per-claim conflict granularity: a grant binds to the revision of
+    /// the one claim it flips, so grants for different claims never
+    /// false-conflict. Derived bookkeeping, not truth state — excluded
+    /// from the world hash (the owner-wide apply counter is hashed).
+    claim_revisions: BTreeMap<ClaimId, u64>,
     revision: u64,
 }
 
@@ -66,8 +72,20 @@ impl SocialOwner {
         }
         Ok(Self {
             claims,
+            claim_revisions: BTreeMap::new(),
             revision: 0,
         })
+    }
+
+    fn claim_revision(&self, claim: ClaimId) -> u64 {
+        self.claim_revisions.get(&claim).copied().unwrap_or(0)
+    }
+
+    /// True when the grant still matches the revision of the claim it
+    /// flips. The boundary's commit phase checks every token in a plan
+    /// BEFORE any owner mutates, so a stale plan is all-or-nothing.
+    pub fn grant_is_fresh(&self, grant: &WitnessGrant) -> bool {
+        self.claim_revision(grant.claim) == grant.from_revision
     }
 
     pub fn claim_site(&self, claim: ClaimId) -> Option<SiteId> {
@@ -126,22 +144,25 @@ impl SocialOwner {
         }
         Ok(WitnessGrant {
             claim,
-            from_revision: self.revision,
+            from_revision: self.claim_revision(claim),
         })
     }
 
     /// Consumes the token by value: reuse is a compile error. Panics on a
-    /// stale token (minted against an older revision) — a boundary bug,
-    /// never a game outcome.
+    /// stale token (minted against an older revision of the same claim) —
+    /// a boundary bug, never a game outcome. Grants for different claims
+    /// are independent and never conflict.
     pub fn apply_witness(&mut self, grant: WitnessGrant) {
-        assert_eq!(
-            grant.from_revision, self.revision,
+        assert!(
+            self.grant_is_fresh(&grant),
             "stale proof token (social) — boundary bug"
         );
+        let claim = grant.claim;
         self.claims
-            .get_mut(&grant.claim)
+            .get_mut(&claim)
             .expect("fresh token: validated claim exists")
             .witnessed = true;
+        *self.claim_revisions.entry(claim).or_insert(0) += 1;
         self.revision += 1;
     }
 
