@@ -25,6 +25,7 @@ decision, migration account, and approval.
 | `architecture.md` | Current decision | Defines truth, execution hosts, seams, and acceptance criteria |
 | `dependency-map.md` | Current map | Shows code dependencies, ownership, command flow, oracles, and tunables |
 | `development-workflow.md` | Current process | Defines branches, worktrees, falsification, review, and integration |
+| `meaning-gate.md` | Ratified workflow invariant | Governs how semantic questions become trial-backed authority |
 | `trial-log.md` | Append-only evidence | Records decisions, red/green rounds, gates, and environment facts |
 | `verb-isolation-report.md` | Standalone evidence | Records the adversarial second-verb isolation trial |
 | `falsification-defier-audit.md` | Standalone evidence | Separates closed counterexamples from the surviving limits of the current proof |
