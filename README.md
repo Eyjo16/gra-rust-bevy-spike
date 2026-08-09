@@ -92,14 +92,19 @@ default gate keeps testing the truth layer without any engine dependency.
 
 Bevy may schedule commands, project truth into ECS views, drive fixtures, and
 render results. It may not define canonical state, bypass the validating
-boundary, or mutate owner state directly. The parity gate enforces this:
+boundary, or mutate owner state directly. Two bounded parity gates test
+this:
 
 ```sh
 cargo run --features bevy-host
+cargo test --features bevy-host falsification_bounded_transition_domain_matches_exactly
 ```
 
-replays the whole trial inside a Bevy ECS world (`src/host_bevy.rs`, truth
-hosted as a resource, one command per schedule tick, every write still through
-`submit`) and exits non-zero unless the hosted run reproduces the pure run's
-canonical receipts and final world hash byte-for-byte — the
-`bevy_host_parity` line and the proof envelope record the comparison.
+The first replays the recorded fixture trial inside a Bevy ECS world
+(`src/host_bevy.rs`, truth hosted as a resource, one command per schedule
+tick, every write still through `submit`). The second runs the seeded
+trial/007 domain sample: 1,000 traces of depth 32 over all 300 enumerated
+command forms. Both demand exact canonical receipts and exact canonical
+final state; the hash remains a checksum. These are claims about those
+tested traces, not universal transition-function equivalence. See
+`docs/transition-domain-report.md` for the exact scope and pressure map.
