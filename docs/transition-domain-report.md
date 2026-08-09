@@ -136,3 +136,13 @@ sequence.
 bevy_host_parity receipts_match=true state_match=true world_match=true receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a
 envelope baseline_commit=f5728d6 grammar=0x530003916889b952 fixture=0x3805f1e20c001051 receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a oracles=10v3
 ```
+
+### Cross-elimination replay before integration
+
+After trials 008 and 009 landed, this branch was rebased and the complete
+gate was rerun against oracle judge `10v4`. The bounded result remained
+byte-exact across all 32,000 transitions and all 300 command forms; the
+default suite passed 47/47 and the `bevy-host` suite passed 49/49. Grammar,
+fixture, receipt, and world fingerprints remained unchanged. This replay is
+the integration evidence; the `10v3` envelope above remains the historical
+envelope of the original trial run.

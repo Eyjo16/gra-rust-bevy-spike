@@ -140,6 +140,11 @@ oracle, or judge version changed. The standard envelope remains
 `grammar=0x530003916889b952 fixture=0x3805f1e20c001051
 oracles=10v3`.
 
+Cross-elimination replay before integration: rebased after trials 008 and
+009, the same harness passed all 32,000 transitions and 300 command forms
+under judge `10v4`; default tests were 47/47 and `bevy-host` tests 49/49.
+Grammar, fixture, receipts, and world fingerprints stayed byte-identical.
+
 ## 2026-08-09 — falsifier map armed for overnight execution
 
 `docs/falsifier-map.md` turns the audit's open falsifiers into three
