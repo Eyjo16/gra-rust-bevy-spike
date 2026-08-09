@@ -4,6 +4,10 @@ The repository uses short-lived branches in separate worktrees so testing,
 reviewing, and refinement can happen without repeatedly disturbing the known
 green checkout.
 
+Semantic authority inside this loop is governed by the ratified
+`docs/meaning-gate.md`: discussion may construct hypotheses, but only a
+numbered falsifiable trial may select or ship normative meaning.
+
 ## Branch roles
 
 - `master` is integrated truth: it must pass the full default compiler gate.
