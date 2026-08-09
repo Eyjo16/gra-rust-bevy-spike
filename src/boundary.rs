@@ -1219,7 +1219,7 @@ mod tests {
         )
     }
 
-    fn assert_cell_mass_landed(world: &World, expected_inventory: u64) {
+    fn assert_cell_mass_state(world: &World, expected_inventory: u64, expected_stock: u64) {
         assert_eq!(
             world.economy.inventory(CharacterId(1)),
             MassGrams::new(expected_inventory)
@@ -1230,12 +1230,14 @@ mod tests {
             .next()
             .map(|(_, _, stock)| stock)
             .expect("the purpose-built site exists");
-        assert_eq!(remaining_stock, MassGrams::ZERO);
+        assert_eq!(remaining_stock, MassGrams::new(expected_stock));
     }
 
     /// Falsifier (trial/010): every non-exhausted band/tier cell must be
-    /// reachable through real gather execution at its exact-full,
-    /// one-gram-short partial, and empty-stock boundaries.
+    /// reachable through real gather execution at its full-path and
+    /// empty-stock boundaries, plus a one-gram-short partial boundary when
+    /// that boundary has positive stock. This deliberately admits zero and
+    /// one-gram table values rather than turning the test into a value floor.
     #[test]
     fn falsification_all_active_cells_are_reachable() {
         let bands = [StaminaBand::Low, StaminaBand::Steady, StaminaBand::Fresh];
@@ -1248,20 +1250,19 @@ mod tests {
         let mut cells_reached = 0;
         let mut full_cases = 0;
         let mut partial_cases = 0;
+        let mut partial_boundaries = 0;
         let mut empty_cases = 0;
 
         for band in bands {
             for tier in tiers {
                 let expected_yield = YIELD_TABLE_GRAMS[band.index()][tier.index()];
                 let expected_cost = STAMINA_COST_BY_BAND[band.index()];
-                assert!(
-                    expected_yield > 0,
-                    "every active cell needs a nonzero partial boundary"
-                );
 
-                // Exact requested stock is the Accepted/Partial boundary:
-                // equality grants the full cell yield and remains Accepted.
-                let mut full_world = active_cell_world(band, tier, expected_yield);
+                // Keep the site nonempty even when the selected yield is zero:
+                // reachability must observe the selected cell without imposing
+                // a hidden lower bound on that cell's value.
+                let full_stock = expected_yield.max(1);
+                let mut full_world = active_cell_world(band, tier, full_stock);
                 let full = submit_active_cell(&mut full_world);
                 assert_eq!(
                     full.outcome,
@@ -1274,35 +1275,36 @@ mod tests {
                 assert_eq!(full.tier, Some(tier));
                 assert_eq!(full.stamina_spent, expected_cost);
                 assert_eq!(full.mass_moved, MassGrams::new(expected_yield));
-                assert_cell_mass_landed(&full_world, expected_yield);
-                assert_eq!(
-                    full_world.economy.total_mass(),
-                    MassGrams::new(expected_yield)
-                );
+                assert_cell_mass_state(&full_world, expected_yield, full_stock - expected_yield);
+                assert_eq!(full_world.economy.total_mass(), MassGrams::new(full_stock));
                 full_cases += 1;
 
-                // One gram below the requested cell value must expose the
-                // partial boundary without changing the value under test.
-                let partial_stock = expected_yield - 1;
-                let mut partial_world = active_cell_world(band, tier, partial_stock);
-                let partial = submit_active_cell(&mut partial_world);
-                assert_eq!(
-                    partial.outcome,
-                    OutcomeKind::Partial(PartialReason::SiteNearlyDepleted),
-                    "one-short cell {}/{}",
-                    band.code(),
-                    tier.code()
-                );
-                assert_eq!(partial.band, Some(band));
-                assert_eq!(partial.tier, Some(tier));
-                assert_eq!(partial.stamina_spent, expected_cost);
-                assert_eq!(partial.mass_moved, MassGrams::new(partial_stock));
-                assert_cell_mass_landed(&partial_world, partial_stock);
-                assert_eq!(
-                    partial_world.economy.total_mass(),
-                    MassGrams::new(partial_stock)
-                );
-                partial_cases += 1;
+                // A one-gram-short Partial exists only when that stock is
+                // positive. Yield 0 has no lower value, and yield 1 reaches the
+                // existing SiteEmpty guard at stock 0; neither is a failure.
+                let partial_stock = expected_yield.checked_sub(1).filter(|stock| *stock > 0);
+                if let Some(partial_stock) = partial_stock {
+                    partial_boundaries += 1;
+                    let mut partial_world = active_cell_world(band, tier, partial_stock);
+                    let partial = submit_active_cell(&mut partial_world);
+                    assert_eq!(
+                        partial.outcome,
+                        OutcomeKind::Partial(PartialReason::SiteNearlyDepleted),
+                        "one-short cell {}/{}",
+                        band.code(),
+                        tier.code()
+                    );
+                    assert_eq!(partial.band, Some(band));
+                    assert_eq!(partial.tier, Some(tier));
+                    assert_eq!(partial.stamina_spent, expected_cost);
+                    assert_eq!(partial.mass_moved, MassGrams::new(partial_stock));
+                    assert_cell_mass_state(&partial_world, partial_stock, 0);
+                    assert_eq!(
+                        partial_world.economy.total_mass(),
+                        MassGrams::new(partial_stock)
+                    );
+                    partial_cases += 1;
+                }
 
                 // Empty stock is reached only after the coherent social,
                 // band/cost, tier, and yield-selection path. It refuses
@@ -1326,12 +1328,11 @@ mod tests {
 
                 println!(
                     "active_cell band={} tier={} yield_g={} gather_cost={} \
-                     full=accepted partial_g={} empty=site_empty",
+                     full=accepted partial_g={partial_stock:?} empty=site_empty",
                     band.code(),
                     tier.code(),
                     expected_yield,
-                    expected_cost,
-                    partial_stock
+                    expected_cost
                 );
                 cells_reached += 1;
             }
@@ -1339,7 +1340,7 @@ mod tests {
 
         assert_eq!(cells_reached, 12);
         assert_eq!(full_cases, 12);
-        assert_eq!(partial_cases, 12);
+        assert_eq!(partial_cases, partial_boundaries);
         assert_eq!(empty_cases, 12);
         println!(
             "active_cell_reachability cells={cells_reached}/12 cases={} \

@@ -37,6 +37,16 @@ choices. The empty cases traverse yield selection but cannot expose its
 numeric value in a zero-mass receipt; full and partial cases provide
 that observable evidence.
 
+Review neutralization: the original harness's `expected_yield > 0`
+assertion and unconditional `yield - 1` were removed as an unauthorized
+balance floor. Full-path reachability now supports zero yield against a
+nonempty site; the one-short Partial case is conditional on positive
+remaining stock. Current values still produce 36 cases, but zero or one
+no longer fail merely because a lower Partial boundary does not exist.
+The neutralized branch replay passed 48/48 default and 50/50 `bevy-host`
+tests under judge `10v4`, with exact hosted parity and all non-judge
+fingerprints unchanged.
+
 Pressure verdict: **no value earned permission to move.** This pass
 proves all 12 active yields and all three active gather costs can receive
 future purpose-built pressure. It supplies no independent expectation

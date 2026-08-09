@@ -86,6 +86,22 @@ Every displayed value was reached through both an exact-full and a
 one-gram-short partial gather. Every corresponding empty-stock path
 refused without mutation.
 
+### Review neutralization — no hidden nonzero floor
+
+The first harness asserted `expected_yield > 0` and unconditionally formed
+`expected_yield - 1`. Review correctly identified that as a balance ratchet:
+the reachability test would have vetoed a future zero-valued active cell even
+though trial/010 earned no authority over values.
+
+The integration candidate removes that assertion. A full-path case now keeps
+the site nonempty with `max(yield, 1)`, so a selected zero yield remains
+observable as an Accepted zero-mass transition instead of being confused with
+the empty-site guard. The one-gram-short Partial case runs only when its stock
+is positive (`yield >= 2`); yields zero and one therefore do not fail merely
+because that particular boundary is mathematically absent. The empty case is
+unchanged. Current production values still exercise 12 full, 12 partial, and
+12 empty cases; the harness no longer makes those counts a future value law.
+
 ## Structural reachability
 
 - **Reachable:** all 12 active cells.
@@ -139,3 +155,11 @@ grammar=0x530003916889b952 fixture=0x3805f1e20c001051 oracles=10v3
 bevy_host_parity receipts_match=true state_match=true world_match=true receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a
 envelope baseline_commit=f5728d6 grammar=0x530003916889b952 fixture=0x3805f1e20c001051 receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a oracles=10v3
 ```
+
+### Neutralized-branch replay
+
+After rebasing onto the integrated 007–009 master and removing the hidden
+value floor, the full gate passed under judge `10v4`: 48/48 default tests,
+50/50 `bevy-host` tests, exact hosted parity, and the same grammar, fixture,
+receipt, and world fingerprints. The original `10v3` block above remains the
+historical envelope of the first trial run.
