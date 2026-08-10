@@ -1,5 +1,65 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-09 — trial/010-active-cell-reachability: 12/12 PASS
+
+Hypothesis: random or fixed-fixture traffic can leave table cells
+untouched; before balance pressure can target a value honestly, every
+non-exhausted stamina-band × infrastructure-tier cell must be reachable
+through a coherent gather and its stock boundaries.
+
+Red evidence against unmodified `f5728d6` was an honest capability red:
+
+```text
+error[E0425]: cannot find function `assert_all_active_cells_reachable` in this scope
+   --> src/boundary.rs:950:9
+    |
+950 |         assert_all_active_cells_reachable();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `gra-rust-bevy-spike` (bin "gra-rust-bevy-spike" test) due to 1 previous error
+```
+
+Green: test-only coherent single-actor/site/claim worlds forced all 12
+active cells through real `submit(Gather)` execution. Each cell passed
+three derived stock cases: exact requested stock was Accepted, one gram
+short was Partial with `site_nearly_depleted`, and empty stock was
+Refused with `site_empty` and exact zero mutation.
+
+```text
+active_cell_reachability cells=12/12 cases=36 full=12 partial=12 empty=12
+```
+
+Structural result: only the four exhausted-row cells are unreachable,
+deliberately, because the actor-exhausted gate returns before cost or
+yield lookup. Their zero values are sentinels, not active balance
+choices. The empty cases traverse yield selection but cannot expose its
+numeric value in a zero-mass receipt; full and partial cases provide
+that observable evidence.
+
+Review neutralization: the original harness's `expected_yield > 0`
+assertion and unconditional `yield - 1` were removed as an unauthorized
+balance floor. Full-path reachability now supports zero yield against a
+nonempty site; the one-short Partial case is conditional on positive
+remaining stock. Current values still produce 36 cases, but zero or one
+no longer fail merely because a lower Partial boundary does not exist.
+The neutralized branch replay passed 48/48 default and 50/50 `bevy-host`
+tests under judge `10v4`, with exact hosted parity and all non-judge
+fingerprints unchanged.
+
+Pressure verdict: **no value earned permission to move.** This pass
+proves all 12 active yields and all three active gather costs can receive
+future purpose-built pressure. It supplies no independent expectation
+about which value is true or balanced.
+
+Full matrix, evidence boundary, and overview:
+`docs/active-cell-reachability-report.md`. No registry, schema,
+contract, grammar, standard fixture, value, receipt, runtime,
+dependency, oracle, or judge version changed. The standard envelope
+remains `grammar=0x530003916889b952 fixture=0x3805f1e20c001051
+oracles=10v4` (judge advanced by trials 007-009; unchanged by this
+trial).
+
 ## 2026-08-09 — trial/008-apply-totality: behavioral red → exact bound
 
 Hypothesis (audit defier 4): the trial/003 freshness barrier prevents stale
@@ -102,7 +162,6 @@ Hypothesis (audit defier 2): trial/002's agreement on one recorded
 16-command history does not establish universal transition-function
 equivalence. A host difference can hide at the first unvisited
 state/command pair.
-
 Red evidence against unmodified `f5728d6` was an honest capability red:
 
 ```text
@@ -111,7 +170,6 @@ error[E0425]: cannot find function `bounded_transition_domain_parity` in this sc
    |
 93 |         bounded_transition_domain_parity();
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
-
 For more information about this error, try `rustc --explain E0425`.
 error: could not compile `gra-rust-bevy-spike` (bin "gra-rust-bevy-spike" test) due to 1 previous error
 ```
