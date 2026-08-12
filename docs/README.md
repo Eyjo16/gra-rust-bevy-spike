@@ -29,13 +29,13 @@ decision, migration account, and approval.
 | `trial-log.md` | Append-only evidence | Records decisions, red/green rounds, gates, and environment facts |
 | `verb-isolation-report.md` | Standalone evidence | Records the adversarial second-verb isolation trial |
 | `falsification-defier-audit.md` | Standalone evidence | Separates closed counterexamples from the surviving limits of the current proof |
-| `falsifier-map.md` | Current plan | Executable overnight plan for the audit's open falsifiers (trials 007–009), with standing rules and handoff checklist |
+| `falsifier-map.md` | Historical plan | The executed overnight plan for the audit's open falsifiers (trials 007–009, all integrated); kept as evidence of the standing rules used |
 | `trial-008-apply-totality-report.md` | Standalone evidence | Records the reachable mass-clamp red, aggregate-bound fix, apply totality audit, and pressure verdict |
 | `trial-009-language-seam-report.md` | Standalone evidence | Records the pre-command normalization red, canonical-byte observation point, adversarial matrix, and pressure verdict |
 | `transition-domain-report.md` | Standalone evidence | Records trial/007's bounded pure/Bevy parity result and the value-cell reachability pressure map |
 | `active-cell-reachability-report.md` | Standalone evidence | Records trial/010's systematic 12-cell reachability and stock-boundary pressure |
-| `runtime-contract-proposal.md` | Proposed architecture | Separates current executable runtime law from semantic rulings and durability gaps |
-| `runtime-target-map.md` | Proposed work map | Orders runtime falsifiers and capability-scoped dependency sweeps by authority |
+| `runtime-contract-proposal.md` | Ratified law | Runtime Contract v0.1 (R1–R7 with amendments): current executable runtime law, semantic rulings, and the durability gap |
+| `runtime-target-map.md` | Active work map | Orders runtime falsifiers and capability-scoped dependency sweeps by authority; carries per-target status |
 
 ## Maintenance rule
 

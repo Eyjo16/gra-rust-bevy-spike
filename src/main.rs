@@ -8,7 +8,10 @@
 //! The Bevy ECS host adapter lives behind the off-by-default `bevy-host`
 //! feature: `cargo run --features bevy-host` additionally replays the
 //! whole trial inside a Bevy ECS world and exits non-zero unless the
-//! hosted run reproduces the pure run's receipts and final hash exactly.
+//! hosted run reproduces the pure run's receipts and exact canonical
+//! final state, the published projection matches canonical facts and
+//! names its identity (R01/R03, incl. stale-publication rejection), and
+//! injected host faults leave zero canonical trace (R02).
 
 mod boundary;
 mod character;

@@ -1,4 +1,4 @@
-# Runtime contract v0.1 — proposal for author and lead review
+# Runtime contract v0.1 — ratified
 
 Date: 2026-08-12. Baseline: `44662a8` (`master`).
 

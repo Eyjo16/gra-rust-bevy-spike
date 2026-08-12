@@ -92,8 +92,14 @@ default gate keeps testing the truth layer without any engine dependency.
 
 Bevy may schedule commands, project truth into ECS views, drive fixtures, and
 render results. It may not define canonical state, bypass the validating
-boundary, or mutate owner state directly. Two bounded parity gates test
-this:
+boundary, or mutate owner state directly. The `bevy-host` run enforces this
+on every gate: `bevy_host_parity` (byte parity of receipts and exact
+canonical final state), `bevy_projection` (R01: views equal canonical facts
+and name their `derived_from` identity), `bevy_publication` (R03: stale
+publications rejected downstream by identity alone), and `bevy_host_faults`
+(R02: injected transport and consumer failures leave zero canonical trace,
+reported only in the closed host-fault vocabulary) — all folded into the
+exit code. Two bounded parity gates test this:
 
 ```sh
 cargo run --features bevy-host

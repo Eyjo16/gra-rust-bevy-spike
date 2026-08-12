@@ -1,4 +1,8 @@
-# Falsifier map — overnight execution plan
+# Falsifier map — overnight execution plan (HISTORICAL)
+
+> Executed 2026-08-09/10: trials 007–009 ran under these rules and are
+> integrated on master. Kept as evidence; superseded as a plan by
+> `runtime-target-map.md`.
 
 Date: 2026-08-09. Baseline: `ba3eaac` (master, after trial/006).
 Source of the falsifiers: `docs/falsification-defier-audit.md` (defiers
