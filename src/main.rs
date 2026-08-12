@@ -177,7 +177,32 @@ fn main() -> ExitCode {
             views_match,
             world.hash(),
         );
-        all_pass &= receipts_match && state_match && world_match && views_match;
+        // R02 probe: injected host faults must leave zero canonical
+        // trace — no receipt, no sequence consumed, no state change —
+        // and be reported only in the host-local closed vocabulary.
+        host.fail_next_admission();
+        host.run_trial(&[Command::Witness(WitnessCommand {
+            witness: CharacterId(1),
+            claim: ClaimId(9),
+        })]);
+        let admission_isolated =
+            host.truth_state() == canonical && host.receipt_log().len() == cmds.len();
+        let projection_isolated = !host.publish_to(|_| Err("injected consumer failure"))
+            && host.truth_state() == canonical;
+        let fault_codes: Vec<&str> = host.host_faults().iter().map(|f| f.code()).collect();
+        println!(
+            "bevy_host_faults admission_zero_mutation={} projection_isolated={} faults={}",
+            admission_isolated,
+            projection_isolated,
+            fault_codes.join(","),
+        );
+        all_pass &= receipts_match
+            && state_match
+            && world_match
+            && views_match
+            && admission_isolated
+            && projection_isolated
+            && fault_codes == ["admission_failed", "projection_consumer_failed"];
     }
 
     // Proof envelope: the full identity of this run for cross-trial

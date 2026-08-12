@@ -79,11 +79,35 @@ struct ClaimView {
     derived_from: u64,
 }
 
+/// Host-local faults: transport and presentation failures that occur
+/// outside `submit`. A closed set, reported beside canonical receipts,
+/// never inside them — a host fault is not a game outcome, produces no
+/// canonical receipt, and consumes no canonical sequence (Runtime
+/// Contract R5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostFault {
+    /// The intention failed host admission before reaching the boundary.
+    AdmissionFailed,
+    /// A projection consumer failed downstream of a successful commit.
+    ProjectionConsumerFailed,
+}
+
+impl HostFault {
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::AdmissionFailed => "admission_failed",
+            Self::ProjectionConsumerFailed => "projection_consumer_failed",
+        }
+    }
+}
+
 /// A Bevy-hosted trial: schedule-driven canonical execution plus a
-/// replaceable projection layer.
+/// replaceable projection layer and a host-local fault log.
 pub struct Host {
     ecs: bevy_ecs::world::World,
     schedule: Schedule,
+    host_faults: Vec<HostFault>,
+    injected_admission_fault: bool,
 }
 
 impl Host {
@@ -97,15 +121,64 @@ impl Host {
             log: Vec::new(),
         });
         ecs.insert_resource(CommandQueue::default());
-        Self { ecs, schedule }
+        Self {
+            ecs,
+            schedule,
+            host_faults: Vec::new(),
+            injected_admission_fault: false,
+        }
     }
 
-    /// Loads the commands into the transport queue and runs one schedule
-    /// tick per command. May be called again to continue the trial.
+    /// Admits each command through the transport gate, then runs one
+    /// schedule tick per admitted command. An admission fault is
+    /// recorded host-locally and the intention never reaches the
+    /// boundary: no receipt, no canonical sequence consumed. May be
+    /// called again to continue the trial.
     pub fn run_trial(&mut self, commands: &[Command]) {
-        self.ecs.resource_mut::<CommandQueue>().0 = commands.iter().rev().copied().collect();
-        for _ in 0..commands.len() {
-            self.schedule.run(&mut self.ecs);
+        for cmd in commands {
+            if self.admit() {
+                self.ecs.resource_mut::<CommandQueue>().0.push(*cmd);
+                self.schedule.run(&mut self.ecs);
+            }
+        }
+    }
+
+    /// Arms a one-shot injected transport failure for the next admission
+    /// — the R02 falsifier and gate-probe surface. Simulation only: no
+    /// real transport exists yet, and a real one must route its failures
+    /// through the same closed host-fault vocabulary.
+    pub fn fail_next_admission(&mut self) {
+        self.injected_admission_fault = true;
+    }
+
+    fn admit(&mut self) -> bool {
+        if self.injected_admission_fault {
+            self.injected_admission_fault = false;
+            self.host_faults.push(HostFault::AdmissionFailed);
+            return false;
+        }
+        true
+    }
+
+    /// The host-local fault log — reported beside canonical receipts,
+    /// never inside them.
+    pub fn host_faults(&self) -> &[HostFault] {
+        &self.host_faults
+    }
+
+    /// Publishes the projection, then hands the rendered view lines to a
+    /// downstream consumer. A consumer failure is recorded host-locally
+    /// and returns `false`; it cannot invalidate the commit the
+    /// projection was derived from.
+    pub fn publish_to<E>(&mut self, consumer: impl FnOnce(&[String]) -> Result<(), E>) -> bool {
+        self.publish();
+        let views = self.view_state();
+        match consumer(&views) {
+            Ok(()) => true,
+            Err(_) => {
+                self.host_faults.push(HostFault::ProjectionConsumerFailed);
+                false
+            }
         }
     }
 
@@ -299,6 +372,105 @@ pub fn run_hosted(build_fixture: fn() -> World, commands: &[Command]) -> (World,
     let mut host = Host::new(build_fixture);
     host.run_trial(commands);
     host.into_truth()
+}
+
+#[cfg(test)]
+mod r02_host_failure_tests {
+    use super::*;
+    use crate::boundary::{CharacterId, ClaimId, Command, WitnessCommand, submit};
+
+    fn extra_witness() -> Command {
+        Command::Witness(WitnessCommand {
+            witness: CharacterId(1),
+            claim: ClaimId(9),
+        })
+    }
+
+    /// Falsifier (R02, Runtime Contract R5 row "host failure before
+    /// submit"): an intention that fails host admission never reaches
+    /// the boundary — zero truth mutation, no canonical receipt, no
+    /// canonical sequence consumed — and the fault is reported in the
+    /// host-local closed vocabulary, never as a game outcome. The same
+    /// intention re-admitted afterwards must be byte-identical to a pure
+    /// reference that never saw a host fault at all.
+    #[test]
+    fn falsification_admission_failure_must_leave_zero_canonical_trace() {
+        let cmds = crate::commands();
+        let mut host = Host::new(crate::fixture);
+        host.run_trial(&cmds);
+        let truth_before = host.truth_state();
+        let hash_before = host.truth_hash();
+        let receipts_before = host.receipts();
+
+        host.fail_next_admission();
+        host.run_trial(std::slice::from_ref(&extra_witness()));
+        assert_eq!(host.truth_state(), truth_before, "zero truth mutation");
+        assert_eq!(host.truth_hash(), hash_before);
+        assert_eq!(host.receipts(), receipts_before, "no canonical receipt");
+        assert_eq!(host.host_faults(), &[HostFault::AdmissionFailed]);
+
+        // Re-admission: canonical sequence was never consumed by the
+        // host fault, so the retry matches a fault-free pure reference.
+        host.run_trial(std::slice::from_ref(&extra_witness()));
+        let mut reference = crate::fixture();
+        let mut reference_lines = Vec::new();
+        for (i, cmd) in cmds.iter().chain([&extra_witness()]).enumerate() {
+            reference_lines.push(submit(&mut reference, i as u64 + 1, *cmd).canonical_line());
+        }
+        assert_eq!(host.receipts(), reference_lines);
+        assert_eq!(host.truth_state(), reference.canonical_state());
+        assert_eq!(host.host_faults(), &[HostFault::AdmissionFailed]);
+    }
+
+    /// Falsifier (R02, Runtime Contract R5 row "presentation failure"):
+    /// a projection consumer that fails downstream of a successful
+    /// commit cannot invalidate the commit — canonical state and
+    /// receipts stay authoritative, the fault is reported separately,
+    /// and the next publish still serves the projection in full.
+    #[test]
+    fn falsification_projection_consumer_failure_must_not_invalidate_commit() {
+        let cmds = crate::commands();
+        let mut host = Host::new(crate::fixture);
+        host.run_trial(&cmds);
+        let truth_before = host.truth_state();
+        let receipts_before = host.receipts();
+
+        let delivered = host.publish_to(|_| Err("render exploded"));
+        assert!(!delivered, "the consumer failure is visible to the host");
+        assert_eq!(host.host_faults(), &[HostFault::ProjectionConsumerFailed]);
+        assert_eq!(host.truth_state(), truth_before, "commit remains valid");
+        assert_eq!(host.receipts(), receipts_before);
+
+        let mut seen: Vec<String> = Vec::new();
+        let delivered = host.publish_to(|views| {
+            seen = views.to_vec();
+            Ok::<(), &str>(())
+        });
+        assert!(delivered, "the next publish serves the projection in full");
+        assert_eq!(seen.as_slice(), &truth_before[..truth_before.len() - 1]);
+    }
+
+    /// Topology pin (R02, Runtime Contract R5 row "internal invariant
+    /// failure"): the host must never translate a truth-layer panic into
+    /// a disposition — a stale proof token or impossible apply stays
+    /// loud. The host source therefore contains no unwind-catching at
+    /// all; patterns are built at runtime so this test's own source does
+    /// not count.
+    #[test]
+    fn host_never_catches_truth_panics() {
+        let source = include_str!("host_bevy.rs");
+        for pattern in [
+            format!("catch_{}", "unwind"),
+            format!("panic::{}", "catch"),
+            format!("set_{}", "hook"),
+        ] {
+            assert_eq!(
+                source.matches(pattern.as_str()).count(),
+                0,
+                "host must not intercept truth-layer panics ({pattern})"
+            );
+        }
+    }
 }
 
 #[cfg(test)]
