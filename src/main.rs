@@ -142,28 +142,42 @@ fn main() -> ExitCode {
 
     // Host parity gate (trial/002): the Bevy-hosted replay must reproduce
     // the pure run's receipts and final hash byte-for-byte, or the host
-    // has acquired semantics of its own.
+    // has acquired semantics of its own. Trial R01 extends the gate with
+    // projection non-authority: a published projection must equal the
+    // canonical facts and name the canonical state it derives from.
     #[cfg(feature = "bevy-host")]
     {
-        let (host_world, host_log) = host_bevy::run_hosted(fixture, &cmds);
+        let mut host = host_bevy::Host::new(fixture);
+        host.run_trial(&cmds);
         let pure_lines: Vec<String> = log.iter().map(Receipt::canonical_line).collect();
-        let host_lines: Vec<String> = host_log.iter().map(Receipt::canonical_line).collect();
-        let receipts_match = host_lines == pure_lines
-            && receipt_chain_digest(&host_log) == receipt_chain_digest(&log);
+        let receipts_match = host.receipts() == pure_lines
+            && receipt_chain_digest(host.receipt_log()) == receipt_chain_digest(&log);
         // Exact serialization carries the equality claim; the hash is
         // its checksum address (FNV-1a is not injective).
-        let state_match = host_world.canonical_state() == world.canonical_state();
-        let world_match = host_world.hash() == world.hash();
+        let canonical = world.canonical_state();
+        let state_match = host.truth_state() == canonical;
+        let world_match = host.truth_hash() == world.hash();
         println!(
             "bevy_host_parity receipts_match={} state_match={} world_match={} \
              receipts=0x{:016x} world=0x{:016x}",
             receipts_match,
             state_match,
             world_match,
-            receipt_chain_digest(&host_log),
-            host_world.hash(),
+            receipt_chain_digest(host.receipt_log()),
+            host.truth_hash(),
         );
-        all_pass &= receipts_match && state_match && world_match;
+        host.publish();
+        let views_match = host.view_state().as_slice() == &canonical[..canonical.len() - 1]
+            && host
+                .view_identities()
+                .iter()
+                .all(|derived_from| *derived_from == world.hash());
+        println!(
+            "bevy_projection views_match={} derived_from=0x{:016x}",
+            views_match,
+            world.hash(),
+        );
+        all_pass &= receipts_match && state_match && world_match && views_match;
     }
 
     // Proof envelope: the full identity of this run for cross-trial
