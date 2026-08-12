@@ -50,6 +50,10 @@ No runtime implementation branch should jump this gate.
 
 ### Target R01 — projection non-authority
 
+Status: **PASSED** 2026-08-12 (trial/R01, red→green; custody topology
+test + behavioral corruption falsifier; `bevy_projection` line in the
+`bevy-host` gate). Evidence in `docs/trial-log.md`.
+
 Hypothesis: Bevy can project canonical state into query/render components
 without creating a second truth owner.
 

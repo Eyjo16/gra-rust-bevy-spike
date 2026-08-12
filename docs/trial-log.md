@@ -1,5 +1,43 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-12 — trial/R01 projection non-authority: red→green
+
+Hypothesis (Runtime Contract R4, target R01): Bevy can project canonical
+state into view components without creating a second truth owner; the
+projection can be corrupted or lost without canonical truth noticing,
+and every publish replaces it in full.
+
+Red: capability red `E0433` — no `Host`, no projection, no publish; the
+falsifier could not be expressed against the trial/002 adapter.
+
+Green, in `src/host_bevy.rs`:
+
+- The command queue moved out of the `Truth` resource into its own
+  `CommandQueue` resource — transport is not truth, so loading a trial
+  no longer requires mutable canonical access.
+- Custody topology pinned by test: exactly one registered system holds
+  `ResMut` access to `Truth` (the commit system calling `submit`); the
+  pattern is built at runtime so the test's own source cannot satisfy
+  the count.
+- Disposable projections `CharacterView` / `SiteView` / `ClaimView`:
+  plain copied facts plus `derived_from` (the canonical state hash) —
+  no `World`, no owner storage, no proof tokens, no mutable handle back.
+- `Host::publish` despawns every view and respawns from canonical truth.
+- The behavioral falsifier corrupts a character view out of band (255
+  stamina — out of canonical bounds on purpose) and despawns a claim
+  view, then proves: canonical state, hash, and receipts byte-identical;
+  the next publish rebuilds the projection exactly; and a subsequent
+  submit is byte-identical to a pure reference that never had a
+  projection at all.
+- The `bevy-host` runtime gate gained a `bevy_projection` line
+  (`views_match` + `derived_from`) folded into the exit code; publish
+  reads truth immutably.
+
+Output evolution (declared): the `bevy-host` run prints one new
+`bevy_projection` line. Receipts, grammar, fixture, world hashes, and
+the judge (`10v4`) are all byte-identical. `run_hosted` is now the
+test-side helper; the runtime gate drives `Host` directly.
+
 ## 2026-08-12 — R00 passed: Runtime Contract v0.1 ratified
 
 R1–R7 ratified by the author with both review amendments incorporated:

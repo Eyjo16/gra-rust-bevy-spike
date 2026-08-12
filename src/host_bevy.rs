@@ -1,59 +1,391 @@
-//! Bevy ECS host adapter (trial/002).
+//! Bevy ECS host adapter (trials 002 and R01).
 //!
-//! Hosts the truth layer as an ECS resource and submits the same fixture
-//! and command sequence through the same boundary, one command per
-//! schedule tick. The host contributes scheduling only — no gameplay
-//! semantics — and the parity gate demands that it reproduce the pure
-//! run's canonical receipts and exact final canonical state. The world
-//! hash remains a redundant checksum. The truth layer itself never
-//! references Bevy; only this adapter does.
+//! Custodies the truth layer as an ECS resource and submits the same
+//! fixture and command sequence through the same boundary, one command
+//! per schedule tick. The host contributes scheduling and projection
+//! only — no gameplay semantics — and the parity gate demands that it
+//! reproduce the pure run's canonical receipts and exact final canonical
+//! state. The world hash remains a redundant checksum. The truth layer
+//! itself never references Bevy; only this adapter does.
+//!
+//! Custody doctrine (Runtime Contract R1 amendment): custody of the
+//! canonical `World` inside an ECS resource grants no semantic
+//! authority. Exactly one registered system holds mutable access to the
+//! `Truth` resource — `submit_next`, the commit system — and a topology
+//! test pins that count. The command queue is transport, not truth, so
+//! it lives in its own resource. Projections (R01) are disposable view
+//! entities derived from canonical state, carrying the canonical hash
+//! they were derived from; they can be corrupted or lost without truth
+//! noticing, and every publish replaces them in full.
 
-use bevy_ecs::prelude::{ResMut, Resource, Schedule};
+use bevy_ecs::prelude::{Component, Entity, Or, ResMut, Resource, Schedule, With};
 
 use crate::boundary::{Command, Receipt, World, submit};
 
-/// The whole truth layer as one ECS resource: the host schedules access
-/// to it but never holds a second mutation path into it — every write
-/// still goes through `submit`.
+/// The whole truth layer as one ECS resource: the host custodies it but
+/// never holds a second mutation path into it — every write still goes
+/// through `submit`, from exactly one registered system.
 #[derive(Resource)]
 struct Truth {
     world: World,
-    /// Pending commands, reversed so `pop` yields the original order.
-    queue: Vec<Command>,
     seq: u64,
     log: Vec<Receipt>,
 }
 
-/// One tick: submit the next queued command through the boundary.
-fn submit_next(mut truth: ResMut<Truth>) {
-    let truth = &mut *truth;
-    if let Some(cmd) = truth.queue.pop() {
+/// Pending commands, reversed so `pop` yields the original order.
+/// Transport, not truth — deliberately outside the `Truth` resource so
+/// loading a trial never requires mutable canonical access.
+#[derive(Resource, Default)]
+struct CommandQueue(Vec<Command>);
+
+/// One tick: submit the next queued command through the boundary. The
+/// only registered system with mutable access to `Truth`.
+fn submit_next(mut truth: ResMut<Truth>, mut queue: ResMut<CommandQueue>) {
+    if let Some(cmd) = queue.0.pop() {
+        let truth = &mut *truth;
         truth.seq += 1;
         let receipt = submit(&mut truth.world, truth.seq, cmd);
         truth.log.push(receipt);
     }
 }
 
-/// Runs the whole trial inside a Bevy ECS world and returns the final
-/// truth world and receipt log for parity comparison against the pure
-/// host.
-pub fn run_hosted(build_fixture: fn() -> World, commands: &[Command]) -> (World, Vec<Receipt>) {
-    let mut ecs = bevy_ecs::world::World::new();
-    let mut schedule = Schedule::default();
-    schedule.add_systems(submit_next);
-    ecs.insert_resource(Truth {
-        world: build_fixture(),
-        queue: commands.iter().rev().copied().collect(),
-        seq: 0,
-        log: Vec::with_capacity(commands.len()),
-    });
-    for _ in 0..commands.len() {
-        schedule.run(&mut ecs);
+/// Disposable projection of one character; plain copied facts plus the
+/// canonical state hash the projection was derived from. No `World`, no
+/// owner storage, no proof tokens, no mutable handle back to truth.
+#[derive(Component)]
+struct CharacterView {
+    id: u64,
+    stamina: u8,
+    inventory_g: u64,
+    derived_from: u64,
+}
+
+/// Disposable projection of one site; same doctrine as `CharacterView`.
+#[derive(Component)]
+struct SiteView {
+    id: u64,
+    tier: &'static str,
+    stock_g: u64,
+    derived_from: u64,
+}
+
+/// Disposable projection of one claim; same doctrine as `CharacterView`.
+#[derive(Component)]
+struct ClaimView {
+    id: u64,
+    holder: u64,
+    site: u64,
+    witnessed: bool,
+    derived_from: u64,
+}
+
+/// A Bevy-hosted trial: schedule-driven canonical execution plus a
+/// replaceable projection layer.
+pub struct Host {
+    ecs: bevy_ecs::world::World,
+    schedule: Schedule,
+}
+
+impl Host {
+    pub fn new(build_fixture: fn() -> World) -> Self {
+        let mut ecs = bevy_ecs::world::World::new();
+        let mut schedule = Schedule::default();
+        schedule.add_systems(submit_next);
+        ecs.insert_resource(Truth {
+            world: build_fixture(),
+            seq: 0,
+            log: Vec::new(),
+        });
+        ecs.insert_resource(CommandQueue::default());
+        Self { ecs, schedule }
     }
-    let truth = ecs
-        .remove_resource::<Truth>()
-        .expect("truth resource survives the schedule");
-    (truth.world, truth.log)
+
+    /// Loads the commands into the transport queue and runs one schedule
+    /// tick per command. May be called again to continue the trial.
+    pub fn run_trial(&mut self, commands: &[Command]) {
+        self.ecs.resource_mut::<CommandQueue>().0 = commands.iter().rev().copied().collect();
+        for _ in 0..commands.len() {
+            self.schedule.run(&mut self.ecs);
+        }
+    }
+
+    /// Read-only canonical observations.
+    pub fn truth_state(&self) -> Vec<String> {
+        self.ecs.resource::<Truth>().world.canonical_state()
+    }
+
+    pub fn truth_hash(&self) -> u64 {
+        self.ecs.resource::<Truth>().world.hash()
+    }
+
+    pub fn receipts(&self) -> Vec<String> {
+        self.ecs
+            .resource::<Truth>()
+            .log
+            .iter()
+            .map(Receipt::canonical_line)
+            .collect()
+    }
+
+    pub fn receipt_log(&self) -> &[Receipt] {
+        &self.ecs.resource::<Truth>().log
+    }
+
+    /// Publish: replace the entire projection with fresh view entities
+    /// derived from canonical truth, each carrying the canonical hash it
+    /// was derived from. Reads truth immutably; writes only views.
+    pub fn publish(&mut self) {
+        let (derived_from, characters, sites, claims) = {
+            let world = &self.ecs.resource::<Truth>().world;
+            let derived_from = world.hash();
+            let characters: Vec<(u64, u8, u64)> = world
+                .characters
+                .iter()
+                .map(|(id, s)| (id.0, s.points(), world.economy.inventory(id).grams()))
+                .collect();
+            let sites: Vec<(u64, &'static str, u64)> = world
+                .economy
+                .sites_iter()
+                .map(|(id, tier, stock)| (id.0, tier.code(), stock.grams()))
+                .collect();
+            let claims: Vec<(u64, u64, u64, bool)> = world
+                .social
+                .claims_iter()
+                .map(|(claim, holder, site, witnessed)| (claim.0, holder.0, site.0, witnessed))
+                .collect();
+            (derived_from, characters, sites, claims)
+        };
+        let mut stale = self
+            .ecs
+            .query_filtered::<Entity, Or<(With<CharacterView>, With<SiteView>, With<ClaimView>)>>();
+        let stale: Vec<Entity> = stale.iter(&self.ecs).collect();
+        for entity in stale {
+            self.ecs.despawn(entity);
+        }
+        for (id, stamina, inventory_g) in characters {
+            self.ecs.spawn(CharacterView {
+                id,
+                stamina,
+                inventory_g,
+                derived_from,
+            });
+        }
+        for (id, tier, stock_g) in sites {
+            self.ecs.spawn(SiteView {
+                id,
+                tier,
+                stock_g,
+                derived_from,
+            });
+        }
+        for (id, holder, site, witnessed) in claims {
+            self.ecs.spawn(ClaimView {
+                id,
+                holder,
+                site,
+                witnessed,
+                derived_from,
+            });
+        }
+    }
+
+    /// The projection rendered in canonical-state line format (without
+    /// the revisions line, which is not projected). Sorted per domain,
+    /// so it is directly comparable against `truth_state()`.
+    pub fn view_state(&mut self) -> Vec<String> {
+        let mut characters: Vec<(u64, String)> = {
+            let mut query = self.ecs.query::<&CharacterView>();
+            query
+                .iter(&self.ecs)
+                .map(|v| {
+                    (
+                        v.id,
+                        format!(
+                            "character C{} stamina={} inventory_g={}",
+                            v.id, v.stamina, v.inventory_g
+                        ),
+                    )
+                })
+                .collect()
+        };
+        let mut sites: Vec<(u64, String)> = {
+            let mut query = self.ecs.query::<&SiteView>();
+            query
+                .iter(&self.ecs)
+                .map(|v| {
+                    (
+                        v.id,
+                        format!("site S{} tier={} stock_g={}", v.id, v.tier, v.stock_g),
+                    )
+                })
+                .collect()
+        };
+        let mut claims: Vec<(u64, String)> = {
+            let mut query = self.ecs.query::<&ClaimView>();
+            query
+                .iter(&self.ecs)
+                .map(|v| {
+                    (
+                        v.id,
+                        format!(
+                            "claim K{} holder=C{} site=S{} witnessed={}",
+                            v.id, v.holder, v.site, v.witnessed
+                        ),
+                    )
+                })
+                .collect()
+        };
+        characters.sort();
+        sites.sort();
+        claims.sort();
+        characters
+            .into_iter()
+            .chain(sites)
+            .chain(claims)
+            .map(|(_, line)| line)
+            .collect()
+    }
+
+    /// The canonical-state identity every current view claims to derive
+    /// from.
+    pub fn view_identities(&mut self) -> Vec<u64> {
+        let mut identities = Vec::new();
+        let mut characters = self.ecs.query::<&CharacterView>();
+        identities.extend(characters.iter(&self.ecs).map(|v| v.derived_from));
+        let mut sites = self.ecs.query::<&SiteView>();
+        identities.extend(sites.iter(&self.ecs).map(|v| v.derived_from));
+        let mut claims = self.ecs.query::<&ClaimView>();
+        identities.extend(claims.iter(&self.ecs).map(|v| v.derived_from));
+        identities
+    }
+
+    #[cfg(test)]
+    fn into_truth(mut self) -> (World, Vec<Receipt>) {
+        let truth = self
+            .ecs
+            .remove_resource::<Truth>()
+            .expect("truth resource survives the schedule");
+        (truth.world, truth.log)
+    }
+}
+
+/// Out-of-band corruption surface for the R01 falsifier — test builds
+/// only. Simulates a buggy or hostile downstream consumer damaging the
+/// projection; canonical truth must not notice.
+#[cfg(test)]
+impl Host {
+    fn corrupt_first_character_view(&mut self, stamina: u8) {
+        let mut query = self.ecs.query::<&mut CharacterView>();
+        let mut view = query
+            .iter_mut(&mut self.ecs)
+            .next()
+            .expect("a character view exists");
+        view.stamina = stamina;
+    }
+
+    fn despawn_first_claim_view(&mut self) {
+        let mut query = self.ecs.query_filtered::<Entity, With<ClaimView>>();
+        let entity = query.iter(&self.ecs).next().expect("a claim view exists");
+        self.ecs.despawn(entity);
+    }
+}
+
+/// Runs a whole trial inside a Bevy ECS world and returns the final
+/// truth world and receipt log — the test-side parity helper used by the
+/// trial/002 parity test and the trial/007 trace harness. The runtime
+/// gate in `main.rs` drives `Host` directly.
+#[cfg(test)]
+pub fn run_hosted(build_fixture: fn() -> World, commands: &[Command]) -> (World, Vec<Receipt>) {
+    let mut host = Host::new(build_fixture);
+    host.run_trial(commands);
+    host.into_truth()
+}
+
+#[cfg(test)]
+mod r01_projection_tests {
+    use super::*;
+    use crate::boundary::{CharacterId, ClaimId, Command, WitnessCommand, submit};
+
+    /// Custody invariant (Runtime Contract R1 amendment): exactly one
+    /// registered host system may hold mutable canonical access — the
+    /// commit system that calls `submit`. Code-topology check; the
+    /// pattern is built at runtime so this test's own source does not
+    /// count as an occurrence.
+    #[test]
+    fn custody_exactly_one_mutable_truth_access() {
+        let source = include_str!("host_bevy.rs");
+        let pattern = format!("ResMut<{}>", "Truth");
+        assert_eq!(
+            source.matches(pattern.as_str()).count(),
+            1,
+            "exactly one registered host system may hold mutable canonical access"
+        );
+    }
+
+    /// Falsifier (R01, Runtime Contract R4): a projection derived from
+    /// canonical state can be corrupted out of band without canonical
+    /// truth, receipts, or hash changing; the next publish replaces the
+    /// projection in full from canonical truth; and canonical execution
+    /// after the corruption is byte-identical to a pure reference that
+    /// never had a projection at all.
+    #[test]
+    fn falsification_corrupted_projection_must_not_touch_truth() {
+        let cmds = crate::commands();
+        let mut host = Host::new(crate::fixture);
+        host.run_trial(&cmds);
+        host.publish();
+
+        let truth_before = host.truth_state();
+        let hash_before = host.truth_hash();
+        let receipts_before = host.receipts();
+        let expected_views = &truth_before[..truth_before.len() - 1];
+        assert_eq!(host.view_state(), expected_views, "publish projects truth");
+        assert!(
+            host.view_identities()
+                .iter()
+                .all(|derived_from| *derived_from == hash_before),
+            "every view names the canonical state it was derived from"
+        );
+
+        // Out-of-band corruption: falsify one character view and drop a
+        // claim view entirely.
+        host.corrupt_first_character_view(255);
+        host.despawn_first_claim_view();
+        assert_ne!(host.view_state(), expected_views, "projection is broken");
+
+        // Canonical truth is untouched by projection damage.
+        assert_eq!(host.truth_state(), truth_before);
+        assert_eq!(host.truth_hash(), hash_before);
+        assert_eq!(host.receipts(), receipts_before);
+
+        // The next publish rebuilds the projection in full from truth.
+        host.publish();
+        assert_eq!(host.view_state(), expected_views, "republish rebuilds");
+        assert!(
+            host.view_identities()
+                .iter()
+                .all(|derived_from| *derived_from == hash_before)
+        );
+
+        // Canonical execution after the corruption matches a pure
+        // reference that never had a projection.
+        let extra = Command::Witness(WitnessCommand {
+            witness: CharacterId(1),
+            claim: ClaimId(9),
+        });
+        host.run_trial(std::slice::from_ref(&extra));
+        let mut reference = crate::fixture();
+        let mut reference_lines = Vec::new();
+        for (i, cmd) in cmds.iter().chain([&extra]).enumerate() {
+            reference_lines.push(submit(&mut reference, i as u64 + 1, *cmd).canonical_line());
+        }
+        assert_eq!(host.receipts(), reference_lines);
+        assert_eq!(
+            host.truth_state(),
+            reference.canonical_state(),
+            "projection lifecycle left zero trace in canonical truth"
+        );
+    }
 }
 
 #[cfg(test)]
