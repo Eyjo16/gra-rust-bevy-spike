@@ -19,6 +19,7 @@ mod economy;
 #[cfg(feature = "bevy-host")]
 mod host_bevy;
 mod oracles;
+mod shapes;
 mod social;
 
 use std::process::ExitCode;
@@ -106,6 +107,30 @@ fn commands() -> Vec<Command> {
 }
 
 fn main() -> ExitCode {
+    // `shapes <outdir>`: emit the deterministic truth-shape projection
+    // (TS01) and exit. Write-only: nothing in this binary ever reads
+    // the generated files back — the YAML/HTML are non-authoritative
+    // projections, never a registry.
+    let mut args = std::env::args().skip(1);
+    if let Some(command) = args.next() {
+        if command == "shapes" {
+            let dir = args.next().unwrap_or_else(|| ".".to_owned());
+            let source_commit = std::env::var("BASELINE_COMMIT").unwrap_or_else(|_| "-".to_owned());
+            let yaml = shapes::emit_yaml(&source_commit);
+            let html = shapes::emit_html(&source_commit);
+            if std::fs::write(format!("{dir}/truth-shapes.yaml"), yaml).is_err()
+                || std::fs::write(format!("{dir}/truth-shapes.html"), html).is_err()
+            {
+                eprintln!("truth_shapes: cannot write to {dir}");
+                return ExitCode::FAILURE;
+            }
+            println!("truth_shapes emitted dir={dir} source_commit={source_commit}");
+            return ExitCode::SUCCESS;
+        }
+        eprintln!("unknown command: {command}");
+        return ExitCode::FAILURE;
+    }
+
     let mut world = fixture();
     validate_world_coherence(&world).expect("fixture is referentially coherent");
     println!("grammar=0x{:016x}", grammar_fingerprint());
