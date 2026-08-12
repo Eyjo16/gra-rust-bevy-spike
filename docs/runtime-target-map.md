@@ -41,8 +41,10 @@ older `44662a8` references in this file are ratification provenance).
 Primary falsifier was feature minimization: `bevy_ecs` reduced to
 `default-features = false, features = ["std"]` and the complete pure and
 Bevy gates stayed green — 48 + 57 tests, all four probe lines, envelope
-byte-identical. The local `cargo tree` for `bevy-host` shrank from 128
-lines / 65 crates to 88 lines / 52 crates; `bevy_reflect`,
+byte-identical. The `bevy-host` dependency surface shrank from 65 to 52 unique
+crates (rendered `cargo tree` line counts are environment-sensitive —
+128→88 and 126→86 were both observed for the same change — and are
+subordinate to the crate count); `bevy_reflect`,
 `async_executor`, `backtrace`, and their trees (including serde
 entirely) left the build as unallocated capabilities. Notable for R11:
 with serde gone, no dependency in the host build is even positioned to
