@@ -1,6 +1,6 @@
 # Trial log — truth-layer slice 001
 
-## 2026-08-12 — bundle: AGENTS.md draft v3 (v2 + re-review amendments)
+## 2026-08-12 — bundle: AGENTS.md draft v4 (v3 + mechanical finding pass)
 
 v3, same envelope and write scope, three re-review points plus the
 author's new laws: (1) the docs/README row now reads "Draft workflow
@@ -14,6 +14,19 @@ read daily) and provisional joint decisions (Fable 5 + Sol 5.6 may
 provisionally decide architecture principles/invariants when both
 explicitly agree and note it; binding only at the author's ratifying
 confirmation).
+
+v4, mechanical pass over the author-confirmed finding set. Claims for
+v3+v4 content (claim-ids `agent/evidence-factory-laws#N`):
+
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
+|---|---|---|---|---|
+| 1 | §2 states the index row exists now and ratification flips only its classification | AGENTS.md §2 vs docs/README.md row | derivation | AGENTS.md §2; docs/README.md AGENTS row |
+| 2 | §6 subordinates rendered-line counts to crate counts scoped to a locked feature set, toolchain, and target | AGENTS.md §6 | derivation | AGENTS.md §6 wording |
+| 3 | §8.8 defines the claim-id form used by BLOCKED markers | AGENTS.md §8.8 | derivation | claim-id definition sentence |
+| 4 | §9 permits envelope-free notes only outside the repo; committed notes require an envelope | AGENTS.md §9 | derivation | §9 first paragraph |
+| 5 | §9 limits provisional joint decisions to author-dispatched reversible work, excluding contract/registry changes, block-lifts, and merges | AGENTS.md §9 | derivation | §9 second paragraph |
+| 6 | The branch touches only AGENTS.md, CLAUDE.md, docs/README.md, docs/trial-log.md | this branch vs master | measurement | `git diff --stat master...HEAD` |
+| 7 | Full dual gate is green on the branch tip | repo at tested_commit | measurement | gate transcript in review request |
 
 ## 2026-08-12 — bundle: AGENTS.md draft v2 (amended per adversarial review)
 

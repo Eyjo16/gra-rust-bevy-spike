@@ -1,8 +1,9 @@
 # AGENTS.md — agent-instruction entrypoint
 
-Status: DRAFT v3 — v2 amended per the first adversarial cross-review;
-v3 adds the author's disagreement/blocking rule, suggestion notes, and
-provisional joint decisions. Pending re-review and author ratification.
+Status: DRAFT v4 — mechanical amendment pass over v3, executing the
+author-confirmed finding set (two half-solved v2 points, two v3
+protocol deviations) with no new debate. Pending exact-diff
+verification and author ratification.
 
 This file is the **single agent-instruction entrypoint** for every
 automated collaborator (Codex, Claude, or future workers). It is not
@@ -31,8 +32,9 @@ workflow: `docs/meaning-gate.md`. Work order and status:
 `docs/runtime-target-map.md`. Branch/worktree/falsification cycle:
 `docs/development-workflow.md`. When this file and those disagree,
 those win; report the contradiction instead of resolving it silently.
-On ratification, `docs/README.md` indexes this file as workflow
-authority.
+`docs/README.md` indexes this file now, classified as a draft
+workflow proposal; the ratification commit changes only that
+classification, not the row's existence.
 
 ## 3. The gate (both feature sets, hard exit checks)
 
@@ -110,8 +112,10 @@ review-ready branch — never an auto-merge.
 - Claims stay exactly the size of their evidence (defier-audit rule).
   Trace-scoped results say so; measurements are not meanings.
   Environment-sensitive measurements (e.g. rendered tree line counts)
-  record the toolchain and are subordinate to environment-independent
-  ones (e.g. unique crate counts).
+  record the toolchain and are subordinate to measurements that are
+  stable under a locked feature set, toolchain, and target (e.g.
+  unique crate counts) — no measurement is literally
+  environment-independent.
 - Nothing becomes accepted merely because it was generated
   successfully. Generated assets carry provenance: prompt, seed,
   model/version, inputs, output hashes.
@@ -183,7 +187,8 @@ in the review so shared assumptions stay visible. The reviewer's duty:
    that circle, both readings go verbatim to the author; every work
    item that depends on the disputed claim is marked
    `BLOCKED(disagreement:<claim-id>)` and stops until the author
-   records a verdict. Independent work continues. Neither agent may
+   records a verdict. A claim-id is `<branch>#<claim-number>` for a
+   claims-table row, or a short free slug for a bundle-level dispute. Independent work continues. Neither agent may
    spend further circles trying to win.
 
 The circle, drawn:
@@ -203,18 +208,22 @@ flowchart LR
 ## 9. Suggestion notes and provisional joint decisions
 
 Any agent may leave a **suggestion note** on anything — code, law,
-meaning, tooling — without an envelope; notes are non-binding, carry
-the author's name (agent identity), and live where the author reads
-daily: trial-log entries, review texts, or a backlog file. A note is
-never silently implemented; it waits to be dispatched.
+meaning, tooling. Notes are non-binding, carry the agent's identity,
+and are envelope-free **only outside the repository** (conversation
+and review texts, which the author reads daily). Committing a note
+into the repository is a file change like any other and runs under an
+authoring envelope. A note is never silently implemented; it waits to
+be dispatched.
 
 Architecture principles and invariants may be **provisionally decided
 jointly** by the two named agents (Fable 5 and Sol 5.6) when both
 explicitly agree and the agreement is clearly noted with both
 identities and its rationale. A provisional joint decision may guide
-work immediately but binds nothing: it awaits the author's ratifying
-confirmation, and the author may overturn it, at which point dependent
-work rebases on the verdict.
+**author-dispatched, reversible work only**; it can never change a
+contract or registry, lift a `BLOCKED` state, or authorize a merge.
+It binds nothing: it awaits the author's ratifying confirmation, and
+the author may overturn it, at which point dependent work rebases on
+the verdict.
 
 ## 10. Escalation
 
