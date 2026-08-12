@@ -148,7 +148,11 @@ fn main() -> ExitCode {
     #[cfg(feature = "bevy-host")]
     {
         let mut host = host_bevy::Host::new(fixture);
-        host.run_trial(&cmds);
+        // The trial runs in two segments so a genuinely older
+        // publication exists for the R03 staleness probe.
+        host.run_trial(&cmds[..cmds.len() / 2]);
+        let early_publication = host.publication();
+        host.run_trial(&cmds[cmds.len() / 2..]);
         let pure_lines: Vec<String> = log.iter().map(Receipt::canonical_line).collect();
         let receipts_match = host.receipts() == pure_lines
             && receipt_chain_digest(host.receipt_log()) == receipt_chain_digest(&log);
@@ -166,8 +170,9 @@ fn main() -> ExitCode {
             receipt_chain_digest(host.receipt_log()),
             host.truth_hash(),
         );
-        host.publish();
-        let views_match = host.view_state().as_slice() == &canonical[..canonical.len() - 1]
+        let publication = host.publication();
+        let views_match = publication.views.as_slice() == &canonical[..canonical.len() - 1]
+            && publication.derived_from == world.hash()
             && host
                 .view_identities()
                 .iter()
@@ -176,6 +181,18 @@ fn main() -> ExitCode {
             "bevy_projection views_match={} derived_from=0x{:016x}",
             views_match,
             world.hash(),
+        );
+        // R03 probe: publications are ordered by canonical identity, and
+        // a delayed (stale) delivery is rejected downstream without
+        // touching canonical truth.
+        let mut consumer = host_bevy::ViewConsumer::new();
+        let stale_rejected = consumer.accept(&publication)
+            && !consumer.accept(&early_publication)
+            && consumer.views() == publication.views.as_slice()
+            && host.truth_state() == canonical;
+        println!(
+            "bevy_publication revisions={} derived_from=0x{:016x} stale_rejected={}",
+            publication.revisions, publication.derived_from, stale_rejected,
         );
         // R02 probe: injected host faults must leave zero canonical
         // trace — no receipt, no sequence consumed, no state change —
@@ -200,6 +217,7 @@ fn main() -> ExitCode {
             && state_match
             && world_match
             && views_match
+            && stale_rejected
             && admission_isolated
             && projection_isolated
             && fault_codes == ["admission_failed", "projection_consumer_failed"];

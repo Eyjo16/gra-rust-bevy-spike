@@ -166,6 +166,26 @@ impl Host {
         &self.host_faults
     }
 
+    /// The monotone canonical apply count: the sum of the three owners'
+    /// apply counters. A canonical observation, not a host invention —
+    /// it orders publications without any new registry ID.
+    pub fn truth_revisions(&self) -> u64 {
+        let world = &self.ecs.resource::<Truth>().world;
+        world.characters.revision() + world.economy.revision() + world.social.revision()
+    }
+
+    /// Publishes the projection and returns it as one identified
+    /// snapshot (Runtime Contract R4: a projection carries the canonical
+    /// identity it was derived from and is replaceable in full).
+    pub fn publication(&mut self) -> Publication {
+        self.publish();
+        Publication {
+            revisions: self.truth_revisions(),
+            derived_from: self.truth_hash(),
+            views: self.view_state(),
+        }
+    }
+
     /// Publishes the projection, then hands the rendered view lines to a
     /// downstream consumer. A consumer failure is recorded host-locally
     /// and returns `false`; it cannot invalidate the commit the
@@ -342,6 +362,51 @@ impl Host {
     }
 }
 
+/// One identified projection snapshot: the monotone canonical apply
+/// count and canonical state hash it derives from, plus the rendered
+/// view lines. Both identity fields are existing canonical observations
+/// — no new registry or schema ID is invented (target R03).
+pub struct Publication {
+    pub revisions: u64,
+    pub derived_from: u64,
+    pub views: Vec<String>,
+}
+
+/// Downstream consumer state: keeps the newest publication it has
+/// accepted and rejects stale deliveries by identity alone. Rejection is
+/// the consumer's whole power — it replaces nothing upstream and can
+/// never touch canonical truth.
+#[derive(Default)]
+pub struct ViewConsumer {
+    last_revisions: Option<u64>,
+    views: Vec<String>,
+}
+
+impl ViewConsumer {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Accepts a publication that is at least as new as the newest seen
+    /// (idempotent on re-delivery); rejects an older one and keeps the
+    /// current projection untouched.
+    pub fn accept(&mut self, publication: &Publication) -> bool {
+        if self
+            .last_revisions
+            .is_some_and(|newest| publication.revisions < newest)
+        {
+            return false;
+        }
+        self.last_revisions = Some(publication.revisions);
+        self.views = publication.views.clone();
+        true
+    }
+
+    pub fn views(&self) -> &[String] {
+        &self.views
+    }
+}
+
 /// Out-of-band corruption surface for the R01 falsifier — test builds
 /// only. Simulates a buggy or hostile downstream consumer damaging the
 /// projection; canonical truth must not notice.
@@ -372,6 +437,71 @@ pub fn run_hosted(build_fixture: fn() -> World, commands: &[Command]) -> (World,
     let mut host = Host::new(build_fixture);
     host.run_trial(commands);
     host.into_truth()
+}
+
+#[cfg(test)]
+mod r03_publication_identity_tests {
+    use super::*;
+
+    /// Falsifier (R03, Runtime Contract R4): every publication names the
+    /// exact canonical observations it derives from — the monotone
+    /// canonical apply count and the canonical state hash. No new
+    /// registry ID is invented.
+    #[test]
+    fn publication_identity_names_canonical_observations() {
+        let cmds = crate::commands();
+        let mut host = Host::new(crate::fixture);
+        host.run_trial(&cmds);
+        let truth = host.truth_state();
+        let publication = host.publication();
+        assert_eq!(publication.derived_from, host.truth_hash());
+        assert_eq!(publication.revisions, host.truth_revisions());
+        assert_eq!(publication.views.as_slice(), &truth[..truth.len() - 1]);
+    }
+
+    /// Falsifier (R03): a delayed publication delivered after a newer
+    /// one must be rejectable by its identity alone — and the rejection
+    /// is downstream-only: canonical execution is unchanged by both the
+    /// reorder and the rejection, and the trial can simply continue.
+    #[test]
+    fn falsification_delayed_publication_must_be_rejected_not_replayed() {
+        let cmds = crate::commands();
+        let mut host = Host::new(crate::fixture);
+        host.run_trial(&cmds[..8]);
+        let early = host.publication();
+        host.run_trial(&cmds[8..]);
+        let late = host.publication();
+        assert!(early.revisions < late.revisions, "the trial advanced");
+
+        let truth_after = host.truth_state();
+        let receipts_after = host.receipts();
+
+        // Delivery order is reversed: the newer publication arrives
+        // first, the delayed one afterwards.
+        let mut consumer = ViewConsumer::new();
+        assert!(consumer.accept(&late), "current publication accepted");
+        assert_eq!(consumer.views(), late.views.as_slice());
+        assert!(!consumer.accept(&early), "stale publication rejected");
+        assert_eq!(
+            consumer.views(),
+            late.views.as_slice(),
+            "rejection replaces nothing: the consumer keeps the newer projection"
+        );
+        // Idempotent re-delivery of the current publication is accepted.
+        assert!(consumer.accept(&late));
+
+        // The reorder and the rejection were downstream-only.
+        assert_eq!(host.truth_state(), truth_after);
+        assert_eq!(host.receipts(), receipts_after);
+
+        // Canonical execution continues, and the next publication
+        // supersedes cleanly.
+        host.run_trial(std::slice::from_ref(&crate::commands()[0]));
+        let next = host.publication();
+        assert!(next.revisions >= late.revisions);
+        assert!(consumer.accept(&next));
+        assert_eq!(consumer.views(), next.views.as_slice());
+    }
 }
 
 #[cfg(test)]
