@@ -1,5 +1,27 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-12 — Evidence Factory Protocol v0.1 ratified
+
+Author verdict, recorded: ratified as proven on
+`agent/evidence-factory-laws` at `6017d5b` — exact-diff review by
+Sol 5.6 (base `4d5f439`, tested `6017d5b`, rustc/cargo 1.97.1, WSL2)
+confirmed claims #1-#7, no scope creep, no registry/schema/runtime
+change, no vocabulary drift, full dual gate green, frozen identities
+unchanged. The ratification commit changes the draft classification
+only; the protocol's evolution history (v1 red on its own laws → v2 →
+v3 → v4 mechanical pass) stands in the entries below as evidence that
+the cross-review circle works on its own governance.
+
+The author also confirmed the provisional joint agreement of Fable 5 +
+Sol 5.6: executable truth, proof history, and the truth-shape extractor
+stay in `gra-rust-bevy-spike`; local orchestration, queues, runs,
+rendering, and generated assets go to the separate
+`gragas-local-compute` repository; the Grágás vision gets its own
+document, kept apart from proven truth.
+
+Unblocked by this ratification: the local-compute scaffold and the
+first truth-shape envelope.
+
 ## 2026-08-12 — bundle: AGENTS.md draft v4 (v3 + mechanical finding pass)
 
 v3, same envelope and write scope, three re-review points plus the

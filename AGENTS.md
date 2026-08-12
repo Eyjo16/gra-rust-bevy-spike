@@ -1,9 +1,10 @@
 # AGENTS.md — agent-instruction entrypoint
 
-Status: DRAFT v4 — mechanical amendment pass over v3, executing the
-author-confirmed finding set (two half-solved v2 points, two v3
-protocol deviations) with no new debate. Pending exact-diff
-verification and author ratification.
+Status: **RATIFIED — Evidence Factory Protocol v0.1** (author,
+2026-08-12, as proven on `agent/evidence-factory-laws` at `6017d5b`;
+exact-diff verified by Sol 5.6, claims #1-#7 CONFIRMED). Changes to
+this file are henceforth governance changes: authoring envelope,
+cross-review, author ratification.
 
 This file is the **single agent-instruction entrypoint** for every
 automated collaborator (Codex, Claude, or future workers). It is not
@@ -32,9 +33,8 @@ workflow: `docs/meaning-gate.md`. Work order and status:
 `docs/runtime-target-map.md`. Branch/worktree/falsification cycle:
 `docs/development-workflow.md`. When this file and those disagree,
 those win; report the contradiction instead of resolving it silently.
-`docs/README.md` indexes this file now, classified as a draft
-workflow proposal; the ratification commit changes only that
-classification, not the row's existence.
+`docs/README.md` indexes this file as workflow authority (Evidence
+Factory Protocol v0.1, ratified 2026-08-12).
 
 ## 3. The gate (both feature sets, hard exit checks)
 
