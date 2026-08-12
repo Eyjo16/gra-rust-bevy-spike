@@ -33,6 +33,19 @@ Claims (claim-ids `trial/ts01-truth-shape-extractor#N`):
 | 5 | No runtime or test path reads the generated files | authority guard | derivation | `shapes` mode is fs::write-only; no fs reads exist in the crate |
 | 6 | Full dual gate green on tested_commit | repo | measurement | 53 default / 62 bevy-host tests; envelope `oracles=10v4`, frozen identities |
 
+Amendment pass (per cross-review): the host shape's writes field was
+inaccurate — the host DOES write truth, through `submit` from the
+single commit system; it now says exactly that. The shape-level
+evidence vocabulary is closed as `EVIDENCE_KINDS` (distinct from the
+§7 claim modes on purpose, both emitted in the YAML), the
+`(contract bound)` value label was replaced with closed-vocabulary
+wording, and claim #2 was upgraded from presence to mapping:
+
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
+|---|---|---|---|---|
+| 2b | Each verb's projected refusal set equals, in both directions, the set its executions actually produce | verb shapes vs `submit` | derivation | test `falsification_refusal_mapping_must_match_execution` — every reason driven to occur, sets compared as equals |
+| 7 | Shape evidence kinds come from a closed, emitted vocabulary | vocabulary closure | derivation | test `evidence_kinds_are_closed`; `evidence_kinds` block in the YAML |
+
 Bundle metadata: author Fable 5; rustc/cargo 1.97.1, WSL2; base
 `91dcd94`; tested_commit = branch tip (recorded in the review request);
 shared assumptions: same clone and gate commands as the reviewer.

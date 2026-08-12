@@ -19,6 +19,18 @@ use crate::boundary::{
     STAMINA_COST_BY_BAND, Stamina, WITNESS_COST, YIELD_TABLE_GRAMS, grammar_fingerprint,
 };
 
+/// The closed shape-level evidence vocabulary. Distinct from the bundle
+/// claims evidence modes (AGENTS.md §7) on purpose: a shape cites the
+/// kinds of proof that back it, a claim cites how one statement was
+/// evidenced. Both sets are closed to prevent drift.
+pub const EVIDENCE_KINDS: [&str; 5] = [
+    "behavioral-red",
+    "capability-red",
+    "measurement",
+    "oracle",
+    "parity",
+];
+
 /// The closed meaning-status vocabulary for projected statements.
 pub const MEANING_STATUSES: [&str; 6] = [
     "ratified",
@@ -181,7 +193,7 @@ fn shapes() -> Vec<Shape> {
             proof_refs: &["trial-log round 1", "trial/003"],
             values: vec![(
                 "stamina_max".to_owned(),
-                format!("{} (contract bound)", Stamina::MAX),
+                format!("{} (proven: type-enforced bound)", Stamina::MAX),
             )],
         },
         Shape {
@@ -260,8 +272,11 @@ fn shapes() -> Vec<Shape> {
                     R01-R03 probe suite; sequential scheduling only (A1 law)",
             evidence_kind: &["capability-red", "behavioral-red", "measurement", "parity"],
             dependencies: &["bevy_ecs (minimized: std only)", "boundary"],
-            reads: &["canonical observations (read-only)"],
-            writes: &["view entities, publications, host-fault log — never truth"],
+            reads: &["canonical observations", "command queue (transport)"],
+            writes: &[
+                "truth — only through submit, from the single commit system",
+                "view entities, publications, host-fault log",
+            ],
             mutation_closure: "exactly one registered system holds mutable access \
                                to Truth (the commit system calling submit); \
                                projections and faults leave zero canonical trace",
@@ -311,6 +326,10 @@ pub fn emit_yaml(source_commit: &str) -> String {
     out.push_str("meaning_statuses:\n");
     for status in MEANING_STATUSES {
         out.push_str(&format!("  - \"{status}\"\n"));
+    }
+    out.push_str("evidence_kinds:\n");
+    for kind in EVIDENCE_KINDS {
+        out.push_str(&format!("  - \"{kind}\"\n"));
     }
     out.push_str("shapes:\n");
     for s in shapes() {
@@ -534,5 +553,132 @@ mod tests {
         assert_eq!(emit_yaml("same"), emit_yaml("same"));
         assert_eq!(emit_html("same"), emit_html("same"));
         assert_ne!(emit_yaml("a"), emit_yaml("b"), "commit-addressed");
+    }
+
+    /// Every shape's evidence kinds come from the closed shape-level
+    /// vocabulary — presence in the projection is not enough, the
+    /// vocabulary itself must be closed.
+    #[test]
+    fn evidence_kinds_are_closed() {
+        for s in super::shapes() {
+            for kind in s.evidence_kind {
+                assert!(
+                    EVIDENCE_KINDS.contains(kind),
+                    "shape {} cites unclosed evidence kind {kind}",
+                    s.id
+                );
+            }
+        }
+    }
+
+    /// Mapping falsifier: the refusal set projected for each verb must
+    /// equal, in both directions, the refusals that verb actually
+    /// produces through `submit` — every projected reason is driven to
+    /// occur, and no occurring reason is missing from the projection.
+    /// The map is thereby true, not merely populated.
+    #[test]
+    fn falsification_refusal_mapping_must_match_execution() {
+        use crate::boundary::{
+            CharacterId, ClaimId, Command, GatherCommand, InfraTier, MassGrams, OutcomeKind,
+            SiteId, SiteId as S, Stamina, WitnessCommand, World, submit,
+        };
+        use crate::character::CharacterOwner;
+        use crate::economy::EconomyOwner;
+        use crate::social::SocialOwner;
+        use std::collections::BTreeSet;
+
+        // A deliberately incoherent-per-claim world (holder C99 does not
+        // exist) so unknown_actor is reachable; coherence validation is
+        // a fixture gate, not an owner precondition, and refusals must
+        // hold regardless. All commands below refuse, so state never
+        // advances between cases.
+        let mut world = World {
+            characters: CharacterOwner::seed([
+                (CharacterId(1), Stamina::new(90).unwrap()),
+                (CharacterId(2), Stamina::new(50).unwrap()),
+                (CharacterId(3), Stamina::new(5).unwrap()),
+                (CharacterId(4), Stamina::new(12).unwrap()),
+                (CharacterId(5), Stamina::new(4).unwrap()),
+            ])
+            .unwrap(),
+            economy: EconomyOwner::seed_sites([
+                (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
+                (SiteId(2), InfraTier::Crude, MassGrams::new(0)),
+            ])
+            .unwrap(),
+            social: SocialOwner::seed_claims([
+                (ClaimId(1), CharacterId(1), SiteId(1), true),
+                (ClaimId(2), CharacterId(2), SiteId(1), false),
+                (ClaimId(3), CharacterId(3), SiteId(1), true),
+                (ClaimId(4), CharacterId(4), SiteId(1), true),
+                (ClaimId(5), CharacterId(2), SiteId(1), true),
+                (ClaimId(6), CharacterId(1), S(9), true),
+                (ClaimId(7), CharacterId(1), SiteId(2), true),
+                (ClaimId(9), CharacterId(99), SiteId(1), true),
+            ])
+            .unwrap(),
+        };
+
+        let gather = |actor: u64, claim: u64, site: u64| {
+            Command::Gather(GatherCommand {
+                actor: CharacterId(actor),
+                claim: ClaimId(claim),
+                site: SiteId(site),
+            })
+        };
+        let witness = |w: u64, claim: u64| {
+            Command::Witness(WitnessCommand {
+                witness: CharacterId(w),
+                claim: ClaimId(claim),
+            })
+        };
+
+        let gather_cases = [
+            gather(1, 99, 1), // unknown_claim
+            gather(1, 5, 1),  // claim_not_held_by_actor (K5 is C2's)
+            gather(1, 1, 2),  // claim_site_mismatch
+            gather(2, 2, 1),  // claim_not_witnessed
+            gather(99, 9, 1), // unknown_actor (holder C99 matches, no body)
+            gather(3, 3, 1),  // actor_exhausted
+            gather(4, 4, 1),  // insufficient_stamina (12 < low cost)
+            gather(1, 6, 9),  // unknown_site
+            gather(1, 7, 2),  // site_empty
+        ];
+        let witness_cases = [
+            witness(1, 99), // unknown_claim
+            witness(2, 5),  // cannot_witness_own_claim
+            witness(2, 1),  // claim_already_witnessed
+            witness(99, 2), // unknown_actor
+            witness(5, 2),  // insufficient_stamina (4 < 5)
+        ];
+
+        let mut observed_gather = BTreeSet::new();
+        for cmd in gather_cases {
+            let receipt = submit(&mut world, 1, cmd);
+            assert!(matches!(receipt.outcome, OutcomeKind::Refused(_)));
+            observed_gather.insert(receipt.outcome.reason_code().to_owned());
+        }
+        let mut observed_witness = BTreeSet::new();
+        for cmd in witness_cases {
+            let receipt = submit(&mut world, 1, cmd);
+            assert!(matches!(receipt.outcome, OutcomeKind::Refused(_)));
+            observed_witness.insert(receipt.outcome.reason_code().to_owned());
+        }
+
+        for (id, observed) in [
+            ("verb.gather", &observed_gather),
+            ("verb.witness", &observed_witness),
+        ] {
+            let shape = super::shapes()
+                .into_iter()
+                .find(|s| s.id == id)
+                .expect("shape exists");
+            let projected: BTreeSet<String> =
+                shape.refusals.iter().map(|r| (*r).to_owned()).collect();
+            assert_eq!(
+                &projected, observed,
+                "{id}: projected refusal set must equal the executed set"
+            );
+        }
     }
 }
