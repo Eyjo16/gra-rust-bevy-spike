@@ -1,5 +1,43 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-12 — bundle: TS01 truth-shape extractor (red→green)
+
+Instrument: the dispatched envelope
+`gragas-local-compute/queue/TS01-truth-shape-extractor.md`, executed as
+written (base `91dcd94`; write scope `src/shapes.rs`, `src/main.rs`
+shapes mode, this entry; artifacts to the local-compute repo).
+
+Red: capability red `E0583` — no shapes module existed; the projection
+could not be expressed.
+
+Green: `src/shapes.rs` — six shapes (verb.gather, verb.witness,
+owner.character, owner.economy, owner.social, host.bevy_ecs), each with
+role, dependencies, read/write sets, mutation closure, guards,
+refusals, receipts, invariants, parity paths, source references, proof
+references, and `authority`/`evidence_kind`/`scope`/`meaning_status`
+from the closed six-status set. Values are formatted from the governing
+constants at emission time; `cargo run -- shapes <dir>` writes
+commit-addressed YAML + a non-authoritative HTML review page.
+Write-only by construction — nothing reads the files back; the binding
+tests verify the emitted *string* against the code (direction
+code→projection, never projection→behavior).
+
+Claims (claim-ids `trial/ts01-truth-shape-extractor#N`):
+
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
+|---|---|---|---|---|
+| 1 | Two independent process runs at `6f310a6` produce byte-identical YAML and HTML | this toolchain, locked commit | measurement | sha256 `f8cd6fc7…` / `2dbf36c6…` in the provenance file; `cmp` clean |
+| 2 | The projection covers every closed refusal and partial reason and every verb | vocabulary binding | derivation | tests `projection_covers_the_closed_vocabulary`, `projection_covers_every_verb` |
+| 3 | Numeric values are emitted from the governing constants, not hand-copied | value binding | derivation | test `projection_values_come_from_the_governing_constants` |
+| 4 | Every shape's meaning_status is in the closed six-status set, and the HTML lists all six | status closure | derivation | test `meaning_statuses_are_closed_and_fully_listed` |
+| 5 | No runtime or test path reads the generated files | authority guard | derivation | `shapes` mode is fs::write-only; no fs reads exist in the crate |
+| 6 | Full dual gate green on tested_commit | repo | measurement | 53 default / 62 bevy-host tests; envelope `oracles=10v4`, frozen identities |
+
+Bundle metadata: author Fable 5; rustc/cargo 1.97.1, WSL2; base
+`91dcd94`; tested_commit = branch tip (recorded in the review request);
+shared assumptions: same clone and gate commands as the reviewer.
+Artifacts and run record: `gragas-local-compute` branch `run/TS01`.
+
 ## 2026-08-12 — Evidence Factory Protocol v0.1 ratified
 
 Author verdict, recorded: ratified as proven on
