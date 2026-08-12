@@ -6,7 +6,10 @@ edition = "2024"
 # Bevy is an optional execution/testing host for the pure Rust truth layer.
 # The dependencies stay pinned behind off-by-default features so the
 # canonical boundary gate remains fast, deterministic, and engine-independent.
-# `bevy-host` is the ECS-only host adapter (trial/002 parity gate);
+# `bevy-host` is the ECS-only host adapter (trial/002 parity gate),
+# feature-minimized by trial/D01: the adapter needs only `std` — reflect,
+# async_executor, and backtrace are unallocated capabilities and stay
+# disabled until a named consumer and gate justify them.
 # `bevy-full` layers the whole engine on top for rendering/interaction work.
 [features]
 default = []
@@ -15,4 +18,4 @@ bevy-full = ["bevy-host", "dep:bevy"]
 
 [dependencies]
 bevy = { version = "0.19", optional = true }
-bevy_ecs = { version = "0.19", optional = true }
+bevy_ecs = { version = "0.19", optional = true, default-features = false, features = ["std"] }
