@@ -7,6 +7,11 @@ runtime gaps, and offers a minimal contract for ratification. It changes no
 runtime code, registry/schema, command, receipt, reason, value, or authority
 identity.
 
+Review status: the lead programmer independently checked the proposal against
+the repository and recommends ratifying R1–R7 with the custody and R5
+evidence-status amendments now incorporated here. Author ruling remains
+pending.
+
 ## Outcome sought
 
 Make the boundary between deterministic truth and execution hosts hard enough
@@ -57,6 +62,20 @@ Exactly one runtime locus owns mutable canonical `World` access. Hosts may
 concurrently collect input, plan read-only work, or derive presentation, but
 canonical mutation occurs through exclusive `submit(&mut World, ...)` only.
 
+**Custody amendment:** a host may custody canonical `World` inside its native
+container—for Bevy, a resource—but custody does not grant semantic authority.
+The canonical resource type and fields remain private to a dedicated custody
+module. Exactly one registered host system may request mutable access to that
+resource: the commit system that calls `submit`. Projection systems may read a
+published canonical observation; projection components must not contain
+`World`, owner storage, proof tokens, or another mutable handle back to truth.
+
+The one-mutable-system condition is a code-topology and review invariant. R01
+adds the behavioral falsifier it supports: corrupting a projection cannot
+alter truth, and republishing replaces the corruption. That runtime test does
+not pretend it can enumerate every future system signature; review and module
+visibility enforce the custody topology.
+
 ### R2 — immediate transaction visibility
 
 Each submitted command validates against the latest committed canonical
@@ -87,18 +106,20 @@ was derived and be replaceable in full on the next publish.
 
 ### R5 — failure classes do not collapse
 
-| Failure class | Canonical receipt? | Truth mutation? | Meaning |
-| --- | --- | --- | --- |
-| Domain refusal | Yes | No | Expected game result |
-| Accepted / Partial | Yes | Yes | Expected game result |
-| Startup coherence fault | No | Runtime must not start | Invalid canonical seed/checkpoint |
-| Stale proof or impossible apply | No new game outcome | Must be zero-mutation at the guarded boundary | Runtime/truth bug; fail loudly |
-| Host failure before `submit` | No | No | Transport/scheduling failure |
-| Presentation/projection failure | No | Canonical commit remains valid | Downstream failure |
-| Crash after commit but before durable publish | Undefined today | Potentially committed | Recovery contract required before persistence |
+| Failure class | Canonical receipt? | Truth mutation? | Meaning | Evidence status |
+| --- | --- | --- | --- | --- |
+| Domain refusal | Yes | No | Expected game result | Proven by oracle 8 and refusal tests |
+| Accepted / Partial | Yes | Yes | Expected game result | Proven by boundary/oracle fixtures |
+| Startup coherence fault | No | Runtime must not start | Invalid canonical seed/checkpoint | Pure runner proven; host startup gate still needs an explicit path |
+| Stale proof or impossible apply | No new game outcome | Must be zero-mutation at the guarded boundary | Runtime/truth bug; fail loudly | Proven by trials 003 and 008 |
+| Host failure before `submit` | No | No | Transport/scheduling failure | **Proposed; no injectable host path exists until R02** |
+| Presentation/projection failure | No | Canonical commit remains valid | Downstream failure | Proposed; R01/R02 make it executable |
+| Crash after commit but before durable publish | Undefined today | Potentially committed | Recovery contract required before persistence | Explicitly unproven / HOLD |
 
 The last row is the current durability gap. It must not be disguised as a
-Refused receipt.
+Refused receipt. The evidence-status column is normative restraint: R00 may
+ratify the classification before every host path exists, but only R01/R02 can
+promote the proposed host rows to tested claims.
 
 ### R6 — time is metadata until modeled
 
@@ -174,7 +195,8 @@ author rules on its semantic surfaces.
 
 ## 5. Ratification questions for lead and author
 
-1. Do we ratify R1–R7 as the minimal current-semantics host contract?
+1. Do we ratify R1–R7, including the custody and evidence-status amendments,
+   as the minimal current-semantics host contract?
 2. Is canonical execution immediate (A1), or do we deliberately open sealed
    turns (A2) as semantic evolution?
 3. Who owns sequence and durable command identity: boundary, runtime journal,

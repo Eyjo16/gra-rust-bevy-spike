@@ -51,6 +51,20 @@ No runtime implementation branch should jump this gate.
 Hypothesis: Bevy can project canonical state into query/render components
 without creating a second truth owner.
 
+Custody topology:
+
+- canonical `Truth` and its fields live behind a private custody-module
+  boundary;
+- exactly one registered system—the commit system—requests `ResMut<Truth>`;
+- projection systems receive read-only published observations and mutate only
+  downstream projection data;
+- projection components contain no `World`, owner, proof token, or mutable
+  handle back to canonical truth.
+
+The first two bullets are visibility/review gates. The behavioral test below
+proves their required consequence rather than claiming Rust reflection can
+count every future system signature.
+
 Falsifier:
 
 1. publish a projection derived from canonical state;
@@ -65,6 +79,10 @@ meaning. It uses existing `bevy_ecs`; no full engine dependency is needed.
 
 Hypothesis: failures outside `submit` cannot become game outcomes or silently
 change truth.
+
+This target supplies the first executable evidence for the R5 row “host
+failure before `submit`”; that row is proposal-level classification until the
+injectable path exists here.
 
 Falsifiers:
 
