@@ -111,6 +111,13 @@ dependency is justified yet.
 
 ### Target R03 — publication identity
 
+Status: **PASSED** 2026-08-12 (trial/R03, red→green; `Publication`
+carries the monotone canonical apply count plus the canonical state
+hash — both existing canonical observations, no new registry ID;
+`ViewConsumer` rejects delayed deliveries by identity alone, downstream
+only; `bevy_publication` line in the `bevy-host` gate). Evidence in
+`docs/trial-log.md`.
+
 Hypothesis: every projection/render snapshot names the exact canonical state
 from which it was derived, and stale views can be detected without becoming
 truth.

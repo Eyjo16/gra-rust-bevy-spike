@@ -1,5 +1,41 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-12 — trial/R03 publication identity: red→green
+
+Hypothesis (Runtime Contract R4, target R03): every projection snapshot
+names the exact canonical state it derives from, and a stale view can be
+detected and rejected without becoming truth.
+
+Red: capability red — `Publication`, `ViewConsumer`,
+`Host::publication`, and `Host::truth_revisions` did not exist
+(`E0433`/`E0599`); views carried `derived_from` per entity (R01) but
+publications had no ordered identity a consumer could compare.
+
+Green, in `src/host_bevy.rs`:
+
+- `Publication { revisions, derived_from, views }`: identity is two
+  existing canonical observations — the monotone sum of the three
+  owners' apply counters, and the canonical state hash. No new registry
+  or schema ID was invented, per the target's own constraint.
+- `ViewConsumer::accept`: rejects a delivery older than the newest seen,
+  by identity alone; idempotent on re-delivery of the current one.
+  Rejection is the consumer's whole power — it replaces nothing
+  upstream and cannot touch canonical truth.
+- The falsifier reverses delivery order (newer publication first, the
+  delayed one afterwards) and proves: the stale one is rejected, the
+  consumer keeps the newer projection, canonical state and receipts are
+  byte-identical through both the reorder and the rejection, and the
+  trial simply continues with the next publication superseding cleanly.
+- The `bevy-host` runtime gate now runs the trial in two segments so a
+  genuinely older publication exists each run, and prints a
+  `bevy_publication` probe line folded into the exit code
+  (`revisions=14` on the standard fixture — 7+5+2).
+
+Output evolution (declared): one new `bevy_publication` line in the
+`bevy-host` run. Receipts, grammar, fixture, world hashes, and the judge
+(`10v4`) are all byte-identical. R01–R03 are now all part of every
+`bevy-host` gate run.
+
 ## 2026-08-12 — trial/R02 host failure boundary: red→green
 
 Hypothesis (Runtime Contract R5, target R02): failures outside `submit`
