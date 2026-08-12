@@ -1,5 +1,108 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-12 — Evidence Factory Protocol v0.1 ratified
+
+Author verdict, recorded: ratified as proven on
+`agent/evidence-factory-laws` at `6017d5b` — exact-diff review by
+Sol 5.6 (base `4d5f439`, tested `6017d5b`, rustc/cargo 1.97.1, WSL2)
+confirmed claims #1-#7, no scope creep, no registry/schema/runtime
+change, no vocabulary drift, full dual gate green, frozen identities
+unchanged. The ratification commit changes the draft classification
+only; the protocol's evolution history (v1 red on its own laws → v2 →
+v3 → v4 mechanical pass) stands in the entries below as evidence that
+the cross-review circle works on its own governance.
+
+The author also confirmed the provisional joint agreement of Fable 5 +
+Sol 5.6: executable truth, proof history, and the truth-shape extractor
+stay in `gra-rust-bevy-spike`; local orchestration, queues, runs,
+rendering, and generated assets go to the separate
+`gragas-local-compute` repository; the Grágás vision gets its own
+document, kept apart from proven truth.
+
+Unblocked by this ratification: the local-compute scaffold and the
+first truth-shape envelope.
+
+## 2026-08-12 — bundle: AGENTS.md draft v4 (v3 + mechanical finding pass)
+
+v3, same envelope and write scope, three re-review points plus the
+author's new laws: (1) the docs/README row now reads "Draft workflow
+proposal" until the ratification commit flips the classification; (2)
+§8.8 records the author's disagreement rule — one review→pushback→
+re-review circle, then both readings go verbatim to the author,
+dependent work is marked `BLOCKED(disagreement:<claim-id>)` and stops,
+independent work continues — with the workflow circle drawn as a
+diagram; (3) new §9: suggestion notes (non-binding, identity-carrying,
+read daily) and provisional joint decisions (Fable 5 + Sol 5.6 may
+provisionally decide architecture principles/invariants when both
+explicitly agree and note it; binding only at the author's ratifying
+confirmation).
+
+v4, mechanical pass over the author-confirmed finding set. Claims for
+v3+v4 content (claim-ids `agent/evidence-factory-laws#N`):
+
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
+|---|---|---|---|---|
+| 1 | §2 states the index row exists now and ratification flips only its classification | AGENTS.md §2 vs docs/README.md row | derivation | AGENTS.md §2; docs/README.md AGENTS row |
+| 2 | §6 subordinates rendered-line counts to crate counts scoped to a locked feature set, toolchain, and target | AGENTS.md §6 | derivation | AGENTS.md §6 wording |
+| 3 | §8.8 defines the claim-id form used by BLOCKED markers | AGENTS.md §8.8 | derivation | claim-id definition sentence |
+| 4 | §9 permits envelope-free notes only outside the repo; committed notes require an envelope | AGENTS.md §9 | derivation | §9 first paragraph |
+| 5 | §9 limits provisional joint decisions to author-dispatched reversible work, excluding contract/registry changes, block-lifts, and merges | AGENTS.md §9 | derivation | §9 second paragraph |
+| 6 | The branch touches only AGENTS.md, CLAUDE.md, docs/README.md, docs/trial-log.md | this branch vs master | measurement | `git diff --stat master...HEAD` |
+| 7 | Full dual gate is green on the branch tip | repo at tested_commit | measurement | gate transcript in review request |
+
+## 2026-08-12 — bundle: AGENTS.md draft v2 (amended per adversarial review)
+
+Instrument (authoring envelope, executed):
+
+```text
+base_commit:         325f5e1
+objective:           agent-instruction entrypoint + cross-review protocol,
+                     amended per review findings 1-8, review-ready
+authoritative_files: docs/README.md, runtime-contract-proposal.md,
+                     meaning-gate.md, development-workflow.md,
+                     falsification-defier-audit.md
+write_scope:         AGENTS.md, CLAUDE.md, docs/README.md (one index row),
+                     docs/trial-log.md (this entry)
+frozen:              all §4 identities; no runtime code
+red_required:        no — governance/documentation; no honest red exists
+                     (Meaning Gate F3); the adversarial review itself is
+                     the falsifier for this class of work
+verification:        full dual gate (§3), clean tree
+evidence:            this entry; claims table below
+tested_commit:       tip of agent/evidence-factory-laws at review request
+                     (self-reference inside the commit is excluded by
+                     construction; recorded in the review request)
+```
+
+Findings 1-8 from the first adversarial review, each addressed: (1)
+review mandate defined as a second instrument — reviewers record
+UNVERIFIABLE and continue, no deadlock on the protocol's own bundles;
+(2) "single instruction source / zero drift" corrected to "single
+agent-instruction entrypoint" with honest drift limits, and the index
+row added; (3) objectives are author-dispatched or queue-policy, never
+self-selected; (4) base_commit/tested_commit split with a clean-tree
+requirement inside the gate; (5) red_required yes|no with reviewable
+justification; reviewers reproduce both colors when yes; (6) claims are
+atomic with scope and evidence reference; `assertion` removed as an
+evidence mode; (7) reviewer is "an agent other than the author",
+independence stated as procedural with identity/toolchain/assumptions
+recorded; "re-derive; never merely re-read"; (8) isolation claim
+reduced to detect-and-reduce, aligned with the defier audit.
+
+Claims:
+
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
+|---|---|---|---|---|
+| 1 | Each of findings 1-8 maps to a concrete v2 change | AGENTS.md text vs review | derivation | the mapping paragraph above; diff vs `4a2f66d` |
+| 2 | The branch touches only its declared write scope | this branch | measurement | `git diff --stat master...HEAD` |
+| 3 | Full dual gate green on the branch tip | repo at tested_commit | measurement | gate transcript in review request |
+| 4 | Frozen identities and judge unchanged | envelope line | measurement | `envelope ... grammar=0x5300... oracles=10v4` |
+
+Author: Claude (lead programmer agent). Toolchain: rustc 1.97.1,
+cargo 1.97.1, WSL2. Shared assumptions: same repo clone and gate
+commands as the reviewer; measurement of rendered `cargo tree` line
+counts is environment-sensitive (see the D01 correction entry) and is
+subordinate to unique-crate counts.
 ## 2026-08-12 — correction: D01 tree line counts are environment-sensitive
 
 Cross-review of the D01 entry found the rendered `cargo tree` line
