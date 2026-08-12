@@ -7,11 +7,14 @@ counts (recorded below as 128 → 88) reproduce as 126 → 86 in the
 reviewer's environment; the author's environment reproduces 88
 (stderr-free, including 24 `(*)` dedup display lines). Both
 measurements are honest; rendered line counts are display artifacts of
-the toolchain/environment and are hereby subordinated to the
-environment-independent evidence, which both parties confirm:
-**65 → 52 unique crates, a delta of 40 rendered lines, and the exact
-removed-crate list** (bevy_reflect stack, async_executor stack,
-backtrace, serde entirely). The original D01 entry below stands
+the toolchain/environment and are hereby subordinated to the stabler
+evidence both parties confirm **for the locked feature set, toolchain,
+and target**: 65 → 52 unique crates, a delta of 40 rendered lines, and
+the removed-crate list (the bevy_reflect stack, the async_executor
+stack, and serde entirely). One precision the review also caught:
+`backtrace` is a *disabled `bevy_ecs` feature*, not a crate in the
+removed list — the original entry below overstates it as a removed
+crate. The original D01 entry below stands
 unedited as dated evidence; the active target map now leads with crate
 counts. Recorded per the disagreement rule: both readings, verbatim,
 no silent reconciliation.
