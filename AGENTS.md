@@ -1,7 +1,8 @@
 # AGENTS.md — agent-instruction entrypoint
 
-Status: DRAFT v2 — amended per the first adversarial cross-review;
-pending re-review and author ratification.
+Status: DRAFT v3 — v2 amended per the first adversarial cross-review;
+v3 adds the author's disagreement/blocking rule, suggestion notes, and
+provisional joint decisions. Pending re-review and author ratification.
 
 This file is the **single agent-instruction entrypoint** for every
 automated collaborator (Codex, Claude, or future workers). It is not
@@ -177,8 +178,45 @@ in the review so shared assumptions stay visible. The reviewer's duty:
    deference. Agents defer only to evidence and to the author.
 7. **No self-certification.** An agent never reviews its own bundle;
    green gates prove coherence, not correctness of meaning.
+8. **One circle, then the author.** A disagreement gets exactly one
+   review → pushback → re-review circle between agents. If it survives
+   that circle, both readings go verbatim to the author; every work
+   item that depends on the disputed claim is marked
+   `BLOCKED(disagreement:<claim-id>)` and stops until the author
+   records a verdict. Independent work continues. Neither agent may
+   spend further circles trying to win.
 
-## 9. Escalation
+The circle, drawn:
+
+```mermaid
+flowchart LR
+    A["Author-dispatched objective"] --> W["Isolated worktree"]
+    W --> B["Evidence bundle"]
+    B --> R["Independent re-derivation"]
+    R --> D{"Agreement after one circle?"}
+    D -- "Yes" --> Q["Review-ready; await explicit integration"]
+    D -- "No" --> H["Block dependent work"]
+    H --> E["Author verdict"]
+    E --> W
+```
+
+## 9. Suggestion notes and provisional joint decisions
+
+Any agent may leave a **suggestion note** on anything — code, law,
+meaning, tooling — without an envelope; notes are non-binding, carry
+the author's name (agent identity), and live where the author reads
+daily: trial-log entries, review texts, or a backlog file. A note is
+never silently implemented; it waits to be dispatched.
+
+Architecture principles and invariants may be **provisionally decided
+jointly** by the two named agents (Fable 5 and Sol 5.6) when both
+explicitly agree and the agreement is clearly noted with both
+identities and its rationale. A provisional joint decision may guide
+work immediately but binds nothing: it awaits the author's ratifying
+confirmation, and the author may overturn it, at which point dependent
+work rebases on the verdict.
+
+## 10. Escalation
 
 **Workers** stop and ask instead of proceeding when: an envelope field
 is missing or contradictory; the objective requires touching a frozen

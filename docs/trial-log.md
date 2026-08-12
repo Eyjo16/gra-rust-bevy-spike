@@ -1,5 +1,20 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-12 — bundle: AGENTS.md draft v3 (v2 + re-review amendments)
+
+v3, same envelope and write scope, three re-review points plus the
+author's new laws: (1) the docs/README row now reads "Draft workflow
+proposal" until the ratification commit flips the classification; (2)
+§8.8 records the author's disagreement rule — one review→pushback→
+re-review circle, then both readings go verbatim to the author,
+dependent work is marked `BLOCKED(disagreement:<claim-id>)` and stops,
+independent work continues — with the workflow circle drawn as a
+diagram; (3) new §9: suggestion notes (non-binding, identity-carrying,
+read daily) and provisional joint decisions (Fable 5 + Sol 5.6 may
+provisionally decide architecture principles/invariants when both
+explicitly agree and note it; binding only at the author's ratifying
+confirmation).
+
 ## 2026-08-12 — bundle: AGENTS.md draft v2 (amended per adversarial review)
 
 Instrument (authoring envelope, executed):
