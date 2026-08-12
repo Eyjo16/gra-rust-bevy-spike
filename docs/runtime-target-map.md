@@ -83,6 +83,13 @@ meaning. It uses existing `bevy_ecs`; no full engine dependency is needed.
 
 ### Target R02 — host failure boundary
 
+Status: **PASSED** 2026-08-12 (trial/R02, red→green; host-local closed
+`HostFault` vocabulary, injected admission fault with zero canonical
+trace and unbroken canonical sequence on retry, projection-consumer
+failure isolated from the commit, no-unwind-catching topology pin;
+`bevy_host_faults` line in the `bevy-host` gate). Evidence in
+`docs/trial-log.md`. The R5 host rows are now tested claims.
+
 Hypothesis: failures outside `submit` cannot become game outcomes or silently
 change truth.
 

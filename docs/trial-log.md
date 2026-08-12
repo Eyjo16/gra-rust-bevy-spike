@@ -1,5 +1,42 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-12 — trial/R02 host failure boundary: red→green
+
+Hypothesis (Runtime Contract R5, target R02): failures outside `submit`
+can become game outcomes or silently change truth — unless the host
+separates transport faults from dispositions in a closed vocabulary.
+
+Red: capability red — `HostFault`, `fail_next_admission`, `host_faults`,
+and `publish_to` did not exist (`E0433`/`E0599`); the R5 host rows were
+ratified as classification but had no executable path.
+
+Green, in `src/host_bevy.rs`:
+
+- Closed `HostFault` vocabulary (`admission_failed`,
+  `projection_consumer_failed`), reported beside canonical receipts,
+  never inside them.
+- Admission gate ahead of the boundary: an injected transport failure
+  leaves canonical state, hash, and receipts byte-identical, produces no
+  receipt, and consumes no canonical sequence — the same intention
+  re-admitted afterwards is byte-identical to a fault-free pure
+  reference.
+- `publish_to`: a projection consumer failing downstream of a committed
+  transition cannot invalidate the commit; the fault is recorded
+  host-locally and the next publish serves the projection in full.
+- Topology pin: the host source contains no unwind-catching — a
+  truth-layer panic (stale token, impossible apply) stays loud and is
+  never translated into a disposition.
+- The `bevy-host` runtime gate gained a `bevy_host_faults` probe line
+  (injected admission + consumer fault each run) folded into the exit
+  code.
+
+Contract effect: the two proposed R5 host rows are promoted to tested
+claims; the durability row (crash between commit and durable publish)
+remains the only unproven class, held for R11. Output evolution
+(declared): one new `bevy_host_faults` line in the `bevy-host` run.
+Receipts, grammar, fixture, world hashes, and the judge (`10v4`) are all
+byte-identical.
+
 ## 2026-08-12 — trial/R01 projection non-authority: red→green
 
 Hypothesis (Runtime Contract R4, target R01): Bevy can project canonical

@@ -123,14 +123,15 @@ was derived and be replaceable in full on the next publish.
 | Accepted / Partial | Yes | Yes | Expected game result | Proven by boundary/oracle fixtures |
 | Startup coherence fault | No | Runtime must not start | Invalid canonical seed/checkpoint | Pure runner proven; host startup gate still needs an explicit path |
 | Stale proof or impossible apply | No new game outcome | Must be zero-mutation at the guarded boundary | Runtime/truth bug; fail loudly | Proven by trials 003 and 008 |
-| Host failure before `submit` | No | No | Transport/scheduling failure | **Proposed; no injectable host path exists until R02** |
-| Presentation/projection failure | No | Canonical commit remains valid | Downstream failure | Proposed; R01/R02 make it executable |
+| Host failure before `submit` | No | No | Transport/scheduling failure | **Proven by trial/R02** (2026-08-12): injected admission fault leaves zero canonical trace, no receipt, no sequence consumed; closed `HostFault` vocabulary |
+| Presentation/projection failure | No | Canonical commit remains valid | Downstream failure | **Proven by trials R01/R02**: consumer failure recorded host-locally, commit stays authoritative, next publish serves in full |
 | Crash after commit but before durable publish | Undefined today | Potentially committed | Recovery contract required before persistence | Explicitly unproven / HOLD |
 
 The last row is the current durability gap. It must not be disguised as a
-Refused receipt. The evidence-status column is normative restraint: R00 may
-ratify the classification before every host path exists, but only R01/R02 can
-promote the proposed host rows to tested claims.
+Refused receipt. The evidence-status column is normative restraint: R00
+ratified the classification before every host path existed; trials R01/R02
+have since promoted the proposed host rows to tested claims. The durability
+row remains the only unproven class, held for R11.
 
 ### R6 — time is metadata until modeled
 
