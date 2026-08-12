@@ -2,8 +2,10 @@
 
 Date: 2026-08-12. Baseline: `44662a8`.
 
-Status: **PROPOSED.** Targets are ordered by authority dependency. Branch IDs
-are provisional until author/lead ruling.
+Status: **ACTIVE** — gate zero (R00) passed 2026-08-12: R1–R7 ratified with
+amendments, A1 immediate/sequential ruled law, R01 authorized as the next
+trial, `bevy-full` held as future convenience. Targets are ordered by
+authority dependency. Branch IDs are provisional until author/lead ruling.
 
 ## Current position
 

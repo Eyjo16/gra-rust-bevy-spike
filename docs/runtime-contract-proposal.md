@@ -2,15 +2,26 @@
 
 Date: 2026-08-12. Baseline: `44662a8` (`master`).
 
-Status: **PROPOSED.** This document records executable behavior, identifies
-runtime gaps, and offers a minimal contract for ratification. It changes no
-runtime code, registry/schema, command, receipt, reason, value, or authority
-identity.
+Status: **RATIFIED** (author, 2026-08-12) — R1–R7 with the custody and R5
+evidence-status amendments below. This document records executable behavior
+and the ratified minimal host contract. It changes no runtime code,
+registry/schema, command, receipt, reason, value, or authority identity.
+
+Ratification rulings:
+
+1. R1–R7 ratified as the minimal current-semantics host contract, with the
+   custody amendment (R1) and the R5 evidence-status note incorporated.
+2. **A1 immediate/sequential execution is law.** A2 sealed turns remains
+   unratified until a gameplay need opens T01 (degenerate-turn bridge);
+   `agent/turn-contract` stays an unmerged candidate spec until then.
+3. Sequence ownership is headed to the boundary, through the R10 ruling —
+   no exactly-once or retry claim before it.
+4. The next trial is **R01 projection non-authority**.
+5. `bevy-full` remains a future convenience feature until capability sweeps
+   justify it.
 
 Review status: the lead programmer independently checked the proposal against
-the repository and recommends ratifying R1–R7 with the custody and R5
-evidence-status amendments now incorporated here. Author ruling remains
-pending.
+the repository; the author ratified with the amendments incorporated.
 
 ## Outcome sought
 
