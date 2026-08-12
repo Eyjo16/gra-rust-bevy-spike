@@ -136,6 +136,13 @@ coherence, not historical accuracy, fairness, or fun.
 
 ## First Bevy-host acceptance slice
 
+Status: **delivered** — trials 002/006 (byte parity on receipts and exact
+canonical final state), R01 (projection non-authority, custody topology,
+adversarial out-of-band corruption), R02 (host failure boundary, closed
+host-fault vocabulary), and R03 (publication identity, stale-view
+rejection). The criteria below remain the law any future host slice must
+meet; evidence lives in `docs/trial-log.md`.
+
 The first host slice should stay deliberately narrow:
 
 1. Initialize the same immutable fixture as the pure host.

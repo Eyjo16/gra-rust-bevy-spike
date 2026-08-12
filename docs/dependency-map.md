@@ -43,12 +43,15 @@ flowchart TD
     main["main.rs<br/>fixture + trial + gate"]
     oracles["oracles.rs<br/>10 bounded checks"]
     boundary["boundary.rs<br/>primitives + orchestrator"]
+    host["host_bevy.rs<br/>bevy-host feature:<br/>custody + projection + faults"]
     character["character/<br/>stamina owner"]
     economy["economy/<br/>mass owner"]
     social["social/<br/>claims owner"]
 
     main --> boundary
     main --> oracles
+    main -.->|"bevy-host only"| host
+    host -->|"submit / read-only observation"| boundary
     oracles --> boundary
     boundary -->|"validate / apply"| character
     boundary -->|"validate / apply"| economy
@@ -57,6 +60,13 @@ flowchart TD
     economy -.->|"primitives only"| boundary
     social -.->|"primitives only"| boundary
 ```
+
+The host adapter (`host_bevy.rs`, R01–R03) custodies the truth `World`
+as one ECS resource with exactly one mutable-access system (the commit
+system calling `submit`), projects it into disposable view entities
+carrying `derived_from` identity, publishes identified snapshots that
+consumers can reject as stale, and records transport/consumer failures
+in a closed host-fault vocabulary beside — never inside — receipts.
 
 The dotted edges are the module cycle Rust allows within a crate: owners
 import *types* from `boundary`, but only the orchestrator calls *into*
