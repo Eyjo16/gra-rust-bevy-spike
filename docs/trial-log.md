@@ -1,5 +1,32 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-12 — trial/D01 ECS slice audit: features minimized, green
+
+Hypothesis (target D01): the host adapter uses only ECS fundamentals;
+every other default `bevy_ecs` capability is unallocated and must not
+ride along shaping the runtime. Execution baseline: `4de06a2`.
+
+Falsifier: feature minimization. `bevy_ecs` was reduced to
+`default-features = false, features = ["std"]` and the complete gates
+re-run. A failure would have named the capability the adapter actually
+depends on; instead everything stayed green — 48 default tests, 57
+`bevy-host` tests including R01–R03, all four probe lines, envelope
+byte-identical (`10v4`, frozen fingerprints).
+
+Measured effect: local `cargo tree --features bevy-host` shrank from
+128 lines / 65 unique crates to 88 lines / 52. Removed as unallocated:
+`bevy_reflect` (+ derive, erased-serde, typeid, assert_type_match,
+downcast-rs), `async_executor` (+ async-executor, futures-io, fastrand,
+parking, slab), `backtrace`, and — notably — **serde/serde_core left
+the build entirely**: no dependency in the host build is now even
+positioned to supply an accidental persistence format before the R11
+schema/recovery ruling. The default build remains one `cargo tree`
+line with zero external dependencies.
+
+Verdict: the extra capabilities stay disabled until a named consumer
+and gate justify each (D02+ per the sweep order). No registry, schema,
+gameplay contract, canonical format, receipt, or judge changed.
+
 ## 2026-08-12 — trial/R03 publication identity: red→green
 
 Hypothesis (Runtime Contract R4, target R03): every projection snapshot

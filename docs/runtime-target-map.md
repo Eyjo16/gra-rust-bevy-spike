@@ -34,6 +34,20 @@ is allowed to choose runtime shape.
 
 ## Gate zero — author/lead ruling
 
+### Target D01 status
+
+**PASSED** 2026-08-12 (trial/D01, execution baseline `4de06a2`; the
+older `44662a8` references in this file are ratification provenance).
+Primary falsifier was feature minimization: `bevy_ecs` reduced to
+`default-features = false, features = ["std"]` and the complete pure and
+Bevy gates stayed green — 48 + 57 tests, all four probe lines, envelope
+byte-identical. The local `cargo tree` for `bevy-host` shrank from 128
+lines / 65 crates to 88 lines / 52 crates; `bevy_reflect`,
+`async_executor`, `backtrace`, and their trees (including serde
+entirely) left the build as unallocated capabilities. Notable for R11:
+with serde gone, no dependency in the host build is even positioned to
+supply an accidental persistence format.
+
 ### Target R00 — ratify a minimal runtime contract
 
 - Input: `docs/runtime-contract-proposal.md`.

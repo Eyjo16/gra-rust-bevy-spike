@@ -16,7 +16,9 @@ Ratification rulings:
    `agent/turn-contract` stays an unmerged candidate spec until then.
 3. Sequence ownership is headed to the boundary, through the R10 ruling —
    no exactly-once or retry claim before it.
-4. The next trial is **R01 projection non-authority**.
+4. The next trial is **R01 projection non-authority** (next at
+   ratification; since passed, along with R02, R03, and D01 — current
+   status lives in `docs/runtime-target-map.md`).
 5. `bevy-full` remains a future convenience feature until capability sweeps
    justify it.
 
