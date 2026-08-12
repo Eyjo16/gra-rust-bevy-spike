@@ -1,5 +1,24 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-12 — correction: D01 tree line counts are environment-sensitive
+
+Cross-review of the D01 entry found the rendered `cargo tree` line
+counts (recorded below as 128 → 88) reproduce as 126 → 86 in the
+reviewer's environment; the author's environment reproduces 88
+(stderr-free, including 24 `(*)` dedup display lines). Both
+measurements are honest; rendered line counts are display artifacts of
+the toolchain/environment and are hereby subordinated to the stabler
+evidence both parties confirm **for the locked feature set, toolchain,
+and target**: 65 → 52 unique crates, a delta of 40 rendered lines, and
+the removed-crate list (the bevy_reflect stack, the async_executor
+stack, and serde entirely). One precision the review also caught:
+`backtrace` is a *disabled `bevy_ecs` feature*, not a crate in the
+removed list — the original entry below overstates it as a removed
+crate. The original D01 entry below stands
+unedited as dated evidence; the active target map now leads with crate
+counts. Recorded per the disagreement rule: both readings, verbatim,
+no silent reconciliation.
+
 ## 2026-08-12 — trial/D01 ECS slice audit: features minimized, green
 
 Hypothesis (target D01): the host adapter uses only ECS fundamentals;
