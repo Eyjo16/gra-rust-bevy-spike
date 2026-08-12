@@ -1,5 +1,24 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-12 — R00 passed: Runtime Contract v0.1 ratified
+
+R1–R7 ratified by the author with both review amendments incorporated:
+the R1 custody amendment (custody of canonical `World` inside a host
+container grants no semantic authority; exactly one registered host
+system may hold mutable access — the commit system that calls `submit`)
+and the R5 evidence-status note (the host-failure-before-submit row is
+promised, not proven, until R02 exercises it).
+
+Rulings: **A1 immediate/sequential execution is law**; A2 sealed turns
+stays unratified until a gameplay need opens T01, and
+`agent/turn-contract` remains an unmerged candidate spec. Sequence
+ownership is headed to the boundary through the R10 ruling. The next
+trial is **R01 projection non-authority**. `bevy-full` remains future
+convenience until capability sweeps justify it.
+
+Full contract: `docs/runtime-contract-proposal.md`. Target order:
+`docs/runtime-target-map.md`. No runtime code changed by ratification.
+
 ## 2026-08-09 — trial/010-active-cell-reachability: 12/12 PASS
 
 Hypothesis: random or fixed-fixture traffic can leave table cells

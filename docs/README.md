@@ -34,6 +34,8 @@ decision, migration account, and approval.
 | `trial-009-language-seam-report.md` | Standalone evidence | Records the pre-command normalization red, canonical-byte observation point, adversarial matrix, and pressure verdict |
 | `transition-domain-report.md` | Standalone evidence | Records trial/007's bounded pure/Bevy parity result and the value-cell reachability pressure map |
 | `active-cell-reachability-report.md` | Standalone evidence | Records trial/010's systematic 12-cell reachability and stock-boundary pressure |
+| `runtime-contract-proposal.md` | Proposed architecture | Separates current executable runtime law from semantic rulings and durability gaps |
+| `runtime-target-map.md` | Proposed work map | Orders runtime falsifiers and capability-scoped dependency sweeps by authority |
 
 ## Maintenance rule
 
