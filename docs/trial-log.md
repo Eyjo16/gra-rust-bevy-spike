@@ -1,5 +1,58 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-12 — bundle: AGENTS.md draft v2 (amended per adversarial review)
+
+Instrument (authoring envelope, executed):
+
+```text
+base_commit:         325f5e1
+objective:           agent-instruction entrypoint + cross-review protocol,
+                     amended per review findings 1-8, review-ready
+authoritative_files: docs/README.md, runtime-contract-proposal.md,
+                     meaning-gate.md, development-workflow.md,
+                     falsification-defier-audit.md
+write_scope:         AGENTS.md, CLAUDE.md, docs/README.md (one index row),
+                     docs/trial-log.md (this entry)
+frozen:              all §4 identities; no runtime code
+red_required:        no — governance/documentation; no honest red exists
+                     (Meaning Gate F3); the adversarial review itself is
+                     the falsifier for this class of work
+verification:        full dual gate (§3), clean tree
+evidence:            this entry; claims table below
+tested_commit:       tip of agent/evidence-factory-laws at review request
+                     (self-reference inside the commit is excluded by
+                     construction; recorded in the review request)
+```
+
+Findings 1-8 from the first adversarial review, each addressed: (1)
+review mandate defined as a second instrument — reviewers record
+UNVERIFIABLE and continue, no deadlock on the protocol's own bundles;
+(2) "single instruction source / zero drift" corrected to "single
+agent-instruction entrypoint" with honest drift limits, and the index
+row added; (3) objectives are author-dispatched or queue-policy, never
+self-selected; (4) base_commit/tested_commit split with a clean-tree
+requirement inside the gate; (5) red_required yes|no with reviewable
+justification; reviewers reproduce both colors when yes; (6) claims are
+atomic with scope and evidence reference; `assertion` removed as an
+evidence mode; (7) reviewer is "an agent other than the author",
+independence stated as procedural with identity/toolchain/assumptions
+recorded; "re-derive; never merely re-read"; (8) isolation claim
+reduced to detect-and-reduce, aligned with the defier audit.
+
+Claims:
+
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
+|---|---|---|---|---|
+| 1 | Each of findings 1-8 maps to a concrete v2 change | AGENTS.md text vs review | derivation | the mapping paragraph above; diff vs `4a2f66d` |
+| 2 | The branch touches only its declared write scope | this branch | measurement | `git diff --stat master...HEAD` |
+| 3 | Full dual gate green on the branch tip | repo at tested_commit | measurement | gate transcript in review request |
+| 4 | Frozen identities and judge unchanged | envelope line | measurement | `envelope ... grammar=0x5300... oracles=10v4` |
+
+Author: Claude (lead programmer agent). Toolchain: rustc 1.97.1,
+cargo 1.97.1, WSL2. Shared assumptions: same repo clone and gate
+commands as the reviewer; measurement of rendered `cargo tree` line
+counts is environment-sensitive (see the D01 correction entry) and is
+subordinate to unique-crate counts.
 ## 2026-08-12 — correction: D01 tree line counts are environment-sensitive
 
 Cross-review of the D01 entry found the rendered `cargo tree` line

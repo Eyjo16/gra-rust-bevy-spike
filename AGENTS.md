@@ -1,22 +1,26 @@
-# AGENTS.md — repository laws for automated collaborators
+# AGENTS.md — agent-instruction entrypoint
 
-Status: DRAFT — pending adversarial cross-review (see § Cross-review
-protocol; this file is its own first test case) and author ratification.
+Status: DRAFT v2 — amended per the first adversarial cross-review;
+pending re-review and author ratification.
 
-This file is the single instruction source for every automated
-collaborator (Codex, Claude, or future workers). `CLAUDE.md` points
-here; do not duplicate laws into per-agent files — one source, many
-loaders, zero drift.
+This file is the **single agent-instruction entrypoint** for every
+automated collaborator (Codex, Claude, or future workers). It is not
+the law itself: substantive law lives in the authoritative documents
+(§2), and this file routes to them. `CLAUDE.md` points here. Keeping
+one entrypoint reduces duplicate-instruction drift between agents; it
+cannot by itself prevent law/document drift — the driftmaster review
+circle exists for that.
 
 ## 1. Authority
 
 The author owns: meaning, priorities, acceptance boundaries, contract
 and registry changes, value promotion, and final integration. Agents
-are an **evidence factory, not an autonomous merger**: select one
-unblocked objective, work isolated, produce a review bundle, and stop
-before merging or changing authority. A merge by an agent requires the
-author's explicit per-item instruction naming the branch; standing
-permission does not exist.
+are an **evidence factory, not an autonomous merger**: work an
+objective that is **author-dispatched, or drawn from an explicit
+author-approved queue policy — never self-selected**; work isolated;
+produce a review bundle; stop before merging or changing authority. A
+merge by an agent requires the author's explicit per-item instruction
+naming the branch; standing permission does not exist.
 
 ## 2. Where the law lives
 
@@ -26,10 +30,13 @@ workflow: `docs/meaning-gate.md`. Work order and status:
 `docs/runtime-target-map.md`. Branch/worktree/falsification cycle:
 `docs/development-workflow.md`. When this file and those disagree,
 those win; report the contradiction instead of resolving it silently.
+On ratification, `docs/README.md` indexes this file as workflow
+authority.
 
 ## 3. The gate (both feature sets, hard exit checks)
 
 ```sh
+git status --porcelain   # must print nothing: clean tree, incl. untracked
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --features bevy-host -- -D warnings
@@ -39,7 +46,9 @@ BASELINE_COMMIT=$(git rev-parse --short HEAD) cargo run --features bevy-host
 ```
 
 Never judge a gate through a pipe that can mask its exit code. The run
-must end exit 0 with every oracle and probe line green.
+must end exit 0 with every oracle and probe line green. A gate run on a
+dirty tree certifies nothing: the clean-tree check is part of the gate,
+and the commit it certifies is recorded as `tested_commit`.
 
 ## 4. Frozen unless explicitly licensed
 
@@ -54,32 +63,54 @@ must end exit 0 with every oracle and probe line green.
   persistence format is an authority change — stop and escalate.
 - `ORACLE_SUITE_VERSION` must be bumped on any oracle behavior change.
 
-## 5. Goal envelope (required for every work item)
+## 5. Work instruments
+
+Two kinds; every work item runs under exactly one.
+
+**Authoring envelope** — for any work that changes files:
 
 ```text
-baseline_commit:     <short hash — today's evidence baseline>
+base_commit:         <branch point — where the work grew from>
 objective:           <one bounded outcome with a provable stop condition>
 authoritative_files: <files whose current content governs the work>
 write_scope:         <paths the branch may touch>
 frozen:              <paths/identities that must not change>
+red_required:        <yes | no — with justification when no>
 verification:        <exact commands whose green defines done>
 evidence:            <artifacts the bundle must contain>
 limits:              <time/compute/dependency budget>
 escalate_when:       <conditions that end the run with a question instead>
+tested_commit:       <filled at completion: the clean-tree commit the gate certified>
 ```
 
-One envelope, one branch, one worktree, own `target-dir`. Serial
-rebases onto master with full re-gates prevent semantic cross-affection.
-Terminal state is a review-ready branch — never an auto-merge.
+`red_required: no` is legitimate for governance proposals,
+documentation repair, measurement-only audits, and other work where no
+honest red exists (Meaning Gate F3 protects such work); the
+justification is itself reviewable.
+
+**Review mandate** — for read-only adversarial review of a bundle: no
+envelope is required to *review*; the reviewer never modifies the
+branch under review, records verdicts (including `UNVERIFIABLE`)
+instead of halting, and stops early only for safety or authority risk.
+
+One instrument, one branch, one worktree, own `target-dir`. Serial
+rebases onto master with full re-gates **detect and reduce** semantic
+cross-affection; they cannot prevent shared blind spots (defier audit:
+cross-elimination is not logical independence). Terminal state is a
+review-ready branch — never an auto-merge.
 
 ## 6. Evidence rules
 
-- **Red first.** Capture the falsifier failing against unmodified code;
-  quote it verbatim in `docs/trial-log.md`. When no behavioral red
-  exists without staging a bug, label the capability red honestly
-  (compile error, absent harness) — precedent: trials 002, 006, R01.
+- **Red first where red exists.** When `red_required: yes`, capture the
+  falsifier failing against `base_commit` and quote it verbatim in
+  `docs/trial-log.md`. When no behavioral red exists without staging a
+  bug, a capability red (compile error, absent harness) is honest and
+  is labeled as such — precedent: trials 002, 006, R01.
 - Claims stay exactly the size of their evidence (defier-audit rule).
   Trace-scoped results say so; measurements are not meanings.
+  Environment-sensitive measurements (e.g. rendered tree line counts)
+  record the toolchain and are subordinate to environment-independent
+  ones (e.g. unique crate counts).
 - Nothing becomes accepted merely because it was generated
   successfully. Generated assets carry provenance: prompt, seed,
   model/version, inputs, output hashes.
@@ -88,52 +119,74 @@ Terminal state is a review-ready branch — never an auto-merge.
 ## 7. Review bundle format
 
 A bundle is the branch plus a trial-log entry (or standalone report)
-containing: the goal envelope as executed, red evidence verbatim, the
-full gate transcript tail (probe lines + envelope line), before/after
-measurements where relevant, and a **numbered claims table**:
+containing: the executed instrument (envelope as run), red evidence
+verbatim when applicable, the full gate transcript tail (probe lines +
+envelope line), before/after measurements where relevant, bundle
+metadata — **author identity, toolchain versions (`rustc`, `cargo`),
+`base_commit`, `tested_commit`, and a shared-assumptions note** — and a
+numbered claims table:
 
 ```text
-| # | Claim | Evidence class |
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
 ```
 
-Evidence classes: `behavioral-red`, `capability-red`, `measurement`,
-`derivation`, `assertion`. Every claim the bundle wants believed must
-appear in the table — an unlisted claim is an escaped claim.
+Evidence modes: `behavioral-red`, `capability-red`, `measurement`,
+`derivation`. Each claim is atomic (one falsifiable statement), scoped
+(what it covers and what it does not), and carries a concrete evidence
+reference — a test name, command, file/line, or artifact hash — that a
+reviewer can re-run. A statement without an evidence reference is not a
+claim; it either gains one or is withdrawn before review. Every claim
+the bundle wants believed must appear in the table — an unlisted claim
+is an escaped claim.
 
 ## 8. Cross-review protocol (mutual guardrails)
 
-Every bundle authored by one agent is adversarially reviewed by the
-other before the author's final review. The reviewer's duty:
+Every bundle is adversarially reviewed by **an agent other than its
+author** before the author's final review — the protocol scales to any
+number of agents, and reviewer independence is procedural, not proven:
+reviewer identity, toolchain, and reproduction references are recorded
+in the review so shared assumptions stay visible. The reviewer's duty:
 
-1. **Re-derive, never re-read.** Run the verification commands; do not
-   trust pasted output. Check envelope fields against the frozen
-   identities. Diff the branch against its stated write scope.
-2. **Verdict per claim**: `CONFIRMED` (re-derived), `OVERSTATED` (true
-   but larger than its evidence), `UNDERSTATED` (evidence proves more),
-   `WRONG`, or `UNVERIFIABLE` (say what would make it verifiable).
-3. **Hunt list**, beyond the claims table: claims larger than evidence;
+1. **Re-derive; never merely re-read.** Read the law and the source,
+   then run the verification commands rather than trusting pasted
+   output. Check envelope fields against the frozen identities. Diff
+   the branch against its declared write scope.
+2. **Reproduce both colors.** For `red_required: yes` bundles, reproduce
+   the declared red on `base_commit` as well as the green on
+   `tested_commit` — a green-only review certifies half the claim.
+3. **Verdict per claim**, each with the reviewer's own reproduction
+   reference: `CONFIRMED` (re-derived), `OVERSTATED` (true but larger
+   than its evidence), `UNDERSTATED` (evidence proves more), `WRONG`,
+   or `UNVERIFIABLE` (state what would make it verifiable). An
+   `UNVERIFIABLE` claim gets its verdict recorded and the review
+   continues — it is a finding, not a stop condition.
+4. **Hunt list**, beyond the claims table: claims larger than evidence;
    vocabulary drift (one word, two meanings across docs); silent scope
-   creep beyond the envelope; stale cross-references; law/evidence
-   confusion (a dated record edited, or a live law left stale);
-   fixture overfitting; a "fix" that moves a value without a licensed
-   red.
-4. **Meaning is expressed, never decided.** For gameplay/meaning work,
-   agents verify *expression*: is the hypothesis falsifiable as
-   stated, is the closed vocabulary coherent, does a value move carry
-   its pre-registered red? The decision itself always remains the
-   author's (Meaning Gate).
-5. **Disagreement is a finding.** When author-agent and reviewer-agent
-   disagree, both readings go to the author verbatim — never silently
-   reconciled, never resolved by deference. Agents defer only to
-   evidence and to the author.
-6. **No self-certification.** An agent never reviews its own bundle;
+   creep beyond the instrument; stale cross-references; law/evidence
+   confusion (a dated record edited, or a live law left stale); fixture
+   overfitting; a "fix" that moves a value without a licensed red.
+5. **Meaning is expressed, never decided.** For gameplay/meaning work,
+   agents verify *expression*: is the hypothesis falsifiable as stated,
+   is the closed vocabulary coherent, does a value move carry its
+   pre-registered red? The decision itself always remains the author's
+   (Meaning Gate), and author rulings still pass through whatever gate
+   applies to them.
+6. **Disagreement is a finding.** When author-agent and reviewer-agent
+   disagree — including on a measurement — both readings go to the
+   author verbatim: never silently reconciled, never resolved by
+   deference. Agents defer only to evidence and to the author.
+7. **No self-certification.** An agent never reviews its own bundle;
    green gates prove coherence, not correctness of meaning.
 
 ## 9. Escalation
 
-Stop and ask instead of proceeding when: an envelope field is missing
-or contradictory; the objective requires touching a frozen identity;
-two law documents disagree; a gate is green but a claim cannot be
-re-derived; or the work reveals an authority question (sequence
-ownership, persistence, contention policy, time semantics) that the
-runtime contract marks as ruled-by-author.
+**Workers** stop and ask instead of proceeding when: an envelope field
+is missing or contradictory; the objective requires touching a frozen
+identity; two law documents disagree; or the work reveals an authority
+question (sequence ownership, persistence, contention policy, time
+semantics) that the runtime contract marks as ruled-by-author.
+
+**Reviewers** record what they find and complete the review; they stop
+early only when continuing would itself create safety or authority risk
+(e.g. the review cannot proceed without modifying the branch or
+touching frozen identities).

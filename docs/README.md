@@ -26,6 +26,7 @@ decision, migration account, and approval.
 | `dependency-map.md` | Current map | Shows code dependencies, ownership, command flow, oracles, and tunables |
 | `development-workflow.md` | Current process | Defines branches, worktrees, falsification, review, and integration |
 | `meaning-gate.md` | Ratified workflow invariant | Governs how semantic questions become trial-backed authority |
+| `../AGENTS.md` | Workflow authority (DRAFT v2) | Agent-instruction entrypoint: evidence-factory boundaries, goal envelopes, review bundles, cross-review protocol |
 | `trial-log.md` | Append-only evidence | Records decisions, red/green rounds, gates, and environment facts |
 | `verb-isolation-report.md` | Standalone evidence | Records the adversarial second-verb isolation trial |
 | `falsification-defier-audit.md` | Standalone evidence | Separates closed counterexamples from the surviving limits of the current proof |
