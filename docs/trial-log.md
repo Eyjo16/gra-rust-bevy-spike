@@ -215,6 +215,63 @@ submits every Low start 10 through 14 before and after evaluation and requires
 the canonical receipt lines to remain byte-identical refusals with
 `insufficient_stamina`, zero spend/mass, and zero world mutation.
 
+## Clean full gate and bundle metadata
+
+The complete AGENTS.md gate ran on clean implementation commit `6deb6cc`
+before this evidence-only append. Every command exited 0:
+
+```text
+cargo fmt --check                                      PASS
+cargo clippy --all-targets -- -D warnings              PASS
+cargo clippy --all-targets --features bevy-host -- -D warnings
+                                                        PASS
+cargo test                                             49 passed
+cargo test --features bevy-host                        58 passed
+cargo run --features bevy-host                         exit 0
+```
+
+Transcript tail:
+
+```text
+oracle PASS stamina_in_bounds (all stamina within 0..=100)
+oracle PASS mass_conserved (baseline=8300g current=8300g)
+oracle PASS witnessed_gate (0 unwitnessed receipts moved mass)
+oracle PASS exhausted_gate (0 exhausted or band-less receipts moved mass)
+oracle PASS closed_reasons (0 receipts with unclosed reason codes)
+oracle PASS cell_bounds (0 receipts outside the 4x4 cell)
+oracle PASS replay_determinism (states_match=true hashes_match=true receipts_match=true)
+oracle PASS refusal_zero_mutation (0 hash-chain or mutation violations)
+oracle PASS shadow_expectation (0 receipts diverge from the shadow evaluator)
+oracle PASS shadow_final_state (0 truth domains diverge from the shadow final state)
+bevy_host_parity receipts_match=true state_match=true world_match=true receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a
+bevy_projection views_match=true derived_from=0x36221d3fdb8aed9a
+bevy_publication revisions=14 derived_from=0x36221d3fdb8aed9a stale_rejected=true
+bevy_host_faults admission_zero_mutation=true projection_isolated=true faults=admission_failed,projection_consumer_failed
+envelope baseline_commit=91dcd94 grammar=0x530003916889b952 fixture=0x3805f1e20c001051 receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a oracles=10v4
+```
+
+The final evidence-only bundle tip is re-gated after commit; its exact
+`tested_commit` is carried in the review handoff because a commit cannot
+contain its own identity.
+
+Author: Codex (GPT-5). Toolchain: rustc 1.97.1, cargo 1.97.1, WSL2.
+Base: `91dcd94`. Implementation gate: `6deb6cc`. Shared assumptions:
+the experiment is deliberately `cfg(test)` and proves only the four named
+drive records and two canonical gathers in this fixture; it does not promote
+drive vocabulary or anticipation meaning into the executable contract.
+Independent cross-review is still required before author review.
+
+## Claims
+
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
+|---|---|---|---|---|
+| 1 | Baseline cannot express the dispatched anticipation evaluator or named cap | trial/014 focused build | capability-red | E0432 diagnostic above |
+| 2 | BAD/AVERAGE select cheap and GOOD/SUPERB select costly | four seeded belief records and two admitted gathers | behavioral-red | focused test output, C101-C104 |
+| 3 | Every applied drive modifier is receipted, bounded by `DRIVE_MODIFIER_CAP = 1`, and bound into the plan only after receipt creation | trial-only evaluator/seal | behavioral-red | focused test assertions; `src/anticipation.rs` |
+| 4 | Evaluation preserves the legal-intent-set hash and committed cost/yield bytes | the two admitted intents `(10,750)` and `(12,1800)` | behavioral-red | summary line; committed-byte before/after assertions |
+| 5 | Low starts 10-14 remain byte-identical `insufficient_stamina` refusals with zero spend, mass, and mutation | established-tier gather fixture | behavioral-red | `low_dead_zone_receipts` before/after assertion |
+| 6 | Canonical grammar, fixture, receipt digest, world hash, and oracle identity equal baseline | standard fixture full dual gate | measurement | envelope line above |
+| 7 | The branch changes only test-only module wiring, the trial module, and this evidence entry | `91dcd94..tested_commit` | measurement | `git diff --name-only 91dcd94..tested_commit` |
 
 
 ## 2026-08-12 — Evidence Factory Protocol v0.1 ratified
