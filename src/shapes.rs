@@ -5,8 +5,10 @@
 //! non-authoritative HTML review page. The projection is derived from
 //! this crate: value fields are formatted from the governing constants
 //! at emission time, and the binding tests below pin the closed
-//! vocabularies and verbs to the real enums, so the projection cannot
-//! silently drift from the code it describes.
+//! vocabularies, verbs, refusal mappings, and source-line references to
+//! the real code — those bound fields cannot silently drift. Descriptive
+//! prose (roles, read/write labels, closures) is authored text: reviewed,
+//! not machine-bound, and it drifts only as loudly as review lets it.
 //!
 //! Authority guard (TS01 envelope, hard): these files are WRITE-ONLY
 //! projections. No runtime or test code ever reads them back; making

@@ -36,7 +36,7 @@ Claims (claim-ids `trial/ts01-truth-shape-extractor#N`):
 | 3 | Numeric values are emitted from the governing constants, not hand-copied | value binding | derivation | test `projection_values_come_from_the_governing_constants` |
 | 4 | Every shape's meaning_status is in the closed six-status set, and the HTML lists all six | status closure | derivation | test `meaning_statuses_are_closed_and_fully_listed` |
 | 5 | No runtime or test path reads the generated files | authority guard | derivation | `shapes` mode is fs::write-only; no fs reads exist in the crate |
-| 6 | Full dual gate green on tested_commit | repo | measurement | 53 default / 62 bevy-host tests; envelope `oracles=10v4`, frozen identities |
+| 6 | Full dual gate green on tested_commit | repo | measurement | 56 default / 65 bevy-host tests; envelope `oracles=10v4`, frozen identities |
 
 Amendment pass (per cross-review): the host shape's writes field was
 inaccurate — the host DOES write truth, through `submit` from the
