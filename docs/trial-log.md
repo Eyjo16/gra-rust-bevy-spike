@@ -7,8 +7,13 @@ Instrument: the dispatched envelope
 written (base `91dcd94`; write scope `src/shapes.rs`, `src/main.rs`
 shapes mode, this entry; artifacts to the local-compute repo).
 
-Red: capability red `E0583` — no shapes module existed; the projection
-could not be expressed.
+Red: capability red, captured verbatim against base `91dcd94`:
+
+```
+error[E0583]: file not found for module `shapes`
+```
+
+No shapes module existed; the projection could not be expressed.
 
 Green: `src/shapes.rs` — six shapes (verb.gather, verb.witness,
 owner.character, owner.economy, owner.social, host.bevy_ecs), each with
@@ -26,7 +31,7 @@ Claims (claim-ids `trial/ts01-truth-shape-extractor#N`):
 
 | # | Atomic claim | Scope | Evidence mode | Evidence reference |
 |---|---|---|---|---|
-| 1 | Two independent process runs at `6f310a6` produce byte-identical YAML and HTML | this toolchain, locked commit | measurement | sha256 `f8cd6fc7…` / `2dbf36c6…` in the provenance file; `cmp` clean |
+| 1 | Two independent process runs at the artifact commit produce byte-identical YAML and HTML | this toolchain, locked commit | measurement | sha256 pairs in the committed provenance file (commit-addressed); `cmp` clean |
 | 2 | The projection covers every closed refusal and partial reason and every verb | vocabulary binding | derivation | tests `projection_covers_the_closed_vocabulary`, `projection_covers_every_verb` |
 | 3 | Numeric values are emitted from the governing constants, not hand-copied | value binding | derivation | test `projection_values_come_from_the_governing_constants` |
 | 4 | Every shape's meaning_status is in the closed six-status set, and the HTML lists all six | status closure | derivation | test `meaning_statuses_are_closed_and_fully_listed` |
@@ -43,8 +48,10 @@ wording, and claim #2 was upgraded from presence to mapping:
 
 | # | Atomic claim | Scope | Evidence mode | Evidence reference |
 |---|---|---|---|---|
-| 2b | Each verb's projected refusal set equals, in both directions, the set its executions actually produce | verb shapes vs `submit` | derivation | test `falsification_refusal_mapping_must_match_execution` — every reason driven to occur, sets compared as equals |
+| 2b | Each verb's projected refusal set equals, in both directions, the set produced by executing every command in the recorded bounded domain (actors {1,2,3,4,5,99} x claims {1..7,9,99} x sites {1,2,9}), each against a fresh identically seeded snapshot | bounded input domain at this commit; general completeness rests on source audit at the exact commit | derivation | test `falsification_refusal_mapping_must_match_execution` |
 | 7 | Shape evidence kinds come from a closed, emitted vocabulary | vocabulary closure | derivation | test `evidence_kinds_are_closed`; `evidence_kinds` block in the YAML |
+| 8 | Every projected source reference carries a resolved line number computed from the source at build time | source references | derivation | `line_of` over `include_str!` sources; test `source_line_references_resolve` refuses `:0` |
+| 9 | The gather read-set includes the inventory entity revision bound at validation | read-set accuracy (write-skew doctrine) | derivation | `Extraction` binds `from_inventory_revision` in `validate_extract`; shape reads field |
 
 Bundle metadata: author Fable 5; rustc/cargo 1.97.1, WSL2; base
 `91dcd94`; tested_commit = branch tip (recorded in the review request);

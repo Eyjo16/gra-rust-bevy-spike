@@ -19,6 +19,23 @@ use crate::boundary::{
     STAMINA_COST_BY_BAND, Stamina, WITNESS_COST, YIELD_TABLE_GRAMS, grammar_fingerprint,
 };
 
+const BOUNDARY_SRC: &str = include_str!("boundary.rs");
+const CHARACTER_SRC: &str = include_str!("character/mod.rs");
+const ECONOMY_SRC: &str = include_str!("economy/mod.rs");
+const SOCIAL_SRC: &str = include_str!("social/mod.rs");
+const HOST_SRC: &str = include_str!("host_bevy.rs");
+
+/// 1-based line of the first source line containing `needle`; 0 when
+/// absent — and the binding tests refuse any unresolved (`:0`)
+/// reference, so a renamed item turns the projection red instead of
+/// letting a line reference drift.
+fn line_of(source: &str, needle: &str) -> usize {
+    source
+        .lines()
+        .position(|line| line.contains(needle))
+        .map_or(0, |index| index + 1)
+}
+
 /// The closed shape-level evidence vocabulary. Distinct from the bundle
 /// claims evidence modes (AGENTS.md §7) on purpose: a shape cites the
 /// kinds of proof that back it, a claim cites how one statement was
@@ -57,7 +74,7 @@ struct Shape {
     receipts: &'static str,
     invariants: &'static [&'static str],
     parity_paths: &'static [&'static str],
-    source: &'static str,
+    source: String,
     proof_refs: &'static [&'static str],
     values: Vec<(String, String)>,
 }
@@ -76,7 +93,12 @@ fn shapes() -> Vec<Shape> {
                     (trial 007); every numeric value is a fixture, not balance",
             evidence_kind: &["behavioral-red", "oracle", "parity"],
             dependencies: &["owner.social", "owner.character", "owner.economy"],
-            reads: &["social.claims", "character.stamina", "economy.sites"],
+            reads: &[
+                "social.claims",
+                "character.stamina",
+                "economy.sites",
+                "economy.inventories (entity revision bound at validation)",
+            ],
             writes: &["character.stamina", "economy.sites", "economy.inventories"],
             mutation_closure: "character and economy entity revisions advance; \
                                social state is never touched by a gather",
@@ -107,7 +129,12 @@ fn shapes() -> Vec<Shape> {
                 "shadow expectation and final state",
             ],
             parity_paths: &["pure", "bevy-serial"],
-            source: "src/boundary.rs: plan_gather, GatherPlan::apply, submit_gather",
+            source: format!(
+                "src/boundary.rs:{} plan_gather, :{} GatherPlan::apply, :{} submit_gather",
+                line_of(BOUNDARY_SRC, "fn plan_gather"),
+                line_of(BOUNDARY_SRC, "impl GatherPlan"),
+                line_of(BOUNDARY_SRC, "fn submit_gather")
+            ),
             proof_refs: &["trial/003", "trial/007", "trial/008", "oracles 1-10"],
             values: vec![
                 (
@@ -160,7 +187,12 @@ fn shapes() -> Vec<Shape> {
                 "shadow expectation and final state",
             ],
             parity_paths: &["pure", "bevy-serial"],
-            source: "src/boundary.rs: plan_witness, WitnessPlan::apply, submit_witness",
+            source: format!(
+                "src/boundary.rs:{} plan_witness, :{} WitnessPlan::apply, :{} submit_witness",
+                line_of(BOUNDARY_SRC, "fn plan_witness"),
+                line_of(BOUNDARY_SRC, "impl WitnessPlan"),
+                line_of(BOUNDARY_SRC, "fn submit_witness")
+            ),
             proof_refs: &["verb-isolation-report", "trial/003", "oracles 1-10"],
             values: vec![(
                 "witness_cost".to_owned(),
@@ -189,7 +221,11 @@ fn shapes() -> Vec<Shape> {
             receipts: "none of its own — receipts are boundary artifacts",
             invariants: &["stamina in 0..=MAX by construction", "stale token panics"],
             parity_paths: &["pure", "bevy-serial"],
-            source: "src/character/mod.rs: validate_spend, apply_spend",
+            source: format!(
+                "src/character/mod.rs:{} validate_spend, :{} apply_spend",
+                line_of(CHARACTER_SRC, "fn validate_spend"),
+                line_of(CHARACTER_SRC, "fn apply_spend")
+            ),
             proof_refs: &["trial-log round 1", "trial/003"],
             values: vec![(
                 "stamina_max".to_owned(),
@@ -224,7 +260,11 @@ fn shapes() -> Vec<Shape> {
                 "stale token panics",
             ],
             parity_paths: &["pure", "bevy-serial"],
-            source: "src/economy/mod.rs: validate_extract, apply_extract",
+            source: format!(
+                "src/economy/mod.rs:{} validate_extract, :{} apply_extract",
+                line_of(ECONOMY_SRC, "fn validate_extract"),
+                line_of(ECONOMY_SRC, "fn apply_extract")
+            ),
             proof_refs: &["trial-log round 1", "trial/003", "trial/008"],
             values: vec![],
         },
@@ -257,7 +297,12 @@ fn shapes() -> Vec<Shape> {
             receipts: "none of its own — receipts are boundary artifacts",
             invariants: &["monotone witnessing", "stale token panics"],
             parity_paths: &["pure", "bevy-serial"],
-            source: "src/social/mod.rs: validate_witness_gate, validate_witness_grant, apply_witness",
+            source: format!(
+                "src/social/mod.rs:{} validate_witness_gate, :{} validate_witness_grant, :{} apply_witness",
+                line_of(SOCIAL_SRC, "fn validate_witness_gate"),
+                line_of(SOCIAL_SRC, "fn validate_witness_grant"),
+                line_of(SOCIAL_SRC, "fn apply_witness")
+            ),
             proof_refs: &["verb-isolation-report", "trial/003"],
             values: vec![],
         },
@@ -295,7 +340,13 @@ fn shapes() -> Vec<Shape> {
                 "no unwind-catching of truth panics",
             ],
             parity_paths: &["bevy-serial vs pure (every gate run)"],
-            source: "src/host_bevy.rs: Host, submit_next, publish, publication",
+            source: format!(
+                "src/host_bevy.rs:{} Host, :{} submit_next, :{} publish, :{} publication",
+                line_of(HOST_SRC, "pub struct Host"),
+                line_of(HOST_SRC, "fn submit_next"),
+                line_of(HOST_SRC, "pub fn publish"),
+                line_of(HOST_SRC, "pub fn publication")
+            ),
             proof_refs: &[
                 "trial/002",
                 "trial/006",
@@ -571,98 +622,100 @@ mod tests {
         }
     }
 
-    /// Mapping falsifier: the refusal set projected for each verb must
-    /// equal, in both directions, the refusals that verb actually
-    /// produces through `submit` — every projected reason is driven to
-    /// occur, and no occurring reason is missing from the projection.
-    /// The map is thereby true, not merely populated.
+    /// Mapping falsifier (bounded-exhaustive): the refusal set projected
+    /// for each verb must equal, in both directions, the set produced by
+    /// executing EVERY command in the recorded input domain — each
+    /// command against a fresh, identically seeded snapshot, so input
+    /// completeness is never confused with sequence reachability.
+    ///
+    /// Recorded domain: actors {1,2,3,4,5,99}, claims {1..=7,9,99},
+    /// sites {1,2,9}; 99/9 are explicit unknown sentinels. General
+    /// completeness beyond this domain rests on source audit at the
+    /// exact commit, and the claim is scoped accordingly.
     #[test]
     fn falsification_refusal_mapping_must_match_execution() {
         use crate::boundary::{
             CharacterId, ClaimId, Command, GatherCommand, InfraTier, MassGrams, OutcomeKind,
-            SiteId, SiteId as S, Stamina, WitnessCommand, World, submit,
+            SiteId, Stamina, WitnessCommand, World, submit,
         };
         use crate::character::CharacterOwner;
         use crate::economy::EconomyOwner;
         use crate::social::SocialOwner;
         use std::collections::BTreeSet;
 
-        // A deliberately incoherent-per-claim world (holder C99 does not
-        // exist) so unknown_actor is reachable; coherence validation is
-        // a fixture gate, not an owner precondition, and refusals must
-        // hold regardless. All commands below refuse, so state never
-        // advances between cases.
-        let mut world = World {
-            characters: CharacterOwner::seed([
-                (CharacterId(1), Stamina::new(90).unwrap()),
-                (CharacterId(2), Stamina::new(50).unwrap()),
-                (CharacterId(3), Stamina::new(5).unwrap()),
-                (CharacterId(4), Stamina::new(12).unwrap()),
-                (CharacterId(5), Stamina::new(4).unwrap()),
-            ])
-            .unwrap(),
-            economy: EconomyOwner::seed_sites([
-                (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
-                (SiteId(2), InfraTier::Crude, MassGrams::new(0)),
-            ])
-            .unwrap(),
-            social: SocialOwner::seed_claims([
-                (ClaimId(1), CharacterId(1), SiteId(1), true),
-                (ClaimId(2), CharacterId(2), SiteId(1), false),
-                (ClaimId(3), CharacterId(3), SiteId(1), true),
-                (ClaimId(4), CharacterId(4), SiteId(1), true),
-                (ClaimId(5), CharacterId(2), SiteId(1), true),
-                (ClaimId(6), CharacterId(1), S(9), true),
-                (ClaimId(7), CharacterId(1), SiteId(2), true),
-                (ClaimId(9), CharacterId(99), SiteId(1), true),
-            ])
-            .unwrap(),
-        };
+        const ACTORS: [u64; 6] = [1, 2, 3, 4, 5, 99];
+        const CLAIMS: [u64; 9] = [1, 2, 3, 4, 5, 6, 7, 9, 99];
+        const SITES: [u64; 3] = [1, 2, 9];
 
-        let gather = |actor: u64, claim: u64, site: u64| {
-            Command::Gather(GatherCommand {
-                actor: CharacterId(actor),
-                claim: ClaimId(claim),
-                site: SiteId(site),
-            })
-        };
-        let witness = |w: u64, claim: u64| {
-            Command::Witness(WitnessCommand {
-                witness: CharacterId(w),
-                claim: ClaimId(claim),
-            })
-        };
-
-        let gather_cases = [
-            gather(1, 99, 1), // unknown_claim
-            gather(1, 5, 1),  // claim_not_held_by_actor (K5 is C2's)
-            gather(1, 1, 2),  // claim_site_mismatch
-            gather(2, 2, 1),  // claim_not_witnessed
-            gather(99, 9, 1), // unknown_actor (holder C99 matches, no body)
-            gather(3, 3, 1),  // actor_exhausted
-            gather(4, 4, 1),  // insufficient_stamina (12 < low cost)
-            gather(1, 6, 9),  // unknown_site
-            gather(1, 7, 2),  // site_empty
-        ];
-        let witness_cases = [
-            witness(1, 99), // unknown_claim
-            witness(2, 5),  // cannot_witness_own_claim
-            witness(2, 1),  // claim_already_witnessed
-            witness(99, 2), // unknown_actor
-            witness(5, 2),  // insufficient_stamina (4 < 5)
-        ];
+        // Fresh, identically seeded snapshot for every single command.
+        // Claim K9's holder C99 has no body on purpose: unknown_actor
+        // must be reachable, and refusals hold regardless of fixture
+        // coherence gates.
+        fn snapshot() -> World {
+            World {
+                characters: CharacterOwner::seed([
+                    (CharacterId(1), Stamina::new(90).unwrap()),
+                    (CharacterId(2), Stamina::new(50).unwrap()),
+                    (CharacterId(3), Stamina::new(5).unwrap()),
+                    (CharacterId(4), Stamina::new(12).unwrap()),
+                    (CharacterId(5), Stamina::new(4).unwrap()),
+                ])
+                .unwrap(),
+                economy: EconomyOwner::seed_sites([
+                    (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
+                    (SiteId(2), InfraTier::Crude, MassGrams::new(0)),
+                ])
+                .unwrap(),
+                social: SocialOwner::seed_claims([
+                    (ClaimId(1), CharacterId(1), SiteId(1), true),
+                    (ClaimId(2), CharacterId(2), SiteId(1), false),
+                    (ClaimId(3), CharacterId(3), SiteId(1), true),
+                    (ClaimId(4), CharacterId(4), SiteId(1), true),
+                    (ClaimId(5), CharacterId(2), SiteId(1), true),
+                    (ClaimId(6), CharacterId(1), SiteId(9), true),
+                    (ClaimId(7), CharacterId(1), SiteId(2), true),
+                    (ClaimId(9), CharacterId(99), SiteId(1), true),
+                ])
+                .unwrap(),
+            }
+        }
 
         let mut observed_gather = BTreeSet::new();
-        for cmd in gather_cases {
-            let receipt = submit(&mut world, 1, cmd);
-            assert!(matches!(receipt.outcome, OutcomeKind::Refused(_)));
-            observed_gather.insert(receipt.outcome.reason_code().to_owned());
+        for actor in ACTORS {
+            for claim in CLAIMS {
+                for site in SITES {
+                    let mut world = snapshot();
+                    let receipt = submit(
+                        &mut world,
+                        1,
+                        Command::Gather(GatherCommand {
+                            actor: CharacterId(actor),
+                            claim: ClaimId(claim),
+                            site: SiteId(site),
+                        }),
+                    );
+                    if matches!(receipt.outcome, OutcomeKind::Refused(_)) {
+                        observed_gather.insert(receipt.outcome.reason_code().to_owned());
+                    }
+                }
+            }
         }
         let mut observed_witness = BTreeSet::new();
-        for cmd in witness_cases {
-            let receipt = submit(&mut world, 1, cmd);
-            assert!(matches!(receipt.outcome, OutcomeKind::Refused(_)));
-            observed_witness.insert(receipt.outcome.reason_code().to_owned());
+        for actor in ACTORS {
+            for claim in CLAIMS {
+                let mut world = snapshot();
+                let receipt = submit(
+                    &mut world,
+                    1,
+                    Command::Witness(WitnessCommand {
+                        witness: CharacterId(actor),
+                        claim: ClaimId(claim),
+                    }),
+                );
+                if matches!(receipt.outcome, OutcomeKind::Refused(_)) {
+                    observed_witness.insert(receipt.outcome.reason_code().to_owned());
+                }
+            }
         }
 
         for (id, observed) in [
@@ -677,8 +730,20 @@ mod tests {
                 shape.refusals.iter().map(|r| (*r).to_owned()).collect();
             assert_eq!(
                 &projected, observed,
-                "{id}: projected refusal set must equal the executed set"
+                "{id}: projected refusal set must equal the executed set over the full domain"
             );
         }
+    }
+
+    /// Binding: every projected source reference resolved to a real
+    /// line — a renamed item turns the projection red instead of
+    /// letting a line reference drift.
+    #[test]
+    fn source_line_references_resolve() {
+        let yaml = emit_yaml("test");
+        assert!(
+            !yaml.contains(":0 "),
+            "an unresolved source-line reference (:0) reached the projection"
+        );
     }
 }
