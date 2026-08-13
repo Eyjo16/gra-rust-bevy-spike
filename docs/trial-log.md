@@ -93,9 +93,10 @@ Bundle metadata: author Fable 5; rustc/cargo 1.97.1, WSL2; base
 `91dcd94`; tested_commit = branch tip (recorded in the review request);
 shared assumptions: same clone and gate commands as the reviewer.
 Artifacts and run record: `gragas-local-compute` branch `run/TS01`.
-## 2026-08-13 ? trial/014 anticipation drive: pre-registration
 
-Instrument (authoring envelope, as dispatched by Eyj?):
+## 2026-08-13 - trial/014 anticipation drive: pre-registration
+
+Instrument (authoring envelope, as dispatched by Eyjo):
 
 ```text
 base_commit:         91dcd94
@@ -117,7 +118,7 @@ frozen:              canonical commands, Receipt and reason vocabularies,
                      band values, trial/013 and its sealed holdout;
                      grammar=0x530003916889b952,
                      fixture=0x3805f1e20c001051, oracles=10v4
-red_required:        yes ? capability red: the single test-oracle names
+red_required:        yes - capability red: the single test-oracle names
                      anticipation belief records, DRIVE_MODIFIER_CAP, a
                      receipted pure modifier, and pre-seal selection that
                      the baseline has no module capable of expressing
@@ -126,7 +127,7 @@ verification:        focused red then focused green for
                      capped_and_membership_preserving; full clean-tree dual
                      gate from AGENTS.md; exact baseline/green comparison of
                      legal-intent-set hash, committed costs/yields, the
-                     10?14 insufficient-stamina refusal, grammar, fixture,
+                     10-14 insufficient-stamina refusal, grammar, fixture,
                      receipt digest, world hash, and oracle identity
 evidence:            verbatim red/green output below; full gate transcript
                      tail; branch/base/tested metadata; numbered claims
@@ -140,15 +141,80 @@ tested_commit:       branch tip named in the review handoff after the clean
                      full gate (the commit cannot contain its own hash)
 ```
 
-Falsifier, as one testable unit: with two already-legal validated intents ?
-cheap/low-yield and costly/high-yield ? BAD/AVERAGE must select cheap and
+Falsifier, as one testable unit: with two already-legal validated intents -
+cheap/low-yield and costly/high-yield - BAD/AVERAGE must select cheap and
 GOOD/SUPERB must select costly. The same oracle also requires a named cap,
 receipted evaluation, and byte-identical legal-set identity, committed
-costs/yields, and baseline Low-start 10?14 `insufficient_stamina` receipt.
+costs/yields, and baseline Low-start 10-14 `insufficient_stamina` receipt.
 The drive modifier may rank members of a frozen legal set before the
 experimental plan seal; it may neither admit an intent nor alter one.
 
-Evidence and claims will be appended after the pre-registered red is run.
+## Capability red - reproduced before implementation
+
+Command:
+
+```text
+cargo test anticipation::tests::trial_014_drive_only_selection_is_capped_and_membership_preserving -- --exact --nocapture
+```
+
+Exit 1, verbatim diagnostic:
+
+```text
+error[E0432]: unresolved imports `super::AnticipationBeliefs`, `super::BeliefRecord`, `super::DRIVE_MODIFIER_CAP`, `super::Drive`, `super::IntentKind`, `super::ValidatedIntent`, `super::evaluate_and_seal`, `super::legal_intent_set_hash`
+  --> src/anticipation.rs:10:9
+   |
+10 |         AnticipationBeliefs, BeliefRecord, DRIVE_MODIFIER_CAP, Drive, IntentKind,
+   |         ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^  ^^^^^  ^^^^^^^^^^ no `IntentKind` in `anticipation`
+   |         |                    |             |                   |
+   |         |                    |             |                   no `Drive` in `anticipation`
+   |         |                    |             no `DRIVE_MODIFIER_CAP` in `anticipation`
+   |         |                    no `BeliefRecord` in `anticipation`
+   |         no `AnticipationBeliefs` in `anticipation`
+11 |         ValidatedIntent, evaluate_and_seal, legal_intent_set_hash,
+   |         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^ no `legal_intent_set_hash` in `anticipation`
+   |         |                |
+   |         |                no `evaluate_and_seal` in `anticipation`
+   |         no `ValidatedIntent` in `anticipation`
+
+error: could not compile `gra-rust-bevy-spike` (bin "gra-rust-bevy-spike" test) due to 1 previous error
+```
+
+Classification: capability red. Baseline has no anticipation belief owner,
+named modifier cap, intent commitment/hash, receipted evaluation, or
+evaluation-before-seal operation for this oracle to call.
+
+## Focused green
+
+The implementation is compiled only under `cfg(test)`. It owns belief
+records in `AnticipationBeliefs`; evaluation receives shared references to
+both beliefs and already-validated intent commitments. The pure modifier is
+clamped to `DRIVE_MODIFIER_CAP = 1`, copied into an evaluation receipt, and
+used to select before the experimental plan binds the receipt hash and the
+selected intent's pre-existing commitment bytes.
+
+Same command, exit 0:
+
+```text
+running 1 test
+agent=C101 drive=bad legal_intents=0xf5b819d2bd530f49 cheap_modifier=0 costly_modifier=-1 selected=cheap cap=1
+agent=C102 drive=average legal_intents=0xf5b819d2bd530f49 cheap_modifier=0 costly_modifier=0 selected=cheap cap=1
+agent=C103 drive=good legal_intents=0xf5b819d2bd530f49 cheap_modifier=0 costly_modifier=1 selected=costly cap=1
+agent=C104 drive=superb legal_intents=0xf5b819d2bd530f49 cheap_modifier=0 costly_modifier=1 selected=costly cap=1
+trial014 summary cap=1 legal_hash=0xf5b819d2bd530f49 membership_unchanged=true costs_yields_unchanged=true low_10_14_refusals_unchanged=true
+test anticipation::tests::trial_014_drive_only_selection_is_capped_and_membership_preserving ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.00s
+```
+
+The two legal intents are admitted by the existing gather boundary in
+independent coherent worlds before this module sees them. Their committed
+cost/yield bytes are `(10, 750)` and `(12, 1800)`. The oracle snapshots
+those bytes and their set hash before evaluation, checks every modifier
+against the named cap, and compares them again afterward. It independently
+submits every Low start 10 through 14 before and after evaluation and requires
+the canonical receipt lines to remain byte-identical refusals with
+`insufficient_stamina`, zero spend/mass, and zero world mutation.
+
 
 
 ## 2026-08-12 — Evidence Factory Protocol v0.1 ratified
