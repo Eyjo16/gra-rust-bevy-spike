@@ -93,6 +93,63 @@ Bundle metadata: author Fable 5; rustc/cargo 1.97.1, WSL2; base
 `91dcd94`; tested_commit = branch tip (recorded in the review request);
 shared assumptions: same clone and gate commands as the reviewer.
 Artifacts and run record: `gragas-local-compute` branch `run/TS01`.
+## 2026-08-13 ? trial/014 anticipation drive: pre-registration
+
+Instrument (authoring envelope, as dispatched by Eyj?):
+
+```text
+base_commit:         91dcd94
+objective:           make a trial-scoped intent evaluator select the legal
+                     cheap/low-yield intent at BAD/AVERAGE drive and the
+                     legal costly/high-yield intent at GOOD/SUPERB drive,
+                     using only a capped pure modifier of anticipation
+                     belief records applied before the experimental plan is
+                     sealed
+authoritative_files: AGENTS.md, docs/README.md, docs/architecture.md,
+                     docs/runtime-contract-proposal.md,
+                     docs/meaning-gate.md, docs/development-workflow.md,
+                     src/boundary.rs
+write_scope:         src/main.rs (test-only module wiring),
+                     src/anticipation.rs (trial-scoped experiment),
+                     docs/trial-log.md (this append-only evidence)
+frozen:              canonical commands, Receipt and reason vocabularies,
+                     the ten-oracle suite, registry/schema, all yield/cost/
+                     band values, trial/013 and its sealed holdout;
+                     grammar=0x530003916889b952,
+                     fixture=0x3805f1e20c001051, oracles=10v4
+red_required:        yes ? capability red: the single test-oracle names
+                     anticipation belief records, DRIVE_MODIFIER_CAP, a
+                     receipted pure modifier, and pre-seal selection that
+                     the baseline has no module capable of expressing
+verification:        focused red then focused green for
+                     anticipation::tests::trial_014_drive_only_selection_is_
+                     capped_and_membership_preserving; full clean-tree dual
+                     gate from AGENTS.md; exact baseline/green comparison of
+                     legal-intent-set hash, committed costs/yields, the
+                     10?14 insufficient-stamina refusal, grammar, fixture,
+                     receipt digest, world hash, and oracle identity
+evidence:            verbatim red/green output below; full gate transcript
+                     tail; branch/base/tested metadata; numbered claims
+limits:              no dependency/network work; local Rust cache only;
+                     no production integration, merge, push, value move, or
+                     trial/013 holdout execution
+escalate_when:       any green requires changing legal intent membership,
+                     canonical truth/receipts, contract/registry, values,
+                     the ten-oracle suite, or production plan ownership
+tested_commit:       branch tip named in the review handoff after the clean
+                     full gate (the commit cannot contain its own hash)
+```
+
+Falsifier, as one testable unit: with two already-legal validated intents ?
+cheap/low-yield and costly/high-yield ? BAD/AVERAGE must select cheap and
+GOOD/SUPERB must select costly. The same oracle also requires a named cap,
+receipted evaluation, and byte-identical legal-set identity, committed
+costs/yields, and baseline Low-start 10?14 `insufficient_stamina` receipt.
+The drive modifier may rank members of a frozen legal set before the
+experimental plan seal; it may neither admit an intent nor alter one.
+
+Evidence and claims will be appended after the pre-registered red is run.
+
 
 ## 2026-08-12 — Evidence Factory Protocol v0.1 ratified
 
