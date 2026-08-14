@@ -25,8 +25,15 @@ language only, not additions to a closed vocabulary.
   exact internal arithmetic is not exposed.
 - Real-time-with-pause is an expression layer over discrete deterministic
   canonical decisions.
-- Historical constraints require dated sources and cannot be taken from a
-  timeless composite “Norse” setting.
+- The playable span is 880–1050. Its law is an inherited oral tradition;
+  later written witnesses may preserve older layers, but exact clauses still
+  require a named inference.
+- Historically exact clause reproduction is not the goal. Authored-synthesis
+  laws are admissible when they fit the declared Norse legal and honor
+  tradition and are not mislabeled as sourced fact.
+- A load-bearing character capability for knowledge and skilled use of law is
+  authorized in principle; it remains separate from law content, office,
+  standing and verdict authority.
 
 These are product directions, not executable law until their owner and proof
 surface are ratified.
@@ -96,11 +103,14 @@ The first scoring trial may compare terms from these provisional families:
 - material need, seasonal opportunity, tools, and expected yield;
 - liking, trust, fear, resentment, and remembered treatment;
 - public reputation, witnessed promises, legal exposure, and honor judgment;
+- lawcraft: remembered law, procedural understanding, formulation and public
+  use of available legal knowledge, never omniscience or authority to change law;
 - anticipation based only on the actor's available observations and beliefs.
 
-This list is neither a registry nor permission to add statistics. Lead must
-decide which terms are distinct, which owner supplies each fact, and which are
-historically supportable.
+This list is not a registry. The author has authorized `Lawcraft` as a
+load-bearing character capability; its executable shape and identity change run
+under LW01. Every other candidate term still needs a separate decision on
+distinctness, ownership and historical support.
 
 Every admitted term later needs: unit, normalization, range, sign convention,
 owner, availability layer, interaction terms, and counterfactual sensitivity
@@ -135,7 +145,7 @@ trade-offs. It cannot authorize RNG or an AI planner.
 
 | Gate | Required ruling/evidence | Why VS01 cannot cross it silently |
 |---|---|---|
-| VS01-G0 | exact historical bucket and geography from H01 | social/legal constraints change by era and source |
+| VS01-G0 | exact scenario position inside 880–1050 and geography from H01 | social/legal constraints can still change within the ratified span |
 | VS01-G1 | player-seat and succession contract | “household head” needs identity, death, transfer, and agency boundaries |
 | VS01-G2 | epistemic-layer ownership | deception and private belief otherwise leak or overwrite truth |
 | VS01-G3 | order lifecycle and legal action space | request, refusal, abandonment, and discipline are not current verbs |
@@ -143,7 +153,7 @@ trade-offs. It cannot authorize RNG or an AI planner.
 | VS01-G5 | independent exact-tip trial/014 verdict | ranking precedent is not yet accepted evidence |
 | VS01-G6 | historical dossiers for order, status, witness, discipline, and household attachment | H01 maps questions but does not establish these mechanics |
 | VS01-G7 | author Meaning Gate for directional social consequences | weights cannot choose what respect, fear, trust, or honor mean |
-| VS01-G8 | registry/schema/contract permission for every new canonical type | standing project law forbids implicit contract evolution |
+| VS01-G8 | reviewed LW01 shape and explicit identity rebaseline for `Lawcraft`; separate permission for every other new canonical type | the author authorized the capability, not silent fixture, receipt, registry or schema drift |
 
 ## Pre-registered falsifiers
 
@@ -174,9 +184,10 @@ Any implementation bundle must include these before tuning values:
 ## Sprint packets after lead refinement
 
 ```text
-H01 + author era choice
+H01 + author 880–1050 verdict
   -> H02-order/status/witness dossier
-      -> VS01-GATE authority decisions
+      -> LW01 lawcraft state + identity review
+          -> VS01-GATE authority decisions
           -> E01 epistemic seam
           -> R10 keyed-random identity
               -> O01 request/order lifecycle
@@ -198,7 +209,7 @@ This proposal is complete when it is pushed, fully gated as docs-only, and the
 lead returns:
 
 1. a dependency-tree correction;
-2. an exact H01 time/place choice or an explicit counterfactual blend;
+2. an exact scenario start/duration and place inside the ratified 880–1050 span;
 3. owner decisions for the five epistemic layers;
 4. the smallest legal order/response action space;
 5. an R10 envelope;
@@ -215,7 +226,7 @@ Until then, code sprinting stops here by design.
 | 1 | Current truth has only Gather and Witness as canonical verbs | master `2dd4db5` | source audit | boundary grammar and TS01 shapes |
 | 2 | Current law is A1 immediate/sequential and has no RNG authority | Runtime Contract v0.1 | derivation | runtime-contract-proposal.md |
 | 3 | Trial/014 response demonstrates test-only order-invariant ranking properties but lacks independent exact-tip verdict | `afbae24` | branch evidence state | sprint map and reachable ref |
-| 4 | H01 does not establish universal status, spy, weapon-burial, or numeric social rules | H01 ledger only | source-bound review | H01-C10, C13–C16 |
+| 4 | The author fixed play to 880–1050 and authorized oral-law/authored-synthesis framing without converting later manuscripts into exact early clauses | author verdict, 2026-08-14 | derivation | H01-C19–C21 on `research/H01-source-ledger` after correction |
 | 5 | This proposal adds no production type, value, registry/schema, contract, closed vocabulary, or executable behavior | branch diff | diff audit | docs-only write scope |
 
 ## Verification
