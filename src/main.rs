@@ -18,7 +18,11 @@ mod character;
 mod economy;
 #[cfg(feature = "bevy-host")]
 mod host_bevy;
+#[cfg(all(feature = "bevy-host", any(test, feature = "rs01-render")))]
+mod host_bevy_render;
 mod oracles;
+#[cfg(all(feature = "bevy-host", any(test, feature = "rs01-render")))]
+mod rs01_fixture;
 mod shapes;
 mod social;
 
@@ -126,6 +130,13 @@ fn main() -> ExitCode {
             }
             println!("truth_shapes emitted dir={dir} source_commit={source_commit}");
             return ExitCode::SUCCESS;
+        }
+        // `rs01`: launch the RS01 renderer (trial RS01). Feature-gated
+        // dispatch only; the scene consumes live publications from the
+        // real boundary.
+        #[cfg(feature = "rs01-render")]
+        if command == "rs01" {
+            return host_bevy_render::run();
         }
         eprintln!("unknown command: {command}");
         return ExitCode::FAILURE;

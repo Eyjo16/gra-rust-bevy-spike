@@ -183,6 +183,56 @@ impl Host {
             revisions: self.truth_revisions(),
             derived_from: self.truth_hash(),
             views: self.view_state(),
+            facts: self.view_facts(),
+        }
+    }
+
+    /// Typed read seam over the published projection (trial RS01): the
+    /// same facts as `view_state`, read from the view entities — not
+    /// from truth — so a renderer consumes the projection layer, never
+    /// canonical state. Read-only; no new mutation path.
+    pub fn view_facts(&mut self) -> PublishedFacts {
+        let mut characters: Vec<CharacterFact> = {
+            let mut query = self.ecs.query::<&CharacterView>();
+            query
+                .iter(&self.ecs)
+                .map(|v| CharacterFact {
+                    id: v.id,
+                    stamina: v.stamina,
+                    inventory_g: v.inventory_g,
+                })
+                .collect()
+        };
+        let mut sites: Vec<SiteFact> = {
+            let mut query = self.ecs.query::<&SiteView>();
+            query
+                .iter(&self.ecs)
+                .map(|v| SiteFact {
+                    id: v.id,
+                    tier: v.tier,
+                    stock_g: v.stock_g,
+                })
+                .collect()
+        };
+        let mut claims: Vec<ClaimFact> = {
+            let mut query = self.ecs.query::<&ClaimView>();
+            query
+                .iter(&self.ecs)
+                .map(|v| ClaimFact {
+                    id: v.id,
+                    holder: v.holder,
+                    site: v.site,
+                    witnessed: v.witnessed,
+                })
+                .collect()
+        };
+        characters.sort_by_key(|c| c.id);
+        sites.sort_by_key(|s| s.id);
+        claims.sort_by_key(|c| c.id);
+        PublishedFacts {
+            characters,
+            sites,
+            claims,
         }
     }
 
@@ -370,6 +420,39 @@ pub struct Publication {
     pub revisions: u64,
     pub derived_from: u64,
     pub views: Vec<String>,
+    pub facts: PublishedFacts,
+}
+
+/// Typed copies of published projection facts (trial RS01 read seam).
+/// Plain data derived from the view entities; carries no `World`, owner
+/// access, proof token, or handle back to canonical truth.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishedFacts {
+    pub characters: Vec<CharacterFact>,
+    pub sites: Vec<SiteFact>,
+    pub claims: Vec<ClaimFact>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CharacterFact {
+    pub id: u64,
+    pub stamina: u8,
+    pub inventory_g: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SiteFact {
+    pub id: u64,
+    pub tier: &'static str,
+    pub stock_g: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClaimFact {
+    pub id: u64,
+    pub holder: u64,
+    pub site: u64,
+    pub witnessed: bool,
 }
 
 /// Downstream consumer state: keeps the newest publication it has

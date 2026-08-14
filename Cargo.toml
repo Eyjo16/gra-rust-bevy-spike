@@ -11,11 +11,21 @@ edition = "2024"
 # async_executor, and backtrace are unallocated capabilities and stay
 # disabled until a named consumer and gate justify them.
 # `bevy-full` layers the whole engine on top for rendering/interaction work.
+# `rs01-render` (trial RS01) is the capability-scoped renderer feature:
+# window/input/2D/text/UI plus png for screenshot capture. The bevy `2d`
+# meta-feature transitively carries default_app/default_platform surplus
+# (gilrs, clipboard, webgl2, scene, picking, sysinfo) — recorded in
+# docs/rs01-report.md as capability surplus with no RS01 consumer.
 [features]
 default = []
 bevy-host = ["dep:bevy_ecs"]
-bevy-full = ["bevy-host", "dep:bevy"]
+bevy-full = ["bevy-host", "bevy/default"]
+rs01-render = ["bevy-host", "dep:bevy"]
 
 [dependencies]
-bevy = { version = "0.19", optional = true }
+bevy = { version = "0.19", optional = true, default-features = false, features = [
+    "2d",
+    "bevy_text",
+    "png",
+] }
 bevy_ecs = { version = "0.19", optional = true, default-features = false, features = ["std"] }
