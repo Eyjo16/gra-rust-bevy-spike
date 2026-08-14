@@ -17,8 +17,27 @@ that must not collapse into one another:
 
 Only step 4 may authorize production meaning, and it still requires the normal
 contract/registry permission and proof path. Legal prescription is not assumed
-to equal everyday behavior. A late manuscript is not silently projected back
-into the settlement period.
+to equal everyday behavior. A late manuscript may preserve older oral law, but
+it is evidence for that earlier layer only when the inference and its limits are
+named; manuscript date is never treated as the birth date of the tradition.
+
+## Author-ratified gameplay frame
+
+Author verdict, 2026-08-14:
+
+- the game spans **880–1050**;
+- law in this world is primarily a remembered, publicly spoken and inherited
+  tradition, including norms older than their surviving written witnesses;
+- later Grágás witnesses may inform the shape of that tradition without making
+  the game a simulation of the surviving manuscript text;
+- individual gameplay laws need not reproduce a historical clause exactly, but
+  must fit the declared Norse legal and honor tradition and must not be presented
+  as a sourced historical fact when they are authored synthesis;
+- knowledge and skilled use of law will be load-bearing character capability,
+  separate from the law itself and from office, standing or verdict authority.
+
+This verdict fixes product meaning. It does not retroactively prove the age of
+any particular clause.
 
 ## Provisional temporal spine
 
@@ -26,14 +45,15 @@ These are research buckets for routing evidence, not gameplay eras or enums.
 
 | Bucket | Approximate scope | Use | Primary caution |
 |---|---|---|---|
-| H01-T0 | settlement through 929 | land-taking, farm formation, pre-Commonwealth practice | later law and sagas are retrospective |
-| H01-T1 | Commonwealth 930–999 | early assembly, pagan farm society | sparse contemporary text |
-| H01-T2 | conversion through 1116 | Christianization and institutional transition | change may be regional and non-synchronous |
-| H01-T3 | 1117–1261 | written-law culture within the Commonwealth | surviving compilations can preserve layers |
-| H01-T4 | 1262–1281 and later witnesses | royal transition, late manuscripts, Járnsíða/Jónsbók | never back-project without a named argument |
+| H01-P0 | 880–929 | settlement, land-taking, farm formation, pre-Alþingi practice | later law and sagas are retrospective witnesses |
+| H01-P1 | 930–999 | early Commonwealth, Alþingi and pagan farm society | sparse contemporary text; oral continuity is not clause identity |
+| H01-P2 | 1000–1050 | conversion and early Christian transition within the game horizon | change may be regional and non-synchronous |
+| H01-W0 | 1051–1116 | near-later witness context outside play | may clarify continuity but is not gameplay time |
+| H01-W1 | 1117–1261 | writing and compilation within the Commonwealth | surviving law can preserve, alter or combine older layers |
+| H01-W2 | 1262 onward | royal transition and later manuscript witnesses | never back-project a clause without a named argument |
 
-The game's anchor period is still an author/lead ruling. Until it is fixed,
-every mechanic claim must name the bucket(s) it purports to represent.
+Every mechanic claim must name P0, P1, P2, or an explicitly declared span.
+W-buckets date evidence and transmission, not playable years.
 
 ## Evidence ledger
 
@@ -60,6 +80,9 @@ quality. “Blocked” means no adequate source was found in this pass.
 | H01-C16 | Choosing three laws every second year | gameplay proposal | author vision; no historical source in this pass | hypothesis | may be tested as a transparent strategy cadence | must not be presented as historical Alþingi procedure |
 | H01-C17 | Real-time-with-pause presentation over discrete deterministic truth | product architecture | author answer, not historical evidence | author direction; implementation unratified | lead may place after discrete-time/identity law | must not be justified by historical sources |
 | H01-C18 | Player occupies the current household head while the dynasty continues and other people remain free-willed | product vision | author answer, not historical evidence | author direction; semantics unratified | candidate north-star for control boundary and succession tests | must not collapse NPC agency into household ownership |
+| H01-C19 | The playable chronology is 880–1050 and its law is an inherited oral tradition that may predate surviving written witnesses | product scope and legal-world premise | author verdict, 2026-08-14 | ratified product meaning; not proof of a particular clause | route every legal mechanic to P0/P1/P2 and label sourced clause, bounded inference, or authored synthesis | dating the tradition only by manuscript date, or claiming an exact clause existed earlier without evidence |
+| H01-C20 | At Lögberg the lawspeaker publicly recited the law; accounts describe a three-year office and recitation of a portion each summer | Alþingi tradition from 930; later and modern institutional/scholarly witnesses | Þingvellir official history; Nygaard; Oxford scholarship | high for public oral recitation; wording and practice across the whole 880–1050 span still need bounded treatment | make memory, formulaic delivery and procedural use of law socially consequential | treating spoken/recited as proof that every law was literally sung to melody, or that every person knew every clause equally |
+| H01-C21 | Taking goods from a fallen enemy is dishonorable under the user's cited “Vígslóði” tradition | exact source locator not yet available in this repository | author-supplied design claim, 2026-08-14 | ratified as desired honor/law shape; historical attribution unverified | candidate authored-synthesis law for a combat aftermath trial, clearly labeled until its source is located | claiming a verified historical clause, scope, penalty or universal compliance from the current evidence |
 
 ## Admission rule for a hard historical mechanic
 
@@ -67,7 +90,7 @@ A proposed historical constraint may enter a Meaning Gate only when its dossier
 has all of the following:
 
 - exact claim text small enough to falsify;
-- geography and H01-T bucket;
+- geography and H01-P bucket or declared span;
 - source type and author;
 - date of material/event and date of surviving witness/publication;
 - direct quotation locator or archaeological context, with paraphrase kept
@@ -102,10 +125,10 @@ action space, and directional meaning are frozen.
 
 ## Rulings still needed from the author/lead
 
-1. Anchor bucket: T0 settlement, early T1, conversion transition, mature
-   Commonwealth, late Commonwealth, or an explicitly counterfactual blend?
+1. Scenario placement inside 880–1050: exact starting year and intended
+   campaign duration?
 2. Geography: all Iceland, one quarter, or a named valley/farm network?
-3. Which deviations are allowed for playability, and how must the UI label
+3. Which authored-synthesis deviations are allowed for playability, and how must the UI label
    them?
 4. Is slavery in scope? If yes, which era, legal status distinctions, and
    representation constraints require specialist review?
@@ -119,6 +142,9 @@ action space, and directional meaning are frozen.
 - [Árnastofnun — Grágás](https://www.arnastofnun.is/is/greinar/gragas)
 - [Árnastofnun — Saga og bókmenntir í handritum](https://arnastofnun.is/is/saga-og-bokmenntir-i-handritum)
 - [Alþingi — institutional history (PDF)](https://www.althingi.is/pdf/Althingi2017_enska.pdf)
+- [Þingvellir — Lögberg](https://www.thingvellir.is/en/education/history/loegberg/)
+- [Nygaard — The Laws of Icelanders](https://hcmc.uvic.ca/~scancan/nygaard_1_28.htm)
+- [Oxford — The Laws of Medieval Iceland](https://academic.oup.com/book/4690/chapter-abstract/146882881)
 - [Miller — Grágás and the Legal Culture of Commonwealth Iceland](https://www.cambridge.org/core/books/abs/cambridge-history-of-old-norseicelandic-literature/gragas-and-the-legal-culture-of-commonwealth-iceland/434139529B11C35DDE4C75E8FBA88CB9)
 - [Some aspects of householding in the medieval Icelandic commonwealth](https://www.cambridge.org/core/journals/continuity-and-change/article/some-aspects-of-householding-in-the-medieval-icelandic-commonwealth/E0163BEFA06520CCDEF84ABFA4FFB4E7)
 - [Zori et al. — Feasting in Viking Age Iceland](https://iris.hi.is/en/publications/feasting-in-viking-age-iceland-sustaining-a-chiefly-political-eco/)
