@@ -25,12 +25,17 @@ gra-rust-bevy-spike v0.1.0
     └── … (proc-macros and support crates)
 ```
 
-`bevy-full` layers the whole engine (`bevy` → renderer, windowing,
-assets — about 1,480 nodes) on top of `bevy-host` for later rendering and
-interaction work. This split keeps the concrete cost of each step visible:
-the parity proof costs one ECS crate, the engine costs the rest. The truth
-layer itself never references Bevy — only `src/host_bevy.rs` does — so the
-boundary stays testable at zero-dependency speed regardless.
+`bevy-render` adds the RS01 capability slice on top of `bevy-host`: Bevy's
+default app, 2D renderer, winit/X11 windowing, bundled default font, and
+multithreaded executor. Audio, UI, 3D/PBR, scenes, glTF, gamepads, and
+Wayland remain outside that named slice. `bevy-full` still enables Bevy's
+broad default set for later work that names such a consumer.
+
+This three-step split keeps each cost visible: the parity proof costs one ECS
+crate, the RS01 renderer costs the named 2D/X11 slice, and the broad engine is
+still explicit. The truth layer itself never references Bevy — only the host
+adapter and presentation module do — so the boundary stays testable at
+zero-dependency speed regardless.
 
 ## 2. Module graph
 
@@ -44,6 +49,7 @@ flowchart TD
     oracles["oracles.rs<br/>10 bounded checks"]
     boundary["boundary.rs<br/>primitives + orchestrator"]
     host["host_bevy.rs<br/>bevy-host feature:<br/>custody + projection + faults"]
+    render["render_bevy.rs<br/>bevy-render feature:<br/>Publication + receipt presentation"]
     character["character/<br/>stamina owner"]
     economy["economy/<br/>mass owner"]
     social["social/<br/>claims owner"]
@@ -51,6 +57,7 @@ flowchart TD
     main --> boundary
     main --> oracles
     main -.->|"bevy-host only"| host
+    main -.->|"bevy-render only"| render --> host
     host -->|"submit / read-only observation"| boundary
     oracles --> boundary
     boundary -->|"validate / apply"| character
@@ -67,6 +74,12 @@ system calling `submit`), projects it into disposable view entities
 carrying `derived_from` identity, publishes identified snapshots that
 consumers can reject as stale, and records transport/consumer failures
 in a closed host-fault vocabulary beside — never inside — receipts.
+
+The presentation module (`render_bevy.rs`, RS01) executes its bounded fixture
+through `Host` and renders typed facts copied from identified `Publication`
+view entities plus the receipts returned by those submissions. It has no
+canonical-truth observation path; its names, material, scene framing, palette,
+and 200 g-per-block scale are explicitly non-authoritative expression policy.
 
 The dotted edges are the module cycle Rust allows within a crate: owners
 import *types* from `boundary`, but only the orchestrator calls *into*

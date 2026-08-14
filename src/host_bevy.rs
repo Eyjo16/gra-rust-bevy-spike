@@ -183,6 +183,8 @@ impl Host {
             revisions: self.truth_revisions(),
             derived_from: self.truth_hash(),
             views: self.view_state(),
+            #[cfg(feature = "bevy-render")]
+            facts: self.published_facts(),
         }
     }
 
@@ -352,6 +354,59 @@ impl Host {
         identities
     }
 
+    /// Typed read seam for render consumers. These facts are copied from
+    /// the disposable ECS view entities after `publish`; this method never
+    /// reads canonical `Truth`. It exists only with the render feature so
+    /// the ECS-only host surface stays exactly as small as before RS01.
+    #[cfg(feature = "bevy-render")]
+    fn published_facts(&mut self) -> PublishedFacts {
+        let mut characters: Vec<PublishedCharacter> = {
+            let mut query = self.ecs.query::<&CharacterView>();
+            query
+                .iter(&self.ecs)
+                .map(|view| PublishedCharacter {
+                    id: view.id,
+                    stamina: view.stamina,
+                    inventory_g: view.inventory_g,
+                    derived_from: view.derived_from,
+                })
+                .collect()
+        };
+        let mut sites: Vec<PublishedSite> = {
+            let mut query = self.ecs.query::<&SiteView>();
+            query
+                .iter(&self.ecs)
+                .map(|view| PublishedSite {
+                    id: view.id,
+                    tier: view.tier,
+                    stock_g: view.stock_g,
+                    derived_from: view.derived_from,
+                })
+                .collect()
+        };
+        let mut claims: Vec<PublishedClaim> = {
+            let mut query = self.ecs.query::<&ClaimView>();
+            query
+                .iter(&self.ecs)
+                .map(|view| PublishedClaim {
+                    id: view.id,
+                    holder: view.holder,
+                    site: view.site,
+                    witnessed: view.witnessed,
+                    derived_from: view.derived_from,
+                })
+                .collect()
+        };
+        characters.sort_by_key(|fact| fact.id);
+        sites.sort_by_key(|fact| fact.id);
+        claims.sort_by_key(|fact| fact.id);
+        PublishedFacts {
+            characters,
+            sites,
+            claims,
+        }
+    }
+
     #[cfg(test)]
     fn into_truth(mut self) -> (World, Vec<Receipt>) {
         let truth = self
@@ -366,10 +421,68 @@ impl Host {
 /// count and canonical state hash it derives from, plus the rendered
 /// view lines. Both identity fields are existing canonical observations
 /// — no new registry or schema ID is invented (target R03).
+#[derive(Clone)]
 pub struct Publication {
     pub revisions: u64,
     pub derived_from: u64,
     pub views: Vec<String>,
+    #[cfg(feature = "bevy-render")]
+    facts: PublishedFacts,
+}
+
+#[cfg(feature = "bevy-render")]
+#[derive(Clone)]
+struct PublishedFacts {
+    characters: Vec<PublishedCharacter>,
+    sites: Vec<PublishedSite>,
+    claims: Vec<PublishedClaim>,
+}
+
+#[cfg(feature = "bevy-render")]
+#[derive(Clone, Copy)]
+pub(crate) struct PublishedCharacter {
+    pub id: u64,
+    pub stamina: u8,
+    pub inventory_g: u64,
+    pub derived_from: u64,
+}
+
+#[cfg(feature = "bevy-render")]
+#[derive(Clone, Copy)]
+pub(crate) struct PublishedSite {
+    pub id: u64,
+    pub tier: &'static str,
+    pub stock_g: u64,
+    pub derived_from: u64,
+}
+
+#[cfg(feature = "bevy-render")]
+#[derive(Clone, Copy)]
+pub(crate) struct PublishedClaim {
+    pub id: u64,
+    pub holder: u64,
+    pub site: u64,
+    pub witnessed: bool,
+    pub derived_from: u64,
+}
+
+#[cfg(feature = "bevy-render")]
+impl Publication {
+    pub(crate) fn character(&self, id: u64) -> Option<PublishedCharacter> {
+        self.facts
+            .characters
+            .iter()
+            .copied()
+            .find(|fact| fact.id == id)
+    }
+
+    pub(crate) fn site(&self, id: u64) -> Option<PublishedSite> {
+        self.facts.sites.iter().copied().find(|fact| fact.id == id)
+    }
+
+    pub(crate) fn claim(&self, id: u64) -> Option<PublishedClaim> {
+        self.facts.claims.iter().copied().find(|fact| fact.id == id)
+    }
 }
 
 /// Downstream consumer state: keeps the newest publication it has
