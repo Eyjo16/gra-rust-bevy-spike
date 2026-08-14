@@ -52,3 +52,4 @@ decision, migration account, and approval.
 - Link every new report from this index and from the relevant trial-log entry.
 - Keep mechanical fixtures and provisional balance values visibly labeled as
   hypotheses until evidence promotes them.
+| `trial-vs01-order-witness-discipline-proposal.md` | Pre-registered vertical-slice proposal | Defines authority gates and falsifiers for free-willed household behavior without adding runtime meaning or types |
