@@ -52,3 +52,4 @@ decision, migration account, and approval.
 - Link every new report from this index and from the relevant trial-log entry.
 - Keep mechanical fixtures and provisional balance values visibly labeled as
   hypotheses until evidence promotes them.
+| `historical-source-ledger-2026-08-14.md` | Non-authoritative research map | Separates dated sources, bounded historical claims, mechanic hypotheses, and forbidden inferences |
