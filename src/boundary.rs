@@ -1429,4 +1429,142 @@ mod tests {
             "stale plan committed partially: the character spend landed without the extraction"
         );
     }
+
+    /// Trial/013 training fixture. This proves conformance to the installed
+    /// H-A mechanics at the Low boundary; by the sealed selection rule it
+    /// cannot turn that mechanical match into authorial meaning.
+    #[test]
+    fn trial_013_low_actionability_training_does_not_select_meaning() {
+        struct Expected {
+            start: u8,
+            band: StaminaBand,
+            table_cost: u8,
+            outcome: &'static str,
+            reason: &'static str,
+            spent: u8,
+            mass: u64,
+            post: u8,
+            mutated: bool,
+        }
+
+        let expected = [
+            Expected {
+                start: 9,
+                band: StaminaBand::Exhausted,
+                table_cost: 0,
+                outcome: "refused",
+                reason: "actor_exhausted",
+                spent: 0,
+                mass: 0,
+                post: 9,
+                mutated: false,
+            },
+            Expected {
+                start: 10,
+                band: StaminaBand::Low,
+                table_cost: 15,
+                outcome: "refused",
+                reason: "insufficient_stamina",
+                spent: 0,
+                mass: 0,
+                post: 10,
+                mutated: false,
+            },
+            Expected {
+                start: 14,
+                band: StaminaBand::Low,
+                table_cost: 15,
+                outcome: "refused",
+                reason: "insufficient_stamina",
+                spent: 0,
+                mass: 0,
+                post: 14,
+                mutated: false,
+            },
+            Expected {
+                start: 15,
+                band: StaminaBand::Low,
+                table_cost: 15,
+                outcome: "accepted",
+                reason: "-",
+                spent: 15,
+                mass: 600,
+                post: 0,
+                mutated: true,
+            },
+        ];
+
+        let mut accepted_low = 0;
+        let mut low_spent = 0_u64;
+        let mut low_mass = 0_u64;
+        for expected in expected {
+            let mut world = World {
+                characters: CharacterOwner::seed([(
+                    CharacterId(1),
+                    Stamina::new(expected.start).unwrap(),
+                )])
+                .unwrap(),
+                economy: EconomyOwner::seed_sites([(
+                    SiteId(1),
+                    InfraTier::Established,
+                    MassGrams::new(10_000),
+                )])
+                .unwrap(),
+                social: SocialOwner::seed_claims([(ClaimId(1), CharacterId(1), SiteId(1), true)])
+                    .unwrap(),
+            };
+            validate_world_coherence(&world).unwrap();
+            let before_hash = world.hash();
+            let stamina = world.characters.stamina(CharacterId(1)).unwrap();
+            let band = stamina.band();
+            let table_cost = STAMINA_COST_BY_BAND[band.index()];
+            let exact_headroom = stamina.spend_exact(table_cost).is_some();
+            let receipt = submit(
+                &mut world,
+                1,
+                Command::Gather(GatherCommand {
+                    actor: CharacterId(1),
+                    claim: ClaimId(1),
+                    site: SiteId(1),
+                }),
+            );
+            let post = world.characters.stamina(CharacterId(1)).unwrap().points();
+            let mutated = before_hash != world.hash();
+            println!(
+                "trial013 training start={} band={} table_cost={} exact_headroom={} outcome={} reason={} spent={} mass={} post={} mutated={}",
+                expected.start,
+                band.code(),
+                table_cost,
+                exact_headroom,
+                receipt.outcome.code(),
+                receipt.outcome.reason_code(),
+                receipt.stamina_spent,
+                receipt.mass_moved.grams(),
+                post,
+                mutated,
+            );
+
+            assert_eq!(band, expected.band);
+            assert_eq!(table_cost, expected.table_cost);
+            assert_eq!(receipt.outcome.code(), expected.outcome);
+            assert_eq!(receipt.outcome.reason_code(), expected.reason);
+            assert_eq!(receipt.stamina_spent, expected.spent);
+            assert_eq!(receipt.mass_moved.grams(), expected.mass);
+            assert_eq!(post, expected.post);
+            assert_eq!(mutated, expected.mutated);
+
+            if band == StaminaBand::Low {
+                accepted_low += usize::from(receipt.outcome == OutcomeKind::Accepted);
+                low_spent += u64::from(receipt.stamina_spent);
+                low_mass += receipt.mass_moved.grams();
+            }
+        }
+
+        assert_eq!(accepted_low, 1);
+        assert_eq!(low_spent, 15);
+        assert_eq!(low_mass, 600);
+        println!(
+            "trial013 training_summary accepted_low=1/3 low_spent=15 low_mass=600 meaning_signal=none verdict=inconclusive holdout=sealed_unrevealed"
+        );
+    }
 }
