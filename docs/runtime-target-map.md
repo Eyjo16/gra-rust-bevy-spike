@@ -9,8 +9,15 @@ authority dependency. Branch IDs are provisional until author/lead ruling.
 
 ## Current position
 
-Integrated master contains Meaning Gate v0.2 and trials 007–010. The full gate
-passes with exact Bevy parity and envelope:
+Integrated master now contains Meaning Gate v0.2, trials 007–010, R01–R03,
+D01, TS01, and the bounded RS01 live Publication renderer. RS01 arrived only
+after R01–R03 named the non-authoritative publication seam; its off-by-default
+`bevy-render` feature is the D04 slice's named X11/2D consumer. It does not
+promote `bevy-full`, persistence, a registry/schema, or gameplay meaning.
+
+The full default and `bevy-host` gates pass with exact Bevy parity and the
+frozen envelope below; the additional `bevy-render` gate passes 73 tests while
+the default and host sets pass 56 and 65 respectively:
 
 ```text
 grammar=0x530003916889b952
@@ -214,6 +221,13 @@ Dependency sweeps begin only after R00 and should be capability-scoped:
    `bevy-full`; retain the broad feature only if its extra surface has named
    consumers and gates.
 
+**D04 status: PASSED for the bounded RS01 slice** on 2026-08-14 through
+`e666cb6`, merged as `cab61be`. The renderer consumes typed Publication facts
+and canonical receipts through `Host`, has no truth writeback, is off by
+default, and leaves the frozen default/host envelope unchanged. This result is
+not a blanket authorization for additional window, input, asset, or render
+capabilities; each still needs a named consumer and gate.
+
 Standing dependency invariant:
 
 > The default pure truth gate remains zero-dependency. A host dependency may
@@ -229,6 +243,7 @@ These branches should not be mistaken for dependency prerequisites:
 | trial/011 | Low dead interval and 39→40 / 79→80 dominance cliffs | Measurement evidence; needs rebase/review before any integration |
 | trial/012 | Active yield table is exactly rank one | Mathematical hypothesis falsified; direction still requires author meaning |
 | trial/013 | H-A descriptive band vs H-B action-affording band | Inconclusive; cost remains 15; holdout sealed and unexecuted |
+| trial/014 | Test-only anticipation ranking with cap 1 over two already-legal intents | Pushed at `bd2f8ca`; independent cross-review and author meaning verdict still required; no production integration |
 
 None of them authorizes a dependency to decide gameplay meaning. Their next
 movement belongs to the Meaning Gate after runtime authority is clearer.
