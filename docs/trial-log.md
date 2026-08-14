@@ -1,5 +1,41 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-14 — RS01 live Bevy publication render (red→green candidate)
+
+Author dispatch: implement RS01 against `fca5237`; treat the HTML scene only
+as `RS01-VISUAL-REFERENCE`; the proof itself must consume live Bevy
+publications from a real boundary trace. The full envelope, capability-red,
+expression-policy restraint, evidence, and eventual claims table live in
+`docs/rs01-live-render-report.md`.
+
+Red captured before renderer implementation: broad default Bevy features
+failed on the unallocated `wayland-client` system dependency; after selecting
+the named X11/2D capability slice, the binary built and then rejected the
+dispatched command with `unknown command: rs01-render`. No registry, schema,
+closed vocabulary, value, receipt, fixture identity, or oracle behavior is in
+scope.
+
+Green candidate: added the off-by-default `bevy-render` X11/2D capability,
+executed the bounded two-actor trace through `Host`, and rendered only typed
+facts copied from identified Bevy publication-view entities plus the canonical
+receipts returned by those submissions. A real 1280 × 800 Bevy/winit window
+under Mesa llvmpipe produced five game-facing frames and five optional exact-
+proof overlays: initial, refused, witnessed, gathered, aftermath. The first
+capture exposed unsupported Icelandic glyphs in Bevy's bundled font; the one
+allowed clarity pass changed only non-authoritative display copy and the final
+sets were visually inspected clean.
+
+Pre-commit gate: formatting and strict default/`bevy-host`/`bevy-render`
+clippy green; 56 default, 65 `bevy-host`, and 68 `bevy-render` tests pass;
+dual runtime envelope remains `grammar=0x530003916889b952`,
+`fixture=0x3805f1e20c001051`, `receipts=0x6c5b0e011471d985`,
+`world=0x36221d3fdb8aed9a`, `oracles=10v4`. One user-approved WSL runtime
+package (`libxkbcommon-x11-0`, plus `libxcb-xkb1`) was required to open the
+X11 window. Full frame hashes, bounded claims, limits, and reproduction command
+are in `docs/rs01-live-render-report.md`. Independent ratification remains
+pending; no registry, schema, vocabulary, value, receipt, oracle, or canonical
+truth contract changed.
+
 ## 2026-08-12 — bundle: TS01 truth-shape extractor (red→green)
 
 Instrument: the dispatched envelope

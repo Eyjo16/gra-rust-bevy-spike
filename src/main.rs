@@ -19,6 +19,8 @@ mod economy;
 #[cfg(feature = "bevy-host")]
 mod host_bevy;
 mod oracles;
+#[cfg(feature = "bevy-render")]
+mod render_bevy;
 mod shapes;
 mod social;
 
@@ -126,6 +128,23 @@ fn main() -> ExitCode {
             }
             println!("truth_shapes emitted dir={dir} source_commit={source_commit}");
             return ExitCode::SUCCESS;
+        }
+        if command == "rs01-render" {
+            #[cfg(feature = "bevy-render")]
+            {
+                let dir = args.next().unwrap_or_else(|| "rs01-render".to_owned());
+                let proof = args.any(|argument| argument == "--proof");
+                return if render_bevy::run(std::path::Path::new(&dir), proof) {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                };
+            }
+            #[cfg(not(feature = "bevy-render"))]
+            {
+                eprintln!("rs01-render requires --features bevy-render");
+                return ExitCode::FAILURE;
+            }
         }
         eprintln!("unknown command: {command}");
         return ExitCode::FAILURE;
