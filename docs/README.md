@@ -35,6 +35,7 @@ decision, migration account, and approval.
 | `trial-009-language-seam-report.md` | Standalone evidence | Records the pre-command normalization red, canonical-byte observation point, adversarial matrix, and pressure verdict |
 | `transition-domain-report.md` | Standalone evidence | Records trial/007's bounded pure/Bevy parity result and the value-cell reachability pressure map |
 | `active-cell-reachability-report.md` | Standalone evidence | Records trial/010's systematic 12-cell reachability and stock-boundary pressure |
+| `trial-012-confluence-shape-report.md` | Standalone evidence | Preserves the exact rank-one confluence measurement while withholding all axis and value decisions |
 | `runtime-contract-proposal.md` | Ratified law | Runtime Contract v0.1 (R1–R7 with amendments): current executable runtime law, semantic rulings, and the durability gap |
 | `runtime-target-map.md` | Active work map | Orders runtime falsifiers and capability-scoped dependency sweeps by authority; carries per-target status |
 | `rs01-live-render-report.md` | Standalone evidence | Records the RS01 capability red, live Publication/receipt render proof, screenshot evidence, and bounded claims |
