@@ -23,7 +23,7 @@ Derived, non-authoritative; when this disagrees with refs, refs win.
 - **One future conflict exists and is hereby defused:** `b384048`
   contains a superseded partial RS01 touching `Cargo.toml`,
   `src/host_bevy.rs`, `src/main.rs`. If it were ever merged after
-  `e666cb6` lands, it would collide. Disposition: the claude/ branch is
+  `d43927c` lands, it would collide. Disposition: the claude/ branch is
   an **evidence archive**. Never merge it into master. If the
   cold-repro-001 document (`b2436cb`) is wanted on master, cherry-pick
   that single doc commit; discard `b384048`'s code by simply never
