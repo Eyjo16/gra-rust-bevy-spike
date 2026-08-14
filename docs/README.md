@@ -42,6 +42,7 @@ decision, migration account, and approval.
 | `rs01-visual-fact-map.md` | Implementation evidence | Classifies every meaningful RS01 default-view element by Publication, receipt, derivation, expression, or interaction source |
 | `environment-evidence-cold-repro-001.md` | Standalone environment evidence | Records an independent cold-machine gate reproduction and the observed `bevy-host` Rust floor |
 | `integration-consolidation-2026-08-14.md` | Integration record | Reconciles reachable RS01 identities, compute merges, held evidence, and the next safe boundary |
+| `lead-iteration-map-2026-08-14.md` | Lead proposal | E01 review verdict, ordered iteration map with falsifiable shapes, the Give verb pick, scaffolding notes S1–S7, and the standing author-decision list — for author + drift-master review |
 
 ## Maintenance rule
 
