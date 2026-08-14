@@ -52,3 +52,4 @@ decision, migration account, and approval.
 - Link every new report from this index and from the relevant trial-log entry.
 - Keep mechanical fixtures and provisional balance values visibly labeled as
   hypotheses until evidence promotes them.
+| `rs01-human-review-protocol.md` | Human-gate protocol | Pre-registers uncoached F1/F10 questions, scoring, evidence capture, and invalidation conditions without claiming a human pass |
