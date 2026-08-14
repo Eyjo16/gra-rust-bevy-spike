@@ -302,8 +302,13 @@ Current-port claims (trial/013-current#N):
 
 | # | Atomic claim | Scope | Evidence mode | Evidence reference |
 |---|---|---|---|---|
-
+| 1 | The disclosed training fixture on current master reproduces the pre-registered H-A mechanical rows for starts 9, 10, 14, and 15 | test-only training fixture; not semantic selection | measurement | `boundary::tests::trial_013_low_actionability_training_does_not_select_meaning` |
+| 2 | The decision-frame answers independently support H-A as the verdict candidate but do not themselves record author ratification | meaning preparation only | derivation | decision-frame bullets and ratification sentence above |
+| 3 | The current-port branch changes no gameplay value, grammar/fixture/judge identity, contract, registry/schema, closed vocabulary, or production behavior | `2dd4db5..tested_commit` | diff audit | `git diff --stat 2dd4db5..tested_commit`; frozen `10v4` runtime envelope |
+| 4 | The sealed holdout remains unrevealed, unexecuted, and absent from executable source | trial/013 holdout only | source audit | focused test prints `holdout=sealed_unrevealed`; source search for the holdout fixture finds only this report |
+| 5 | The current-port tip passes all three feature gates and both feature-enabled runtime parity probes | tested branch tip | measurement | gate record below: 57 / 66 / 74 tests; receipts/state/world parity true |
 Current-port gate on the staged tree: the focused disclosed-training test
+
 passed and printed `holdout=sealed_unrevealed`; format and all three strict
 Clippy suites passed; tests passed 57 default / 66 bevy-host / 74
 bevy-render. Both feature-enabled runtime probes exited 0 with receipts,
