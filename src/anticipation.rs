@@ -4,7 +4,7 @@
 //! intents before an experimental plan seal, but has no authority to change
 //! canonical commands, receipts, values, or the ten-oracle suite.
 
-use std::collections::BTreeMap;
+use std::{cmp::Ordering, collections::BTreeMap};
 
 use crate::boundary::{CharacterId, Fnv1a, OutcomeKind, Receipt, Verb};
 
@@ -90,45 +90,67 @@ impl IntentKind {
 /// receipt. Evaluation may rank these bytes but cannot rewrite them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ValidatedIntent {
-    kind: IntentKind,
     committed_cost: u8,
     committed_yield: u64,
 }
 
 impl ValidatedIntent {
-    fn from_receipt(kind: IntentKind, receipt: &Receipt) -> Option<Self> {
+    fn from_receipt(receipt: &Receipt) -> Option<Self> {
         (receipt.verb == Verb::Gather
             && matches!(
                 receipt.outcome,
                 OutcomeKind::Accepted | OutcomeKind::Partial(_)
             ))
         .then_some(Self {
-            kind,
             committed_cost: receipt.stamina_spent,
             committed_yield: receipt.mass_moved.grams(),
         })
     }
 
-    fn committed_bytes(self) -> [u8; 10] {
-        let mut bytes = [0; 10];
-        bytes[0] = self.kind.index() as u8;
-        bytes[1] = self.committed_cost;
-        bytes[2..].copy_from_slice(&self.committed_yield.to_be_bytes());
+    fn committed_bytes(self) -> [u8; 9] {
+        let mut bytes = [0; 9];
+        bytes[0] = self.committed_cost;
+        bytes[1..].copy_from_slice(&self.committed_yield.to_be_bytes());
         bytes
     }
 }
 
+/// Derive semantic roles from the commitments rather than caller labels.
+/// The trial shape requires one cheaper/lower-yield intent and one
+/// costlier/higher-yield intent; ties and crossed trade-offs fail closed.
+fn semantic_intents(intents: &[ValidatedIntent; 2]) -> Option<[ValidatedIntent; 2]> {
+    let [left, right] = *intents;
+    match (
+        left.committed_cost.cmp(&right.committed_cost),
+        left.committed_yield.cmp(&right.committed_yield),
+    ) {
+        (Ordering::Less, Ordering::Less) => Some([left, right]),
+        (Ordering::Greater, Ordering::Greater) => Some([right, left]),
+        _ => None,
+    }
+}
+
 fn legal_intent_set_hash(intents: &[ValidatedIntent; 2]) -> u64 {
+    let mut commitments = intents.map(ValidatedIntent::committed_bytes);
+    commitments.sort_unstable();
     let mut hasher = Fnv1a::default();
-    for intent in intents {
-        hasher.update(&intent.committed_bytes());
+    for commitment in commitments {
+        hasher.update(&commitment);
     }
     hasher.finish()
 }
 
+fn bounded_modifier(raw: i8) -> Option<i8> {
+    (-DRIVE_MODIFIER_CAP..=DRIVE_MODIFIER_CAP)
+        .contains(&raw)
+        .then_some(raw)
+}
+
 /// Pure score contribution from one belief record. The cheap intent remains
 /// the zero reference; drive can rank but never alter a committed intent.
-fn drive_modifier(record: BeliefRecord, kind: IntentKind) -> i8 {
+/// A table entry outside the declared cap rejects evaluation rather than
+/// being silently clamped into a different ranking.
+fn drive_modifier(record: BeliefRecord, kind: IntentKind) -> Option<i8> {
     let raw = match kind {
         IntentKind::Cheap => 0,
         IntentKind::Costly => match record.drive {
@@ -137,7 +159,7 @@ fn drive_modifier(record: BeliefRecord, kind: IntentKind) -> i8 {
             Drive::Good | Drive::Superb => 1,
         },
     };
-    raw.clamp(-DRIVE_MODIFIER_CAP, DRIVE_MODIFIER_CAP)
+    bounded_modifier(raw)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -173,7 +195,7 @@ impl EvaluationReceipt {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SealedPlan {
-    committed_intent: [u8; 10],
+    committed_intent: [u8; 9],
     evaluation_receipt_hash: u64,
 }
 
@@ -192,20 +214,29 @@ fn evaluate_and_seal(
     intents: &[ValidatedIntent; 2],
 ) -> Option<EvaluatedPlan> {
     let belief = beliefs.record(agent)?;
+    let [cheap, costly] = semantic_intents(intents)?;
     let modifiers = [
-        drive_modifier(belief, intents[0].kind),
-        drive_modifier(belief, intents[1].kind),
+        drive_modifier(belief, IntentKind::Cheap)?,
+        drive_modifier(belief, IntentKind::Costly)?,
     ];
 
-    // Stable first-member tie break keeps BAD/AVERAGE on the cheap intent.
-    let selected_index = usize::from(modifiers[1] > modifiers[0]);
-    let selected = intents[selected_index];
+    // A tie resolves to the semantic cheap intent, independent of input order.
+    let selected_kind =
+        if modifiers[IntentKind::Costly.index()] > modifiers[IntentKind::Cheap.index()] {
+            IntentKind::Costly
+        } else {
+            IntentKind::Cheap
+        };
+    let selected = match selected_kind {
+        IntentKind::Cheap => cheap,
+        IntentKind::Costly => costly,
+    };
     let receipt = EvaluationReceipt {
         agent,
         drive: belief.drive,
         legal_intent_set_hash: legal_intent_set_hash(intents),
         modifiers,
-        selected: selected.kind,
+        selected: selected_kind,
     };
 
     // The receipt must exist before the plan can bind to its hash.
@@ -220,7 +251,7 @@ fn evaluate_and_seal(
 mod tests {
     use super::{
         AnticipationBeliefs, BeliefRecord, DRIVE_MODIFIER_CAP, Drive, IntentKind, ValidatedIntent,
-        evaluate_and_seal, legal_intent_set_hash,
+        bounded_modifier, evaluate_and_seal, legal_intent_set_hash,
     };
     use crate::boundary::{
         CharacterId, ClaimId, Command, GatherCommand, InfraTier, MassGrams, OutcomeKind, Receipt,
@@ -278,9 +309,8 @@ mod tests {
         assert_eq!(costly_receipt.outcome, OutcomeKind::Accepted);
 
         let intents = [
-            ValidatedIntent::from_receipt(IntentKind::Cheap, &cheap_receipt)
-                .expect("accepted cheap intent is legal"),
-            ValidatedIntent::from_receipt(IntentKind::Costly, &costly_receipt)
+            ValidatedIntent::from_receipt(&cheap_receipt).expect("accepted cheap intent is legal"),
+            ValidatedIntent::from_receipt(&costly_receipt)
                 .expect("accepted costly intent is legal"),
         ];
         assert!(intents[0].committed_cost < intents[1].committed_cost);
@@ -306,13 +336,24 @@ mod tests {
         ];
 
         assert_eq!(DRIVE_MODIFIER_CAP, 1);
+        assert_eq!(bounded_modifier(-2), None);
+        assert_eq!(bounded_modifier(-1), Some(-1));
+        assert_eq!(bounded_modifier(1), Some(1));
+        assert_eq!(bounded_modifier(2), None);
+        let reversed_intents = [intents[1], intents[0]];
         for (agent, drive, expected) in cases {
             let evaluated = evaluate_and_seal(&beliefs, agent, &intents)
                 .expect("agent has an anticipation belief");
             let replay =
                 evaluate_and_seal(&beliefs, agent, &intents).expect("pure evaluation replays");
+            let reversed = evaluate_and_seal(&beliefs, agent, &reversed_intents)
+                .expect("input order does not change semantic validity");
 
             assert_eq!(evaluated, replay, "belief-only evaluation must be pure");
+            assert_eq!(
+                reversed, evaluated,
+                "semantic selection and set identity must ignore input order"
+            );
             assert_eq!(evaluated.receipt.drive, drive);
             assert_eq!(evaluated.receipt.selected, expected);
             assert_eq!(evaluated.receipt.legal_intent_set_hash, legal_hash_before);
@@ -333,6 +374,12 @@ mod tests {
             );
             println!("{}", evaluated.receipt.canonical_line());
         }
+
+        assert_eq!(
+            legal_intent_set_hash(&reversed_intents),
+            legal_hash_before,
+            "set identity must ignore input order",
+        );
 
         let legal_bytes_after = intents.map(ValidatedIntent::committed_bytes);
         let refusals_after = low_dead_zone_receipts();

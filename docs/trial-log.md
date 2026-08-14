@@ -94,6 +94,98 @@ Bundle metadata: author Fable 5; rustc/cargo 1.97.1, WSL2; base
 shared assumptions: same clone and gate commands as the reviewer.
 Artifacts and run record: `gragas-local-compute` branch `run/TS01`.
 
+## 2026-08-14 - trial/014 independent-review response
+
+Instrument (author-dispatched alignment before integration):
+
+```text
+base_commit:         bd2f8ca
+objective:           accept the independent permutation findings and make
+                     BAD/AVERAGE -> semantic cheap and GOOD/SUPERB ->
+                     semantic costly independent of input order, with a
+                     canonical legal-set identity and fail-closed cap
+authoritative_files: AGENTS.md, docs/meaning-gate.md,
+                     docs/development-workflow.md, src/boundary.rs,
+                     independent Fable 5 review of bd2f8ca
+write_scope:         src/anticipation.rs, docs/trial-log.md
+frozen:              production wiring; canonical commands/receipts;
+                     registry/schema; all cost/yield/band values; trial/013
+                     and its sealed holdout; grammar, fixture, receipt/world
+                     identities and oracles=10v4
+red_required:        yes - the committed permutation probe must fail on the
+                     reviewed implementation before the alignment
+verification:        focused red/green; fmt; strict default and bevy-host
+                     clippy; default and bevy-host tests; bevy-host runtime
+                     envelope; exact diff and clean tree
+evidence:            red/green output below; reviewer verdict disposition;
+                     clean tested tip named in the integration handoff
+limits:              trial-only code; no dependency, production, meaning,
+                     value, registry/schema, or holdout change
+escalate_when:       any resolution requires changing a frozen item or
+                     selecting anticipation meaning beyond this trial shape
+tested_commit:       clean branch tip named after this record is committed
+```
+
+The independent reviewer returned claims 3, 5, 6, and 7 CONFIRMED;
+claims 2 and 4 OVERSTATED; and claim 1 UNVERIFIABLE only as an exact
+byte-reproduction because the original red-only source was not committed.
+The capability absence itself was independently reproduced. The original
+verbatim-red exactness is withdrawn; the historical transcript remains
+unchanged below rather than being rewritten.
+
+The new committed probe first failed on `bd2f8ca`, exit 1:
+
+```text
+assertion `left == right` failed:
+semantic selection and set identity must ignore input order
+  left: (Costly, 2911889435201929265)  # 0x28691c03726c8031
+ right: (Cheap, 17705930327917268809) # 0xf5b819d2bd530f49
+```
+
+This reproduces both accepted findings in one unit: AVERAGE followed the
+first array member, and the alleged set identity changed under permutation.
+
+Resolution:
+
+- `ValidatedIntent` no longer accepts a caller-assigned cheap/costly label.
+  Semantic roles are derived from the committed pair: cheap must have both
+  lower cost and lower yield; costly must have both higher cost and higher
+  yield. Ties and crossed trade-offs reject evaluation.
+- Legal-set identity sorts the two 9-byte cost/yield commitments before
+  hashing. Forward and reversed inputs therefore produce the same identity.
+- A semantic cheap tie-break makes AVERAGE order-independent. The committed
+  permutation probe requires the complete `EvaluatedPlan` to be identical
+  for both input orders across BAD, AVERAGE, GOOD, and SUPERB.
+- The cap no longer silently clamps. `bounded_modifier` accepts -1..=1 and
+  returns `None` outside the declared cap; the test pins rejection at -2/2.
+
+Focused green, same command, exit 0:
+
+```text
+agent=C101 drive=bad legal_intents=0x8ab7c3d4010cb960 cheap_modifier=0 costly_modifier=-1 selected=cheap cap=1
+agent=C102 drive=average legal_intents=0x8ab7c3d4010cb960 cheap_modifier=0 costly_modifier=0 selected=cheap cap=1
+agent=C103 drive=good legal_intents=0x8ab7c3d4010cb960 cheap_modifier=0 costly_modifier=1 selected=costly cap=1
+agent=C104 drive=superb legal_intents=0x8ab7c3d4010cb960 cheap_modifier=0 costly_modifier=1 selected=costly cap=1
+trial014 summary cap=1 legal_hash=0x8ab7c3d4010cb960 membership_unchanged=true costs_yields_unchanged=true low_10_14_refusals_unchanged=true
+test result: ok. 1 passed; 0 failed
+```
+
+The hash change is trial-local and is caused solely by removing the
+caller-provided kind byte and canonicalizing member order. No canonical
+identity, receipt, cost, yield, vocabulary, registry, schema, or oracle
+changed. Independent re-review of this response tip remains required before
+integration; passing it does not decide anticipation meaning.
+
+Response claims (`trial/014-response#N`):
+
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
+|---|---|---|---|---|
+| 1 | All four drive selections and sealed plans are identical under the two input permutations | committed two-intent fixture | behavioral-red | focused permutation test |
+| 2 | Legal-set identity is identical under the two input permutations | two committed cost/yield byte strings | behavioral-red | focused hash assertion |
+| 3 | Modifier values outside -1..=1 reject instead of clamp | trial cap helper | behavioral-red | bounded_modifier -2/-1/1/2 assertions |
+| 4 | Cheap/costly roles are derived from strict cost-and-yield ordering, not a caller label | trial evaluator input pair | derivation | semantic_intents; ValidatedIntent::from_receipt |
+| 5 | Original values, canonical identities, production wiring, and trial/013 remain unchanged | bd2f8ca..tested_commit | measurement | exact diff; clean full gate |
+
 ## 2026-08-13 - trial/014 anticipation drive: pre-registration
 
 Instrument (authoring envelope, as dispatched by Eyjo):
