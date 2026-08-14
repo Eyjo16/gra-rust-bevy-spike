@@ -1,7 +1,9 @@
 # RS01 — live Bevy publication render
 
-Status: **GREEN IMPLEMENTATION CANDIDATE; human gate and independent
-ratification pending**. Author-dispatched 2026-08-14. Base `fca5237`.
+Status: **INTEGRATED on truth master through merge `cab61be`; mechanical
+gate green, human F1/F10 still unmeasured**. Author-dispatched 2026-08-14.
+Base `fca5237`; implementation tip `e666cb6`. Integration does not promote
+the unmeasured comprehension questions into a pass.
 
 ## Envelope as run
 
@@ -191,6 +193,6 @@ historical/semantic claim. Question three is a continuation signal only, not
 an RS01 pass condition. Screenshots are evidence outputs, never authority.
 
 `bevy-full` remains the broad, separately allocated engine feature and is not
-part of the RS01 gate. Independent review must reproduce the exact diff,
-tests, interactive path, capture command, dimensions, hashes, and visual
-verdict before ratification or integration.
+part of the RS01 gate. Integration records the author's instruction and green
+mechanical gates; independent review of the exact diff, interactive path,
+captures, hashes, and visual verdict remains required before ratification.

@@ -59,6 +59,30 @@ Name the hypothesis and its falsifier before implementation. Record it at the
 top of `docs/trial-log.md`; use a standalone report when the evidence becomes
 large.
 
+### Cross-machine claim and identity check
+
+A dispatch has one executor at a time. When more than one machine can see the
+work, the executor claims the branch by pushing its starting ref before making
+implementation commits. A second machine may review that ref, but does not
+start a parallel implementation under the same branch identity.
+
+Commit identities in handoffs and coordination records are observations, not
+authority. Before a commit is recorded as reachable, verify it against an
+accessible ref and object store:
+
+```sh
+git fetch --prune origin
+git cat-file -e <commit>^{commit}
+git branch -a --contains <commit>
+```
+
+For a bundle, record its SHA-256, run `git bundle verify`, and inspect
+`git bundle list-heads` before naming any contained commit as available. A
+hash copied from an agent report is never promoted into a coordination record
+by memory alone. A superseded evidence branch is filtered commit-by-commit;
+its useful standalone evidence may be cherry-picked, but its code is not
+merged merely to preserve the history.
+
 ### 2. Create an isolated worktree
 
 ```sh

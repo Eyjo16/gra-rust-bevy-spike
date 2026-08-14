@@ -39,6 +39,8 @@ decision, migration account, and approval.
 | `runtime-target-map.md` | Active work map | Orders runtime falsifiers and capability-scoped dependency sweeps by authority; carries per-target status |
 | `rs01-live-render-report.md` | Standalone evidence | Records the RS01 capability red, live Publication/receipt render proof, screenshot evidence, and bounded claims |
 | `rs01-visual-fact-map.md` | Implementation evidence | Classifies every meaningful RS01 default-view element by Publication, receipt, derivation, expression, or interaction source |
+| `environment-evidence-cold-repro-001.md` | Standalone environment evidence | Records an independent cold-machine gate reproduction and the observed `bevy-host` Rust floor |
+| `integration-consolidation-2026-08-14.md` | Integration record | Reconciles reachable RS01 identities, compute merges, held evidence, and the next safe boundary |
 
 ## Maintenance rule
 
