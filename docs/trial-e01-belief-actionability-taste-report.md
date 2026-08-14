@@ -2,7 +2,7 @@
 
 Date: 2026-08-14
 
-Status: **implemented and mechanically proven; human/manual verdict pending**
+Status: **mechanical and human/manual PASS**
 
 Branch baseline: `9a766ca`
 
@@ -178,4 +178,24 @@ QA, not the required player-driven human verdict.
 belief legible against one unchanged canonical actionability edge, without
 giving belief or presentation authority over the world. Balance meaning,
 general character inference, and inventory design are not ratified here. The
-manual loop remains open and must be reported separately.
+manual loop is reported separately below.
+
+## Human/manual verdict
+
+On exact evidence tip `9df3a90`, the author ran:
+
+```text
+cargo run --features e01-taste -- e01-render
+```
+
+The author advanced the complete four-beat loop and observed the unchanged
+Publication on Hrafn's refusal, the new Publication after Egil's accepted
+action, and the retained pre-action beliefs in both later beats. The rendered
+window used Mesa llvmpipe; its XSETTINGS, software-rendering, and XRandR
+messages were environmental warnings, not trial failures.
+
+Author verdict: **PASS** — "the grammar seems to do its sensible behaviour."
+This closes the human/manual gate for the bounded E01 trace. It ratifies the
+legibility and sensible behavior of this installed grammar edge only; it does
+not ratify balance values, generalized character inference, inventory design,
+or a registry/schema contract.

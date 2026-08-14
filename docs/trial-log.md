@@ -1,5 +1,20 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-14 — E01 author manual verdict (PASS)
+
+The author ran the complete interactive E01 loop on exact evidence tip
+`9df3a90` with `cargo run --features e01-taste -- e01-render`. The console
+trace preserved Publication `0xa650191d3c5fe826` through Hrafn's refused
+start-14 action, advanced truth to `0x4d2c6d5c1cd8f7c8` after Egil spent 15
+and moved 600 g, and retained both identified pre-action beliefs throughout.
+The visible loop was accepted with the verdict: **"the grammar seems to do its
+sensible behaviour."**
+
+Human/manual gate: **PASS** for this bounded belief/actionability taste. The
+verdict does not promote fixture values, generalized inference, inventory,
+registry, or schema. The mechanical evidence remains in the section and
+standalone report below.
+
 ## 2026-08-14 — E01 belief/actionability render taste (mechanical PASS)
 
 Author dispatch: after integrating trial/014 and trial/013 locally, taste the
