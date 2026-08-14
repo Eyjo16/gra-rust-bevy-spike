@@ -1429,4 +1429,312 @@ mod tests {
             "stale plan committed partially: the character spend landed without the extraction"
         );
     }
+
+    const THRESHOLD_EDGE_STARTS: [u8; 8] = [9, 10, 14, 15, 39, 40, 79, 80];
+
+    #[derive(Debug)]
+    struct ChainObservation {
+        start: u8,
+        starting_band: StaminaBand,
+        policy_cost: u8,
+        exact_headroom: bool,
+        first_outcome: &'static str,
+        first_reason: &'static str,
+        first_spent: u8,
+        first_yield: u64,
+        first_post: u8,
+        accepted_chain: usize,
+        total_yield: u64,
+        final_stamina: u8,
+        stop_reason: &'static str,
+        path: String,
+    }
+
+    #[derive(Debug)]
+    struct EdgeObservation {
+        gather: ChainObservation,
+        witness: ChainObservation,
+    }
+
+    fn gather_edge_world(start: u8) -> World {
+        World {
+            characters: CharacterOwner::seed([(CharacterId(1), Stamina::new(start).unwrap())])
+                .unwrap(),
+            economy: EconomyOwner::seed_sites([(
+                SiteId(1),
+                InfraTier::Established,
+                MassGrams::new(100_000),
+            )])
+            .unwrap(),
+            social: SocialOwner::seed_claims([(ClaimId(1), CharacterId(1), SiteId(1), true)])
+                .unwrap(),
+        }
+    }
+
+    fn witness_edge_world(start: u8) -> World {
+        World {
+            characters: CharacterOwner::seed([
+                (CharacterId(1), Stamina::new(start).unwrap()),
+                (CharacterId(2), Stamina::new(100).unwrap()),
+            ])
+            .unwrap(),
+            economy: EconomyOwner::seed_sites([(
+                SiteId(1),
+                InfraTier::Established,
+                MassGrams::new(100_000),
+            )])
+            .unwrap(),
+            social: SocialOwner::seed_claims(
+                (1_u64..=17).map(|claim| (ClaimId(claim), CharacterId(2), SiteId(1), false)),
+            )
+            .unwrap(),
+        }
+    }
+
+    fn observe_gather_chain(start: u8) -> ChainObservation {
+        let mut world = gather_edge_world(start);
+        validate_world_coherence(&world).unwrap();
+        let starting_band = Stamina::new(start).unwrap().band();
+        let policy_cost = STAMINA_COST_BY_BAND[starting_band.index()];
+        let exact_headroom = Stamina::new(start)
+            .unwrap()
+            .spend_exact(policy_cost)
+            .is_some();
+        let mut first: Option<(&'static str, &'static str, u8, u64, u8)> = None;
+        let mut accepted_chain = 0;
+        let mut total_yield = 0_u64;
+        let mut steps = Vec::new();
+        let stop_reason = loop {
+            let receipt = submit(
+                &mut world,
+                accepted_chain as u64 + 1,
+                Command::Gather(GatherCommand {
+                    actor: CharacterId(1),
+                    claim: ClaimId(1),
+                    site: SiteId(1),
+                }),
+            );
+            let post = world.characters.stamina(CharacterId(1)).unwrap().points();
+            first.get_or_insert((
+                receipt.outcome.code(),
+                receipt.outcome.reason_code(),
+                receipt.stamina_spent,
+                receipt.mass_moved.grams(),
+                post,
+            ));
+            match receipt.outcome {
+                OutcomeKind::Accepted | OutcomeKind::Partial(_) => {
+                    let band = receipt.band.expect("known actor has a band");
+                    assert_eq!(
+                        receipt.stamina_spent,
+                        STAMINA_COST_BY_BAND[band.index()],
+                        "receipt cost must follow the band at each transition"
+                    );
+                    assert_eq!(
+                        receipt.mass_moved.grams(),
+                        YIELD_TABLE_GRAMS[band.index()][InfraTier::Established.index()],
+                        "receipt yield must follow the active cell"
+                    );
+                    steps.push(format!(
+                        "{}:{}/{}g->{}",
+                        band.code(),
+                        receipt.stamina_spent,
+                        receipt.mass_moved.grams(),
+                        post
+                    ));
+                    accepted_chain += 1;
+                    total_yield += receipt.mass_moved.grams();
+                    assert!(accepted_chain <= 16, "edge gather chain did not terminate");
+                }
+                OutcomeKind::Refused(reason) => break reason.code(),
+            }
+        };
+        let (first_outcome, first_reason, first_spent, first_yield, first_post) =
+            first.expect("every chain submits at least once");
+        ChainObservation {
+            start,
+            starting_band,
+            policy_cost,
+            exact_headroom,
+            first_outcome,
+            first_reason,
+            first_spent,
+            first_yield,
+            first_post,
+            accepted_chain,
+            total_yield,
+            final_stamina: world.characters.stamina(CharacterId(1)).unwrap().points(),
+            stop_reason,
+            path: if steps.is_empty() {
+                "-".to_owned()
+            } else {
+                steps.join(",")
+            },
+        }
+    }
+
+    fn observe_witness_chain(start: u8) -> ChainObservation {
+        let mut world = witness_edge_world(start);
+        validate_world_coherence(&world).unwrap();
+        let starting_band = Stamina::new(start).unwrap().band();
+        let exact_headroom = Stamina::new(start)
+            .unwrap()
+            .spend_exact(WITNESS_COST)
+            .is_some();
+        let mut first: Option<(&'static str, &'static str, u8, u64, u8)> = None;
+        let mut accepted_chain = 0;
+        let mut steps = Vec::new();
+        let stop_reason = loop {
+            let claim = ClaimId(accepted_chain as u64 + 1);
+            let receipt = submit(
+                &mut world,
+                accepted_chain as u64 + 1,
+                Command::Witness(WitnessCommand {
+                    witness: CharacterId(1),
+                    claim,
+                }),
+            );
+            let post = world.characters.stamina(CharacterId(1)).unwrap().points();
+            first.get_or_insert((
+                receipt.outcome.code(),
+                receipt.outcome.reason_code(),
+                receipt.stamina_spent,
+                receipt.mass_moved.grams(),
+                post,
+            ));
+            match receipt.outcome {
+                OutcomeKind::Accepted => {
+                    let band = receipt.band.expect("known witness has a band");
+                    assert_eq!(receipt.stamina_spent, WITNESS_COST);
+                    assert_eq!(receipt.mass_moved, MassGrams::ZERO);
+                    steps.push(format!(
+                        "{}:{}/0g->{}",
+                        band.code(),
+                        receipt.stamina_spent,
+                        post
+                    ));
+                    accepted_chain += 1;
+                    assert!(accepted_chain <= 16, "edge witness chain did not terminate");
+                }
+                OutcomeKind::Partial(_) => panic!("witness has no partial outcome"),
+                OutcomeKind::Refused(reason) => break reason.code(),
+            }
+        };
+        let (first_outcome, first_reason, first_spent, first_yield, first_post) =
+            first.expect("every chain submits at least once");
+        ChainObservation {
+            start,
+            starting_band,
+            policy_cost: WITNESS_COST,
+            exact_headroom,
+            first_outcome,
+            first_reason,
+            first_spent,
+            first_yield,
+            first_post,
+            accepted_chain,
+            total_yield: 0,
+            final_stamina: world.characters.stamina(CharacterId(1)).unwrap().points(),
+            stop_reason,
+            path: steps.join(","),
+        }
+    }
+
+    fn collect_threshold_edge_observations() -> Vec<EdgeObservation> {
+        THRESHOLD_EDGE_STARTS
+            .into_iter()
+            .map(|start| EdgeObservation {
+                gather: observe_gather_chain(start),
+                witness: observe_witness_chain(start),
+            })
+            .collect()
+    }
+
+    /// Falsifier (trial/011): isolated band assertions do not expose the
+    /// transition chains produced when thresholds, costs, and verb policies
+    /// interact. The collector must make every named edge comparable.
+    #[test]
+    fn falsification_threshold_edges_need_transition_chain_evidence() {
+        let observations = collect_threshold_edge_observations();
+        assert_eq!(observations.len(), 8);
+        for observation in &observations {
+            let gather = &observation.gather;
+            let witness = &observation.witness;
+            println!(
+                "edge gather start={} band={} policy_cost={} exact_headroom={} first={} reason={} spent={} yield={} first_post={} chain={} total_yield={} final={} stop={} path={}",
+                gather.start,
+                gather.starting_band.code(),
+                gather.policy_cost,
+                gather.exact_headroom,
+                gather.first_outcome,
+                gather.first_reason,
+                gather.first_spent,
+                gather.first_yield,
+                gather.first_post,
+                gather.accepted_chain,
+                gather.total_yield,
+                gather.final_stamina,
+                gather.stop_reason,
+                gather.path,
+            );
+            println!(
+                "edge witness start={} band={} policy_cost={} exact_headroom={} first={} reason={} spent={} yield={} first_post={} chain={} total_yield={} final={} stop={} path={}",
+                witness.start,
+                witness.starting_band.code(),
+                witness.policy_cost,
+                witness.exact_headroom,
+                witness.first_outcome,
+                witness.first_reason,
+                witness.first_spent,
+                witness.first_yield,
+                witness.first_post,
+                witness.accepted_chain,
+                witness.total_yield,
+                witness.final_stamina,
+                witness.stop_reason,
+                witness.path,
+            );
+
+            assert_eq!(gather.start, witness.start);
+            assert_eq!(gather.starting_band, witness.starting_band);
+            assert!(witness.exact_headroom, "all named starts can pay 5");
+            assert_eq!(witness.first_outcome, "accepted");
+            assert_eq!(witness.first_spent, WITNESS_COST);
+            assert_eq!(witness.first_yield, 0);
+            assert_eq!(witness.stop_reason, "insufficient_stamina");
+
+            if gather.starting_band == StaminaBand::Exhausted {
+                assert_eq!(gather.first_outcome, "refused");
+                assert_eq!(gather.first_reason, "actor_exhausted");
+            } else if !gather.exact_headroom {
+                assert_eq!(gather.first_outcome, "refused");
+                assert_eq!(gather.first_reason, "insufficient_stamina");
+            } else {
+                assert_eq!(gather.first_outcome, "accepted");
+                assert_eq!(gather.first_spent, gather.policy_cost);
+            }
+        }
+
+        let by_start = |start| {
+            observations
+                .iter()
+                .find(|observation| observation.gather.start == start)
+                .expect("named edge exists")
+        };
+        let gather_dead_zone: Vec<u8> = observations
+            .iter()
+            .filter(|observation| {
+                observation.gather.starting_band != StaminaBand::Exhausted
+                    && !observation.gather.exact_headroom
+            })
+            .map(|observation| observation.gather.start)
+            .collect();
+        assert_eq!(gather_dead_zone, [10, 14]);
+        for (lower, upper) in [(39, 40), (79, 80)] {
+            let lower = &by_start(lower).gather;
+            let upper = &by_start(upper).gather;
+            assert!(upper.policy_cost < lower.policy_cost);
+            assert!(upper.first_yield > lower.first_yield);
+        }
+    }
 }
