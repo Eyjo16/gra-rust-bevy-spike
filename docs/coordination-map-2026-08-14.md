@@ -35,19 +35,45 @@ Derived, non-authoritative; when this disagrees with refs, refs win.
   names its single executor, or the executor claims it by pushing the
   branch name empty before starting.
 
-## Identity correction (2026-08-14, later same day)
+## Identity resolution (2026-08-14, final — supersedes the section below)
+
+**Resolved by integration**: `e666cb6` ("Complete RS01 player-driven
+publication proof") was REAL all along and is now reachable on master
+under merge `cab61be`. `d43927c` was the phantom: the bundle named for
+it was a stale archive containing neither commit. The correction this
+map previously recorded (declaring `e666cb6` dead) was therefore
+**wrong in the same way it warned about** — it promoted "unverifiable
+from here right now" to "does not exist", on incomplete search.
+
+The lesson survives its own misapplication, sharpened: an unreachable
+hash is *unverified*, never *dead*. Coordination records may carry
+exactly three identity states — `verified-reachable(ref)`,
+`unverified(source named)`, `refuted(by exhaustive search, scope
+named)` — and this map used the third when only the second was
+earned. Both agent lanes have now made this class of error once each
+(one misreported forward, one over-concluded backward); the fail-closed
+rule above is the shared fix.
+
+Integration facts, verified cold from this environment at write time:
+truth master `2dd4db5` — full gate green here (fmt, three clippy
+suites `-D warnings`, 56/65/73 tests, both runtime envelopes exit 0,
+identities byte-identical: grammar `0x530003916889b952`, fixture
+`0x3805f1e20c001051`, receipts `0x6c5b0e011471d985`, world
+`0x36221d3fdb8aed9a`, `oracles=10v4`). The cold-repro-001 evidence
+from this branch was cherry-picked to master as `909c957`; the
+superseded renderer and the wrong identity correction were rightly
+filtered out. `trial/014-anticipation-drive` @ `bd2f8ca` is reachable
+and awaits independent cross-review + Meaning Gate.
+
+## Superseded: identity correction (2026-08-14, earlier — kept as history)
 
 The local session originally reported its RS01 tip as `e666cb6`. That
-hash was subsequently found in **no** object store — not the author's
-local repo, not GitHub, not this environment (which never held it).
-The verified artifact is `d43927c` inside
-`rs01-reference-d43927c.bundle` (SHA-256
-`e8e78d100fa754e5dd532ac71b5b796a1cd79117c541b0aa7dd9212421a3cebb`).
-`e666cb6` is a dead label — most likely a misreported or
-rewritten-away hash — and appears in earlier records (including the
-first revision of this map) only as history. Lesson, doctrine-grade:
-an agent-reported commit identity enters coordination records only
-after `git cat-file`-level verification against a reachable ref.
+hash was subsequently found in **no** object store searched at the
+time. This map then declared the verified artifact to be `d43927c`
+inside `rs01-reference-d43927c.bundle` (SHA-256
+`e8e78d100fa754e5dd532ac71b5b796a1cd79117c541b0aa7dd9212421a3cebb`)
+and `e666cb6` a dead label. Both conclusions inverted under the final
+integration audit; see the resolution above.
 
 ## Open decisions, in order (everything else is noise)
 
