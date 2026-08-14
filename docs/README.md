@@ -38,6 +38,7 @@ decision, migration account, and approval.
 | `runtime-contract-proposal.md` | Ratified law | Runtime Contract v0.1 (R1–R7 with amendments): current executable runtime law, semantic rulings, and the durability gap |
 | `runtime-target-map.md` | Active work map | Orders runtime falsifiers and capability-scoped dependency sweeps by authority; carries per-target status |
 | `rs01-live-render-report.md` | Standalone evidence | Records the RS01 capability red, live Publication/receipt render proof, screenshot evidence, and bounded claims |
+| `rs01-visual-fact-map.md` | Implementation evidence | Classifies every meaningful RS01 default-view element by Publication, receipt, derivation, expression, or interaction source |
 
 ## Maintenance rule
 

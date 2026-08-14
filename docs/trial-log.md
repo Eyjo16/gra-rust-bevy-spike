@@ -999,3 +999,27 @@ verb lands and the isolation claim survives it.
 5. `closed_reasons` — every reason code round-trips the closed enums
 6. `cell_bounds` — every yield stays inside the active 4×4 cell
 7. `replay_determinism` — replaying the fixture reproduces receipts and hash
+
+## 2026-08-14 — RS01 player-driven live Publication renderer
+
+- Added the off-by-default `bevy-render` capability and a real Bevy/winit X11
+  window consuming typed facts copied from identified Publications plus the
+  canonical receipts returned by `Host`.
+- Corrected the first implementation gap found against the recovered dispatch:
+  `rs01-render` now begins with zero receipts and requires one deliberate
+  Space/Enter submission for each of gather/refuse, witness, and gather. The
+  automated five-frame evidence path is separately named `rs01-capture` and
+  cannot stand in for the primary player path.
+- Added `docs/rs01-visual-fact-map.md`, deterministic replay and deletion/
+  isolation checks, a one-command-per-advance test, and a default-copy gate.
+  Exact quantities, grams, IDs, hashes, receipts, engine vocabulary, and
+  presentation-policy disclosure are proof-only; the default view uses stable
+  bars and equal blocks without ledger copy.
+- Final live walkthrough reached initial → refused → witnessed → gathered →
+  aftermath through exactly three Host receipts. Separate default and proof
+  capture sets each produced five visually inspected 1280 × 800 PNGs.
+- Registry, schema, closed vocabulary, gameplay values, receipt format,
+  oracles, and canonical owner/boundary semantics were not changed.
+- Mechanical verdict is green. F1/F10 remain unmeasured until an unbriefed
+  human receives only “Try this short scene” and answers the dispatched
+  questions verbatim. Question three is continuation evidence only.

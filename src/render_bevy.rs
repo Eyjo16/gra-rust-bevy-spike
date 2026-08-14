@@ -40,6 +40,33 @@ const HEIGHT: u32 = 800;
 const BLOCK_GRAMS: u64 = 200;
 const WARMUP_FRAMES: u16 = 12;
 const CAPTURE_TIMEOUT_FRAMES: u16 = 600;
+const POLICY_FOOTER: &str = "Presentation policy: Snorri - Thordur - Hvammur - peat - autumn morning - equal block scale - palette and layout. No danger or emotion is asserted.";
+const AFTERMATH_COST: &str =
+    "COST\n\n- Snorri spent stamina\n- Thordur spent stamina\n- Peat left the bog";
+const AFTERMATH_GAIN: &str = "GAIN\n\n- Peat now stands at Snorri's stack\n- Snorri's claim is witnessed\n- Material moved; none appeared";
+#[cfg(test)]
+const DEFAULT_VISUAL_FACT_IDS: [&str; 20] = [
+    "frame.background",
+    "frame.beat_heading",
+    "narrative.initial",
+    "narrative.refusal",
+    "narrative.witness",
+    "narrative.gather",
+    "narrative.aftermath",
+    "actor.aliases",
+    "actor.silhouettes",
+    "layout.positions",
+    "actor.stamina_bars",
+    "site.alias_and_material",
+    "site.witness_seal",
+    "site.turf_blocks",
+    "inventory.turf_blocks",
+    "outcome.banner",
+    "aftermath.cost",
+    "aftermath.gain",
+    "interaction.prompt",
+    "palette.state_colors",
+];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BeatKind {
@@ -170,60 +197,80 @@ fn commands() -> [Command; 3] {
     ]
 }
 
+fn action_spec(index: usize) -> Option<(Command, BeatKind, &'static str)> {
+    let commands = commands();
+    match index {
+        0 => Some((
+            commands[0],
+            BeatKind::Refused,
+            "Snorri attempts to gather peat. The attempt is refused: the claim is not witnessed. The world does not change.",
+        )),
+        1 => Some((
+            commands[1],
+            BeatKind::Witnessed,
+            "Thordur witnesses the claim. Snorri's claim opens, paid for with Thordur's own stamina.",
+        )),
+        2 => Some((
+            commands[2],
+            BeatKind::Gathered,
+            "Snorri tries again. Peat moves from the bog to his stack, and his stamina falls.",
+        )),
+        _ => None,
+    }
+}
+
+fn initial_beat(host: &mut Host) -> Beat {
+    Beat {
+        kind: BeatKind::Initial,
+        narrative: "A cold autumn morning at Hvammur. Snorri's claim on the peat bog is unwitnessed; the bog remains closed.",
+        publication: host.publication(),
+        receipt: None,
+    }
+}
+
+fn submit_action(host: &mut Host, index: usize) -> Result<Beat, String> {
+    let (command, kind, narrative) =
+        action_spec(index).ok_or_else(|| format!("RS01 has no action at trace index {index}"))?;
+    host.run_trial(std::slice::from_ref(&command));
+    let receipt = host
+        .receipt_log()
+        .last()
+        .cloned()
+        .ok_or_else(|| "submitted command produced no receipt".to_owned())?;
+    Ok(Beat {
+        kind,
+        narrative,
+        publication: host.publication(),
+        receipt: Some(receipt),
+    })
+}
+
+fn aftermath_beat(publication: Publication) -> Beat {
+    Beat {
+        kind: BeatKind::Aftermath,
+        narrative: "Cost and gain now stand side by side.",
+        publication,
+        receipt: None,
+    }
+}
+
 fn build_trace() -> Result<Vec<Beat>, String> {
     let seeded = fixture();
     validate_world_coherence(&seeded).map_err(|fault| format!("fixture fault: {fault:?}"))?;
     let mut host = Host::new(fixture);
-    let initial = host.publication();
+    let initial = initial_beat(&mut host);
     let mut action_beats = Vec::with_capacity(3);
-    for (command, kind, narrative) in [
-        (
-            commands()[0],
-            BeatKind::Refused,
-            "Snorri attempts to gather peat. The boundary refuses: the claim is not witnessed. The world does not change.",
-        ),
-        (
-            commands()[1],
-            BeatKind::Witnessed,
-            "Thordur witnesses the claim. Snorri's claim opens, paid for with Thordur's own stamina.",
-        ),
-        (
-            commands()[2],
-            BeatKind::Gathered,
-            "Snorri tries again. Peat moves from the bog to his stack, and his stamina falls.",
-        ),
-    ] {
-        host.run_trial(std::slice::from_ref(&command));
-        let receipt = host
-            .receipt_log()
-            .last()
-            .cloned()
-            .ok_or_else(|| "submitted command produced no receipt".to_owned())?;
-        action_beats.push(Beat {
-            kind,
-            narrative,
-            publication: host.publication(),
-            receipt: Some(receipt),
-        });
+    for index in 0..3 {
+        action_beats.push(submit_action(&mut host, index)?);
     }
     let gathered = action_beats
         .last()
         .expect("three action beats")
         .publication
         .clone();
-    let mut beats = vec![Beat {
-        kind: BeatKind::Initial,
-        narrative: "A cold autumn morning at Hvammur. Snorri's claim on the peat bog is unwitnessed; the bog remains closed.",
-        publication: initial,
-        receipt: None,
-    }];
+    let mut beats = vec![initial];
     beats.extend(action_beats);
-    beats.push(Beat {
-        kind: BeatKind::Aftermath,
-        narrative: "Cost and gain now stand side by side - only what the publications carry.",
-        publication: gathered,
-        receipt: None,
-    });
+    beats.push(aftermath_beat(gathered));
     validate_trace(&beats)?;
     Ok(beats)
 }
@@ -298,6 +345,48 @@ fn validate_trace(beats: &[Beat]) -> Result<(), String> {
 }
 
 #[derive(Resource)]
+struct InteractiveRun {
+    host: Host,
+    beats: Vec<Beat>,
+    proof: bool,
+}
+
+impl InteractiveRun {
+    fn new(proof: bool) -> Result<Self, String> {
+        let seeded = fixture();
+        validate_world_coherence(&seeded).map_err(|fault| format!("fixture fault: {fault:?}"))?;
+        let mut host = Host::new(fixture);
+        let initial = initial_beat(&mut host);
+        Ok(Self {
+            host,
+            beats: vec![initial],
+            proof,
+        })
+    }
+
+    fn current(&self) -> &Beat {
+        self.beats
+            .last()
+            .expect("interactive run always has a beat")
+    }
+
+    fn advance(&mut self) -> Result<Option<Beat>, String> {
+        let next = match self.current().kind {
+            BeatKind::Initial => submit_action(&mut self.host, 0)?,
+            BeatKind::Refused => submit_action(&mut self.host, 1)?,
+            BeatKind::Witnessed => submit_action(&mut self.host, 2)?,
+            BeatKind::Gathered => aftermath_beat(self.current().publication.clone()),
+            BeatKind::Aftermath => return Ok(None),
+        };
+        self.beats.push(next.clone());
+        if next.kind == BeatKind::Aftermath {
+            validate_trace(&self.beats)?;
+        }
+        Ok(Some(next))
+    }
+}
+
+#[derive(Resource)]
 struct CaptureRun {
     beats: Vec<Beat>,
     output_dir: PathBuf,
@@ -316,10 +405,50 @@ enum CapturePhase {
 #[derive(Component)]
 struct RenderedBeat;
 
-/// Opens a real Bevy/winit window, renders the live trace, captures each
-/// publication beat, and exits. Returns false on trace, render, or capture
-/// failure so the CLI can propagate a non-zero process exit.
-pub fn run(output_dir: &Path, proof: bool) -> bool {
+fn add_render_plugins(app: &mut App) {
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "RS01 - Witness at Hvammur".to_owned(),
+                    resolution: WindowResolution::new(WIDTH, HEIGHT),
+                    resizable: false,
+                    ..default()
+                }),
+                ..default()
+            })
+            .set(RenderPlugin {
+                synchronous_pipeline_compilation: true,
+                ..default()
+            }),
+    );
+}
+
+/// Primary RS01 path: the window starts from the initial Publication and
+/// submits exactly one canonical command per player advance input. Nothing is
+/// pre-submitted; Space or Enter drives the three-command trace.
+pub fn run_interactive(proof: bool) -> bool {
+    let run = match InteractiveRun::new(proof) {
+        Ok(run) => run,
+        Err(error) => {
+            eprintln!("rs01_trace: {error}");
+            return false;
+        }
+    };
+    print_beat(run.current());
+    let mut app = App::new();
+    app.insert_resource(ClearColor(Color::srgb_u8(232, 237, 241)))
+        .insert_resource(run);
+    add_render_plugins(&mut app);
+    app.add_systems(Startup, setup_interactive)
+        .add_systems(Update, advance_interactive);
+    app.run().is_success()
+}
+
+/// Mechanical evidence path: replays the same live boundary trace, captures
+/// each publication beat, and exits. It is intentionally a separate command
+/// so automated capture cannot masquerade as the player-driven primary path.
+pub fn capture(output_dir: &Path, proof: bool) -> bool {
     let beats = match build_trace() {
         Ok(beats) => beats,
         Err(error) => {
@@ -345,15 +474,7 @@ pub fn run(output_dir: &Path, proof: bool) -> bool {
             );
             return false;
         }
-        println!(
-            "rs01_publication beat={} revisions={} derived_from=0x{:016x}",
-            beat.kind.slug(),
-            beat.publication.revisions,
-            beat.publication.derived_from,
-        );
-        if let Some(receipt) = &beat.receipt {
-            println!("rs01_receipt {}", receipt.canonical_line());
-        }
+        print_beat(beat);
     }
 
     let mut app = App::new();
@@ -365,30 +486,27 @@ pub fn run(output_dir: &Path, proof: bool) -> bool {
             phase: CapturePhase::Warmup,
             frames: 0,
             proof,
-        })
-        .add_plugins(
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        title: "RS01 - Witness at Hvammur".to_owned(),
-                        resolution: WindowResolution::new(WIDTH, HEIGHT),
-                        resizable: false,
-                        ..default()
-                    }),
-                    ..default()
-                })
-                .set(RenderPlugin {
-                    synchronous_pipeline_compilation: true,
-                    ..default()
-                }),
-        )
-        .add_systems(Startup, setup)
+        });
+    add_render_plugins(&mut app);
+    app.add_systems(Startup, setup_capture)
         .add_systems(Update, capture_sequence);
     let exit = app.run();
     let complete = BeatKind::ALL
         .iter()
         .all(|kind| output_dir.join(format!("{}.png", kind.slug())).is_file());
     exit.is_success() && complete
+}
+
+fn print_beat(beat: &Beat) {
+    println!(
+        "rs01_publication beat={} revisions={} derived_from=0x{:016x}",
+        beat.kind.slug(),
+        beat.publication.revisions,
+        beat.publication.derived_from,
+    );
+    if let Some(receipt) = &beat.receipt {
+        println!("rs01_receipt {}", receipt.canonical_line());
+    }
 }
 
 impl BeatKind {
@@ -401,9 +519,55 @@ impl BeatKind {
     ];
 }
 
-fn setup(mut commands: Commands, run: Res<CaptureRun>) {
+fn setup_capture(mut commands: Commands, run: Res<CaptureRun>) {
     commands.spawn(Camera2d);
-    spawn_beat(&mut commands, &run.beats[0], run.proof);
+    spawn_beat(&mut commands, &run.beats[0], run.proof, None);
+}
+
+fn setup_interactive(mut commands: Commands, run: Res<InteractiveRun>) {
+    commands.spawn(Camera2d);
+    spawn_beat(
+        &mut commands,
+        run.current(),
+        run.proof,
+        Some(interaction_prompt(run.current().kind)),
+    );
+}
+
+fn advance_interactive(
+    mut commands: Commands,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut run: ResMut<InteractiveRun>,
+    rendered: Query<Entity, With<RenderedBeat>>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    if keyboard.just_pressed(KeyCode::Escape) || keyboard.just_pressed(KeyCode::KeyQ) {
+        exit.write(AppExit::Success);
+        return;
+    }
+    let advance = keyboard.just_pressed(KeyCode::Space) || keyboard.just_pressed(KeyCode::Enter);
+    if !advance {
+        return;
+    }
+    let next = match run.advance() {
+        Ok(Some(next)) => next,
+        Ok(None) => return,
+        Err(error) => {
+            eprintln!("rs01_interactive: {error}");
+            exit.write(AppExit::error());
+            return;
+        }
+    };
+    print_beat(&next);
+    for entity in &rendered {
+        commands.entity(entity).despawn();
+    }
+    spawn_beat(
+        &mut commands,
+        &next,
+        run.proof,
+        Some(interaction_prompt(next.kind)),
+    );
 }
 
 fn capture_sequence(
@@ -446,7 +610,7 @@ fn capture_sequence(
                 run.phase = CapturePhase::Warmup;
                 run.frames = 0;
                 let next = run.beats[run.beat_index].clone();
-                spawn_beat(&mut commands, &next, run.proof);
+                spawn_beat(&mut commands, &next, run.proof, None);
             } else if run.frames >= CAPTURE_TIMEOUT_FRAMES {
                 eprintln!("rs01_capture: timed out waiting for {}", path.display());
                 exit.write(AppExit::error());
@@ -455,7 +619,17 @@ fn capture_sequence(
     }
 }
 
-fn spawn_beat(commands: &mut Commands, beat: &Beat, proof: bool) {
+fn interaction_prompt(kind: BeatKind) -> &'static str {
+    match kind {
+        BeatKind::Initial => "SPACE / ENTER - attempt to gather peat",
+        BeatKind::Refused => "SPACE / ENTER - ask Thordur to witness",
+        BeatKind::Witnessed => "SPACE / ENTER - gather again",
+        BeatKind::Gathered => "SPACE / ENTER - view the aftermath",
+        BeatKind::Aftermath => "ESC / Q - close",
+    }
+}
+
+fn spawn_beat(commands: &mut Commands, beat: &Beat, proof: bool, prompt: Option<&str>) {
     let facts = beat.facts().expect("trace was validated before app start");
     rect(
         commands,
@@ -473,11 +647,7 @@ fn spawn_beat(commands: &mut Commands, beat: &Beat, proof: bool) {
     );
     text(
         commands,
-        format!(
-            "{:02} / 05  -  {}",
-            beat_index(beat.kind) + 1,
-            beat.kind.heading()
-        ),
+        beat.kind.heading(),
         Vec2::new(0.0, 374.0),
         16.0,
         Color::srgb_u8(107, 118, 129),
@@ -535,26 +705,28 @@ fn spawn_beat(commands: &mut Commands, beat: &Beat, proof: bool) {
     }
     if proof {
         draw_proof(commands, beat, facts);
+        text(
+            commands,
+            POLICY_FOOTER,
+            Vec2::new(0.0, -380.0),
+            12.0,
+            Color::srgb_u8(107, 118, 129),
+            Vec2::new(1160.0, 34.0),
+            Justify::Center,
+            5.0,
+        );
     }
-    text(
-        commands,
-        "Presentation policy: Snorri - Thordur - Hvammur - peat - autumn morning - 200 g per block - palette and layout. No danger or emotion is asserted.",
-        Vec2::new(0.0, -380.0),
-        12.0,
-        Color::srgb_u8(107, 118, 129),
-        Vec2::new(1160.0, 34.0),
-        Justify::Center,
-        5.0,
-    );
-}
-
-const fn beat_index(kind: BeatKind) -> usize {
-    match kind {
-        BeatKind::Initial => 0,
-        BeatKind::Refused => 1,
-        BeatKind::Witnessed => 2,
-        BeatKind::Gathered => 3,
-        BeatKind::Aftermath => 4,
+    if let Some(prompt) = prompt {
+        text(
+            commands,
+            prompt,
+            Vec2::new(0.0, -348.0),
+            14.0,
+            Color::srgb_u8(58, 68, 77),
+            Vec2::new(1160.0, 24.0),
+            Justify::Center,
+            5.0,
+        );
     }
 }
 
@@ -749,7 +921,7 @@ fn draw_aftermath(commands: &mut Commands) {
     );
     text(
         commands,
-        "COST\n\n- Snorri spent one fifth of his stamina\n- Thordur spent one sixth of his stamina\n- Six of ten peat blocks left the bog",
+        AFTERMATH_COST,
         Vec2::new(-292.0, -250.0),
         16.0,
         Color::srgb_u8(163, 103, 42),
@@ -759,7 +931,7 @@ fn draw_aftermath(commands: &mut Commands) {
     );
     text(
         commands,
-        "GAIN\n\n- Six peat blocks stand at the stack\n- Snorri's claim is witnessed\n- Mass moved; nothing appeared from nothing",
+        AFTERMATH_GAIN,
         Vec2::new(292.0, -250.0),
         16.0,
         Color::srgb_u8(77, 107, 77),
@@ -784,9 +956,10 @@ fn draw_proof(commands: &mut Commands, beat: &Beat, facts: SceneFacts) {
     text(
         commands,
         format!(
-            "PROOF - Publication revisions={} derived_from=0x{:016x}\nC1 stamina={} stack={}g - C2 stamina={} - S1={}g - K1 witnessed={}\n{}",
+            "PROOF - Publication revisions={} derived_from=0x{:016x} - block_scale={}g\nC1 stamina={} stack={}g - C2 stamina={} - S1={}g - K1 witnessed={}\n{}",
             beat.publication.revisions,
             beat.publication.derived_from,
+            BLOCK_GRAMS,
             facts.snorri_stamina,
             facts.snorri_inventory_g,
             facts.thordur_stamina,
@@ -890,5 +1063,117 @@ mod tests {
                 "04-aftermath",
             ]
         );
+    }
+
+    #[test]
+    fn primary_path_submits_exactly_one_command_per_player_advance() {
+        let mut run = InteractiveRun::new(false).expect("interactive fixture is coherent");
+        assert_eq!(run.current().kind, BeatKind::Initial);
+        assert!(run.host.receipt_log().is_empty());
+
+        for (receipt_count, kind) in [
+            (1, BeatKind::Refused),
+            (2, BeatKind::Witnessed),
+            (3, BeatKind::Gathered),
+        ] {
+            let next = run
+                .advance()
+                .expect("advance validates")
+                .expect("next beat");
+            assert_eq!(next.kind, kind);
+            assert_eq!(run.host.receipt_log().len(), receipt_count);
+        }
+
+        let aftermath = run
+            .advance()
+            .expect("aftermath validates")
+            .expect("aftermath");
+        assert_eq!(aftermath.kind, BeatKind::Aftermath);
+        assert_eq!(run.host.receipt_log().len(), 3);
+        assert!(run.advance().expect("completed run is stable").is_none());
+        assert_eq!(run.host.receipt_log().len(), 3);
+    }
+
+    #[test]
+    fn replay_expression_states_are_deterministic() {
+        let signature = |beats: Vec<Beat>| {
+            beats
+                .into_iter()
+                .map(|beat| {
+                    (
+                        beat.kind,
+                        beat.publication.revisions,
+                        beat.publication.derived_from,
+                        beat.facts().expect("published facts"),
+                        beat.receipt.map(|receipt| receipt.canonical_line()),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            signature(build_trace().expect("first trace")),
+            signature(build_trace().expect("second trace")),
+        );
+    }
+
+    #[test]
+    fn renderer_is_deletable_and_off_by_default() {
+        let manifest = include_str!("../Cargo.toml");
+        assert!(manifest.contains("default = []"));
+        assert!(manifest.contains("bevy-host = [\"dep:bevy_ecs\"]"));
+        assert!(manifest.contains("bevy-render = [\"bevy-host\", \"dep:bevy\"]"));
+        assert!(!manifest.contains("default = [\"bevy-render\"]"));
+    }
+
+    #[test]
+    fn every_default_visual_has_exactly_one_fact_map_row() {
+        let fact_map = include_str!("../docs/rs01-visual-fact-map.md");
+        for id in DEFAULT_VISUAL_FACT_IDS {
+            let marker = format!("| `{id}` |");
+            assert_eq!(
+                fact_map.matches(&marker).count(),
+                1,
+                "default visual must have exactly one fact-map row: {id}"
+            );
+        }
+    }
+
+    #[test]
+    fn default_copy_omits_ledger_and_exact_quantities() {
+        let beats = build_trace().expect("live boundary trace validates");
+        let mut copy = beats
+            .iter()
+            .flat_map(|beat| {
+                [
+                    beat.kind.heading(),
+                    beat.narrative,
+                    interaction_prompt(beat.kind),
+                ]
+            })
+            .collect::<Vec<_>>();
+        copy.extend([AFTERMATH_COST, AFTERMATH_GAIN]);
+
+        for text in copy {
+            assert!(
+                !text.chars().any(|character| character.is_ascii_digit()),
+                "default copy must not display exact numbers: {text}"
+            );
+            let lower = text.to_ascii_lowercase();
+            for ledger_term in [
+                " gram",
+                "receipt",
+                "revision",
+                "derived_from",
+                "hash=",
+                "publication",
+                "boundary",
+                "presentation policy",
+            ] {
+                assert!(
+                    !lower.contains(ledger_term),
+                    "default copy must not display proof-ledger terms: {text}"
+                );
+            }
+        }
     }
 }

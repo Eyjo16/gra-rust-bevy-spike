@@ -132,9 +132,13 @@ fn main() -> ExitCode {
         if command == "rs01-render" {
             #[cfg(feature = "bevy-render")]
             {
-                let dir = args.next().unwrap_or_else(|| "rs01-render".to_owned());
-                let proof = args.any(|argument| argument == "--proof");
-                return if render_bevy::run(std::path::Path::new(&dir), proof) {
+                let arguments: Vec<String> = args.collect();
+                let proof = arguments.as_slice() == ["--proof"];
+                if !arguments.is_empty() && !proof {
+                    eprintln!("usage: rs01-render [--proof]");
+                    return ExitCode::FAILURE;
+                }
+                return if render_bevy::run_interactive(proof) {
                     ExitCode::SUCCESS
                 } else {
                     ExitCode::FAILURE
@@ -143,6 +147,28 @@ fn main() -> ExitCode {
             #[cfg(not(feature = "bevy-render"))]
             {
                 eprintln!("rs01-render requires --features bevy-render");
+                return ExitCode::FAILURE;
+            }
+        }
+        if command == "rs01-capture" {
+            #[cfg(feature = "bevy-render")]
+            {
+                let dir = args.next().unwrap_or_else(|| "rs01-render".to_owned());
+                let arguments: Vec<String> = args.collect();
+                let proof = arguments.as_slice() == ["--proof"];
+                if !arguments.is_empty() && !proof {
+                    eprintln!("usage: rs01-capture [outdir] [--proof]");
+                    return ExitCode::FAILURE;
+                }
+                return if render_bevy::capture(std::path::Path::new(&dir), proof) {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                };
+            }
+            #[cfg(not(feature = "bevy-render"))]
+            {
+                eprintln!("rs01-capture requires --features bevy-render");
                 return ExitCode::FAILURE;
             }
         }
