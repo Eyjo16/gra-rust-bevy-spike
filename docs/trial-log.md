@@ -94,6 +94,335 @@ Bundle metadata: author Fable 5; rustc/cargo 1.97.1, WSL2; base
 shared assumptions: same clone and gate commands as the reviewer.
 Artifacts and run record: `gragas-local-compute` branch `run/TS01`.
 
+## 2026-08-14 - trial/014 lead rebase verification (Fable 5)
+
+The author rebased this branch onto truth master `2dd4db5`. The historical
+sections below are preserved verbatim, so their commit references name the
+pre-rebase history. The identity map is:
+
+| Historical reference | Meaning | Current-history equivalent |
+|---|---|---|
+| `91dcd94` | original authoring base | `2dd4db5` (rebase base) |
+| `de24fd5` | pre-registration | `0be236f` |
+| `6deb6cc` | implementation gate | `230c57c` |
+| `bd2f8ca` | evidence bundle / red target | `f8af4ef` |
+| `afbae24` | reviewed response tip | `51df6e1` |
+
+Lead verification on `51df6e1`, independent and exact-tip:
+
+- `git diff afbae24:src/anticipation.rs 51df6e1:src/anticipation.rs` is
+  empty and the `src/main.rs` delta is the identical two-line test-only
+  wiring; the rebase changed history, not content.
+- Response claims 1-5 were independently re-derived at `afbae24` and carry
+  to `51df6e1` by content identity: the focused permutation test reproduces
+  byte-identical output including `legal_hash=0x8ab7c3d4010cb960`; the
+  sorted-commitment set identity, the `bounded_modifier` rejection at -2/2,
+  and the strict cost-and-yield role derivation were each confirmed in
+  source and by execution.
+- The pre-rebase red was reproduced by reconstructing the permutation probe
+  against the committed `bd2f8ca` API; it failed with the byte-identical
+  diagnostic `(Costly, 2911889435201929265)` vs
+  `(Cheap, 17705930327917268809)`. The red-only probe source itself remains
+  uncommitted; future reds should commit the probe or a reconstruction
+  recipe.
+- Current-history claim scopes: response claim 5 is `f8af4ef..51df6e1`;
+  original claims-table #7 is `2dd4db5..51df6e1`.
+
+Full triple gate on clean `51df6e1`, every command exit 0:
+
+```text
+cargo fmt --check                                        PASS
+cargo clippy --all-targets -- -D warnings                PASS
+cargo clippy --all-targets --features bevy-host          PASS
+cargo clippy --all-targets --features bevy-render        PASS
+cargo test                                               57 passed
+cargo test --features bevy-host                          66 passed
+cargo test --features bevy-render                        74 passed
+cargo run / cargo run --features bevy-host               exit 0
+```
+
+Both runtime envelopes remain `grammar=0x530003916889b952
+fixture=0x3805f1e20c001051 receipts=0x6c5b0e011471d985
+world=0x36221d3fdb8aed9a oracles=10v4`.
+
+Verdict: trial/014-response claims 1-5 **CONFIRMED at exact tip
+`51df6e1`**. This entry is the durable independent exact-tip verdict
+required by VS01-G5. It is an evidence-only append: no code changes, and
+the post-append tip is re-gated before push. The integration decision
+remains with the author.
+
+## 2026-08-14 - trial/014 independent-review response
+
+Instrument (author-dispatched alignment before integration):
+
+```text
+base_commit:         bd2f8ca
+objective:           accept the independent permutation findings and make
+                     BAD/AVERAGE -> semantic cheap and GOOD/SUPERB ->
+                     semantic costly independent of input order, with a
+                     canonical legal-set identity and fail-closed cap
+authoritative_files: AGENTS.md, docs/meaning-gate.md,
+                     docs/development-workflow.md, src/boundary.rs,
+                     independent Fable 5 review of bd2f8ca
+write_scope:         src/anticipation.rs, docs/trial-log.md
+frozen:              production wiring; canonical commands/receipts;
+                     registry/schema; all cost/yield/band values; trial/013
+                     and its sealed holdout; grammar, fixture, receipt/world
+                     identities and oracles=10v4
+red_required:        yes - the committed permutation probe must fail on the
+                     reviewed implementation before the alignment
+verification:        focused red/green; fmt; strict default and bevy-host
+                     clippy; default and bevy-host tests; bevy-host runtime
+                     envelope; exact diff and clean tree
+evidence:            red/green output below; reviewer verdict disposition;
+                     clean tested tip named in the integration handoff
+limits:              trial-only code; no dependency, production, meaning,
+                     value, registry/schema, or holdout change
+escalate_when:       any resolution requires changing a frozen item or
+                     selecting anticipation meaning beyond this trial shape
+tested_commit:       clean branch tip named after this record is committed
+```
+
+The independent reviewer returned claims 3, 5, 6, and 7 CONFIRMED;
+claims 2 and 4 OVERSTATED; and claim 1 UNVERIFIABLE only as an exact
+byte-reproduction because the original red-only source was not committed.
+The capability absence itself was independently reproduced. The original
+verbatim-red exactness is withdrawn; the historical transcript remains
+unchanged below rather than being rewritten.
+
+The new committed probe first failed on `bd2f8ca`, exit 1:
+
+```text
+assertion `left == right` failed:
+semantic selection and set identity must ignore input order
+  left: (Costly, 2911889435201929265)  # 0x28691c03726c8031
+ right: (Cheap, 17705930327917268809) # 0xf5b819d2bd530f49
+```
+
+This reproduces both accepted findings in one unit: AVERAGE followed the
+first array member, and the alleged set identity changed under permutation.
+
+Resolution:
+
+- `ValidatedIntent` no longer accepts a caller-assigned cheap/costly label.
+  Semantic roles are derived from the committed pair: cheap must have both
+  lower cost and lower yield; costly must have both higher cost and higher
+  yield. Ties and crossed trade-offs reject evaluation.
+- Legal-set identity sorts the two 9-byte cost/yield commitments before
+  hashing. Forward and reversed inputs therefore produce the same identity.
+- A semantic cheap tie-break makes AVERAGE order-independent. The committed
+  permutation probe requires the complete `EvaluatedPlan` to be identical
+  for both input orders across BAD, AVERAGE, GOOD, and SUPERB.
+- The cap no longer silently clamps. `bounded_modifier` accepts -1..=1 and
+  returns `None` outside the declared cap; the test pins rejection at -2/2.
+
+Focused green, same command, exit 0:
+
+```text
+agent=C101 drive=bad legal_intents=0x8ab7c3d4010cb960 cheap_modifier=0 costly_modifier=-1 selected=cheap cap=1
+agent=C102 drive=average legal_intents=0x8ab7c3d4010cb960 cheap_modifier=0 costly_modifier=0 selected=cheap cap=1
+agent=C103 drive=good legal_intents=0x8ab7c3d4010cb960 cheap_modifier=0 costly_modifier=1 selected=costly cap=1
+agent=C104 drive=superb legal_intents=0x8ab7c3d4010cb960 cheap_modifier=0 costly_modifier=1 selected=costly cap=1
+trial014 summary cap=1 legal_hash=0x8ab7c3d4010cb960 membership_unchanged=true costs_yields_unchanged=true low_10_14_refusals_unchanged=true
+test result: ok. 1 passed; 0 failed
+```
+
+The hash change is trial-local and is caused solely by removing the
+caller-provided kind byte and canonicalizing member order. No canonical
+identity, receipt, cost, yield, vocabulary, registry, schema, or oracle
+changed. Independent re-review of this response tip remains required before
+integration; passing it does not decide anticipation meaning.
+
+Response claims (`trial/014-response#N`):
+
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
+|---|---|---|---|---|
+| 1 | All four drive selections and sealed plans are identical under the two input permutations | committed two-intent fixture | behavioral-red | focused permutation test |
+| 2 | Legal-set identity is identical under the two input permutations | two committed cost/yield byte strings | behavioral-red | focused hash assertion |
+| 3 | Modifier values outside -1..=1 reject instead of clamp | trial cap helper | behavioral-red | bounded_modifier -2/-1/1/2 assertions |
+| 4 | Cheap/costly roles are derived from strict cost-and-yield ordering, not a caller label | trial evaluator input pair | derivation | semantic_intents; ValidatedIntent::from_receipt |
+| 5 | Original values, canonical identities, production wiring, and trial/013 remain unchanged | bd2f8ca..tested_commit | measurement | exact diff; clean full gate |
+
+## 2026-08-13 - trial/014 anticipation drive: pre-registration
+
+Instrument (authoring envelope, as dispatched by Eyjo):
+
+```text
+base_commit:         91dcd94
+objective:           make a trial-scoped intent evaluator select the legal
+                     cheap/low-yield intent at BAD/AVERAGE drive and the
+                     legal costly/high-yield intent at GOOD/SUPERB drive,
+                     using only a capped pure modifier of anticipation
+                     belief records applied before the experimental plan is
+                     sealed
+authoritative_files: AGENTS.md, docs/README.md, docs/architecture.md,
+                     docs/runtime-contract-proposal.md,
+                     docs/meaning-gate.md, docs/development-workflow.md,
+                     src/boundary.rs
+write_scope:         src/main.rs (test-only module wiring),
+                     src/anticipation.rs (trial-scoped experiment),
+                     docs/trial-log.md (this append-only evidence)
+frozen:              canonical commands, Receipt and reason vocabularies,
+                     the ten-oracle suite, registry/schema, all yield/cost/
+                     band values, trial/013 and its sealed holdout;
+                     grammar=0x530003916889b952,
+                     fixture=0x3805f1e20c001051, oracles=10v4
+red_required:        yes - capability red: the single test-oracle names
+                     anticipation belief records, DRIVE_MODIFIER_CAP, a
+                     receipted pure modifier, and pre-seal selection that
+                     the baseline has no module capable of expressing
+verification:        focused red then focused green for
+                     anticipation::tests::trial_014_drive_only_selection_is_
+                     capped_and_membership_preserving; full clean-tree dual
+                     gate from AGENTS.md; exact baseline/green comparison of
+                     legal-intent-set hash, committed costs/yields, the
+                     10-14 insufficient-stamina refusal, grammar, fixture,
+                     receipt digest, world hash, and oracle identity
+evidence:            verbatim red/green output below; full gate transcript
+                     tail; branch/base/tested metadata; numbered claims
+limits:              no dependency/network work; local Rust cache only;
+                     no production integration, merge, push, value move, or
+                     trial/013 holdout execution
+escalate_when:       any green requires changing legal intent membership,
+                     canonical truth/receipts, contract/registry, values,
+                     the ten-oracle suite, or production plan ownership
+tested_commit:       branch tip named in the review handoff after the clean
+                     full gate (the commit cannot contain its own hash)
+```
+
+Falsifier, as one testable unit: with two already-legal validated intents -
+cheap/low-yield and costly/high-yield - BAD/AVERAGE must select cheap and
+GOOD/SUPERB must select costly. The same oracle also requires a named cap,
+receipted evaluation, and byte-identical legal-set identity, committed
+costs/yields, and baseline Low-start 10-14 `insufficient_stamina` receipt.
+The drive modifier may rank members of a frozen legal set before the
+experimental plan seal; it may neither admit an intent nor alter one.
+
+## Capability red - reproduced before implementation
+
+Command:
+
+```text
+cargo test anticipation::tests::trial_014_drive_only_selection_is_capped_and_membership_preserving -- --exact --nocapture
+```
+
+Exit 1, verbatim diagnostic:
+
+```text
+error[E0432]: unresolved imports `super::AnticipationBeliefs`, `super::BeliefRecord`, `super::DRIVE_MODIFIER_CAP`, `super::Drive`, `super::IntentKind`, `super::ValidatedIntent`, `super::evaluate_and_seal`, `super::legal_intent_set_hash`
+  --> src/anticipation.rs:10:9
+   |
+10 |         AnticipationBeliefs, BeliefRecord, DRIVE_MODIFIER_CAP, Drive, IntentKind,
+   |         ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^  ^^^^^  ^^^^^^^^^^ no `IntentKind` in `anticipation`
+   |         |                    |             |                   |
+   |         |                    |             |                   no `Drive` in `anticipation`
+   |         |                    |             no `DRIVE_MODIFIER_CAP` in `anticipation`
+   |         |                    no `BeliefRecord` in `anticipation`
+   |         no `AnticipationBeliefs` in `anticipation`
+11 |         ValidatedIntent, evaluate_and_seal, legal_intent_set_hash,
+   |         ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^ no `legal_intent_set_hash` in `anticipation`
+   |         |                |
+   |         |                no `evaluate_and_seal` in `anticipation`
+   |         no `ValidatedIntent` in `anticipation`
+
+error: could not compile `gra-rust-bevy-spike` (bin "gra-rust-bevy-spike" test) due to 1 previous error
+```
+
+Classification: capability red. Baseline has no anticipation belief owner,
+named modifier cap, intent commitment/hash, receipted evaluation, or
+evaluation-before-seal operation for this oracle to call.
+
+## Focused green
+
+The implementation is compiled only under `cfg(test)`. It owns belief
+records in `AnticipationBeliefs`; evaluation receives shared references to
+both beliefs and already-validated intent commitments. The pure modifier is
+clamped to `DRIVE_MODIFIER_CAP = 1`, copied into an evaluation receipt, and
+used to select before the experimental plan binds the receipt hash and the
+selected intent's pre-existing commitment bytes.
+
+Same command, exit 0:
+
+```text
+running 1 test
+agent=C101 drive=bad legal_intents=0xf5b819d2bd530f49 cheap_modifier=0 costly_modifier=-1 selected=cheap cap=1
+agent=C102 drive=average legal_intents=0xf5b819d2bd530f49 cheap_modifier=0 costly_modifier=0 selected=cheap cap=1
+agent=C103 drive=good legal_intents=0xf5b819d2bd530f49 cheap_modifier=0 costly_modifier=1 selected=costly cap=1
+agent=C104 drive=superb legal_intents=0xf5b819d2bd530f49 cheap_modifier=0 costly_modifier=1 selected=costly cap=1
+trial014 summary cap=1 legal_hash=0xf5b819d2bd530f49 membership_unchanged=true costs_yields_unchanged=true low_10_14_refusals_unchanged=true
+test anticipation::tests::trial_014_drive_only_selection_is_capped_and_membership_preserving ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.00s
+```
+
+The two legal intents are admitted by the existing gather boundary in
+independent coherent worlds before this module sees them. Their committed
+cost/yield bytes are `(10, 750)` and `(12, 1800)`. The oracle snapshots
+those bytes and their set hash before evaluation, checks every modifier
+against the named cap, and compares them again afterward. It independently
+submits every Low start 10 through 14 before and after evaluation and requires
+the canonical receipt lines to remain byte-identical refusals with
+`insufficient_stamina`, zero spend/mass, and zero world mutation.
+
+## Clean full gate and bundle metadata
+
+The complete AGENTS.md gate ran on clean implementation commit `6deb6cc`
+before this evidence-only append. Every command exited 0:
+
+```text
+cargo fmt --check                                      PASS
+cargo clippy --all-targets -- -D warnings              PASS
+cargo clippy --all-targets --features bevy-host -- -D warnings
+                                                        PASS
+cargo test                                             49 passed
+cargo test --features bevy-host                        58 passed
+cargo run --features bevy-host                         exit 0
+```
+
+Transcript tail:
+
+```text
+oracle PASS stamina_in_bounds (all stamina within 0..=100)
+oracle PASS mass_conserved (baseline=8300g current=8300g)
+oracle PASS witnessed_gate (0 unwitnessed receipts moved mass)
+oracle PASS exhausted_gate (0 exhausted or band-less receipts moved mass)
+oracle PASS closed_reasons (0 receipts with unclosed reason codes)
+oracle PASS cell_bounds (0 receipts outside the 4x4 cell)
+oracle PASS replay_determinism (states_match=true hashes_match=true receipts_match=true)
+oracle PASS refusal_zero_mutation (0 hash-chain or mutation violations)
+oracle PASS shadow_expectation (0 receipts diverge from the shadow evaluator)
+oracle PASS shadow_final_state (0 truth domains diverge from the shadow final state)
+bevy_host_parity receipts_match=true state_match=true world_match=true receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a
+bevy_projection views_match=true derived_from=0x36221d3fdb8aed9a
+bevy_publication revisions=14 derived_from=0x36221d3fdb8aed9a stale_rejected=true
+bevy_host_faults admission_zero_mutation=true projection_isolated=true faults=admission_failed,projection_consumer_failed
+envelope baseline_commit=91dcd94 grammar=0x530003916889b952 fixture=0x3805f1e20c001051 receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a oracles=10v4
+```
+
+The final evidence-only bundle tip is re-gated after commit; its exact
+`tested_commit` is carried in the review handoff because a commit cannot
+contain its own identity.
+
+Author: Codex (GPT-5). Toolchain: rustc 1.97.1, cargo 1.97.1, WSL2.
+Base: `91dcd94`. Implementation gate: `6deb6cc`. Shared assumptions:
+the experiment is deliberately `cfg(test)` and proves only the four named
+drive records and two canonical gathers in this fixture; it does not promote
+drive vocabulary or anticipation meaning into the executable contract.
+Independent cross-review is still required before author review.
+
+## Claims
+
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
+|---|---|---|---|---|
+| 1 | Baseline cannot express the dispatched anticipation evaluator or named cap | trial/014 focused build | capability-red | E0432 diagnostic above |
+| 2 | BAD/AVERAGE select cheap and GOOD/SUPERB select costly | four seeded belief records and two admitted gathers | behavioral-red | focused test output, C101-C104 |
+| 3 | Every applied drive modifier is receipted, bounded by `DRIVE_MODIFIER_CAP = 1`, and bound into the plan only after receipt creation | trial-only evaluator/seal | behavioral-red | focused test assertions; `src/anticipation.rs` |
+| 4 | Evaluation preserves the legal-intent-set hash and committed cost/yield bytes | the two admitted intents `(10,750)` and `(12,1800)` | behavioral-red | summary line; committed-byte before/after assertions |
+| 5 | Low starts 10-14 remain byte-identical `insufficient_stamina` refusals with zero spend, mass, and mutation | established-tier gather fixture | behavioral-red | `low_dead_zone_receipts` before/after assertion |
+| 6 | Canonical grammar, fixture, receipt digest, world hash, and oracle identity equal baseline | standard fixture full dual gate | measurement | envelope line above |
+| 7 | The branch changes only test-only module wiring, the trial module, and this evidence entry | `91dcd94..tested_commit` | measurement | `git diff --name-only 91dcd94..tested_commit` |
+
+
 ## 2026-08-12 — Evidence Factory Protocol v0.1 ratified
 
 Author verdict, recorded: ratified as proven on

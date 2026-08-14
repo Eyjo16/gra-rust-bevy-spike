@@ -13,6 +13,8 @@
 //! names its identity (R01/R03, incl. stale-publication rejection), and
 //! injected host faults leave zero canonical trace (R02).
 
+#[cfg(test)]
+mod anticipation;
 mod boundary;
 mod character;
 mod economy;
