@@ -94,6 +94,63 @@ Bundle metadata: author Fable 5; rustc/cargo 1.97.1, WSL2; base
 shared assumptions: same clone and gate commands as the reviewer.
 Artifacts and run record: `gragas-local-compute` branch `run/TS01`.
 
+## 2026-08-14 - trial/014 lead rebase verification (Fable 5)
+
+The author rebased this branch onto truth master `2dd4db5`. The historical
+sections below are preserved verbatim, so their commit references name the
+pre-rebase history. The identity map is:
+
+| Historical reference | Meaning | Current-history equivalent |
+|---|---|---|
+| `91dcd94` | original authoring base | `2dd4db5` (rebase base) |
+| `de24fd5` | pre-registration | `0be236f` |
+| `6deb6cc` | implementation gate | `230c57c` |
+| `bd2f8ca` | evidence bundle / red target | `f8af4ef` |
+| `afbae24` | reviewed response tip | `51df6e1` |
+
+Lead verification on `51df6e1`, independent and exact-tip:
+
+- `git diff afbae24:src/anticipation.rs 51df6e1:src/anticipation.rs` is
+  empty and the `src/main.rs` delta is the identical two-line test-only
+  wiring; the rebase changed history, not content.
+- Response claims 1-5 were independently re-derived at `afbae24` and carry
+  to `51df6e1` by content identity: the focused permutation test reproduces
+  byte-identical output including `legal_hash=0x8ab7c3d4010cb960`; the
+  sorted-commitment set identity, the `bounded_modifier` rejection at -2/2,
+  and the strict cost-and-yield role derivation were each confirmed in
+  source and by execution.
+- The pre-rebase red was reproduced by reconstructing the permutation probe
+  against the committed `bd2f8ca` API; it failed with the byte-identical
+  diagnostic `(Costly, 2911889435201929265)` vs
+  `(Cheap, 17705930327917268809)`. The red-only probe source itself remains
+  uncommitted; future reds should commit the probe or a reconstruction
+  recipe.
+- Current-history claim scopes: response claim 5 is `f8af4ef..51df6e1`;
+  original claims-table #7 is `2dd4db5..51df6e1`.
+
+Full triple gate on clean `51df6e1`, every command exit 0:
+
+```text
+cargo fmt --check                                        PASS
+cargo clippy --all-targets -- -D warnings                PASS
+cargo clippy --all-targets --features bevy-host          PASS
+cargo clippy --all-targets --features bevy-render        PASS
+cargo test                                               57 passed
+cargo test --features bevy-host                          66 passed
+cargo test --features bevy-render                        74 passed
+cargo run / cargo run --features bevy-host               exit 0
+```
+
+Both runtime envelopes remain `grammar=0x530003916889b952
+fixture=0x3805f1e20c001051 receipts=0x6c5b0e011471d985
+world=0x36221d3fdb8aed9a oracles=10v4`.
+
+Verdict: trial/014-response claims 1-5 **CONFIRMED at exact tip
+`51df6e1`**. This entry is the durable independent exact-tip verdict
+required by VS01-G5. It is an evidence-only append: no code changes, and
+the post-append tip is re-gated before push. The integration decision
+remains with the author.
+
 ## 2026-08-14 - trial/014 independent-review response
 
 Instrument (author-dispatched alignment before integration):
