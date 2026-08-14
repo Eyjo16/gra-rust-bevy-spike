@@ -28,7 +28,8 @@ limits:              no branch merges, holdout reveal, value promotion, or histo
                      claim promotion
 escalate_when:       meaning, RNG authority, contract/schema change, new canonical
                      type, closed-vocabulary evolution, or merge authority is needed
-tested_commit:       filled after the clean-tree gate
+tested_commit:       final pushed branch tip named in the review handoff;
+                     clean-tree gates rerun after commit
 ~~~
 
 ## Cold estate snapshot
