@@ -1,5 +1,25 @@
 # Trial log — truth-layer slice 001
 
+## 2026-08-14 — E01 belief/actionability render taste (mechanical PASS)
+
+Author dispatch: after integrating trial/014 and trial/013 locally, taste the
+shortest playable epistemic loop before further hardening; defer inventory.
+The off-by-default `e01-taste` capability submits two existing Gather commands
+through `Host` in one fixed Publication-fed fixture. Both characters believe
+they can manage one last gather: start 14 is canonically refused without
+mutation; start 15 spends 15 and moves 600 g. The renderer can present belief
+as fallible perspective but has no truth-observation or outcome-selection path.
+
+The capability red and a second red—loss of the pre-action belief after a
+successful mutation—are preserved in the standalone report. The latter was
+fixed by retaining an identified pre-action Publication as the belief source,
+separate from the current Publication and canonical Receipt. Final strict
+four-capability gate: **58 / 67 / 75 / 81 tests**, clippy clean, pure/host
+envelope byte-frozen. Eight 1280 x 800 default/proof captures were hashed and
+visually checked. Mechanical verdict: **PASS**. Human/player-driven taste,
+balance meaning, generalized inference, and inventory architecture remain
+open. Full evidence: `docs/trial-e01-belief-actionability-taste-report.md`.
+
 ## 2026-08-14 — RS01 live Bevy publication render (red→green candidate)
 
 Author dispatch: implement RS01 against `fca5237`; treat the HTML scene only

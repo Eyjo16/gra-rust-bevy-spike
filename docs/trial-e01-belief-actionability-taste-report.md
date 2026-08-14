@@ -2,7 +2,7 @@
 
 Date: 2026-08-14
 
-Status: **pre-registered; implementation not yet written**
+Status: **implemented and mechanically proven; human/manual verdict pending**
 
 Branch baseline: `9a766ca`
 
@@ -97,6 +97,85 @@ The trial fails if any of these occur:
 
 ## Execution ledger
 
-Implementation, red/green evidence, exact commits, gate counts, capture
-identity, and the bounded verdict will be appended without rewriting this
-pre-registration.
+The pre-registration is commit `6d76bda`; the bounded implementation is
+commit `02e573d`. The implementation changes only the off-by-default
+`e01-taste` capability, its command wiring, and `src/e01_taste.rs`.
+
+### Red to green
+
+1. Before the feature existed, `cargo test --features e01-taste` failed with
+   `package ... does not contain this feature: e01-taste`. This is the
+   capability red.
+2. The first automated capture panicked after the second beat: the overlay
+   recomputed Egil's expectation from the post-action Publication, where his
+   stamina was already zero. That erased the belief that had caused the
+   action. The fix retains the identified pre-action Publication as
+   `belief_source`; current scene facts still come from the current
+   Publication, and outcomes still come only from canonical Receipts.
+3. Six focused falsification tests then passed: wrong/matching belief,
+   belief-read non-interference, one Host submission per player advance,
+   sealed-holdout exclusion, no canonical observation backdoor, and
+   capability/capture-name stability.
+
+### Exact mechanical result
+
+The same trace presents two fixture-local beliefs derived from Publication
+`0xa650191d3c5fe826`. Hrafn's refused action leaves the current Publication at
+that identity. Egil's accepted action advances current truth to
+`0x4d2c6d5c1cd8f7c8`, while the displayed remembered belief remains explicitly
+identified as coming from `0xa650191d3c5fe826`.
+
+- Hrafn, start 14: refused / `insufficient_stamina`; spent 0; moved 0;
+  Publication unchanged.
+- Egil, start 15: accepted; spent 15; moved 600 g; site 2,000 -> 1,400 g;
+  stack 0 -> 600 g.
+- The renderer neither submits an outcome nor observes canonical state. The
+  only player advances each submit exactly one existing command through
+  `Host`.
+- The trial/013 start-29/Advanced holdout does not appear in the executable
+  fixture.
+
+Final exact-tip gate, after the evidence append:
+
+| Gate | Result |
+| --- | --- |
+| `cargo fmt --check` | PASS |
+| strict clippy, default / `bevy-host` / `bevy-render` / `e01-taste` | PASS |
+| tests, default / `bevy-host` / `bevy-render` / `e01-taste` | 58 / 67 / 75 / 81 PASS |
+| pure and `bevy-host` runs | PASS; byte-frozen envelope |
+
+Frozen runtime identity:
+
+```text
+grammar=0x530003916889b952
+fixture=0x3805f1e20c001051
+receipts=0x6c5b0e011471d985
+world=0x36221d3fdb8aed9a
+oracles=10v4
+```
+
+### Automated render evidence
+
+Both sets contain four 1280 x 800 PNGs at
+`/home/eyjo/taste-evidence/E01-belief-actionability-2026-08-14/`.
+
+| Beat | Default SHA-256 | Proof SHA-256 |
+| --- | --- | --- |
+| two beliefs | `dc8636507258fa1a4264f9eaac1c1dcf4adaa3680bb51e418d589c1630ce5850` | `26df31c8c16868b4f363b9ef87dffc0ed032d5c4a932cb8964f4aa227939c480` |
+| belief wrong | `a66711bda42e33a78d8f7e47408be8700e6a77330d7a64a791dd6210fee154c6` | `3e7c939c46747d8a14c23fd2f0baaf50fdb514cd8ad50f5458f1bb8b2242412d` |
+| belief matched | `5472576ec4b5d3da220255997dbda75132867d34f0f297bf32b341f6fed25a80` | `8096fa2981474c3d3053d1521c69eeab76c02ac19d5952a7be45066084e7e614` |
+| belief is not truth | `6f147eb71e3fbe638b6650a88c4922ae4f4cf66a0fd81a364e8daa6436edbce6` | `4cfb777dfe09ad0d35c9f5a43ac0e28991becd876fc1295b5b9ea28c8e3f06e8` |
+
+The full-resolution captures were visually checked for clipping, overlap,
+fact drift, and proof/default separation. The default view uses player-facing
+language; the proof view adds current Publication, remembered-belief identity,
+and receipt detail. This is automated capture plus implementation-side visual
+QA, not the required player-driven human verdict.
+
+## Bounded verdict
+
+**Mechanically PASS.** The current core can make a wrong belief and a matching
+belief legible against one unchanged canonical actionability edge, without
+giving belief or presentation authority over the world. Balance meaning,
+general character inference, and inventory design are not ratified here. The
+manual loop remains open and must be reported separately.

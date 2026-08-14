@@ -36,6 +36,7 @@ decision, migration account, and approval.
 | `transition-domain-report.md` | Standalone evidence | Records trial/007's bounded pure/Bevy parity result and the value-cell reachability pressure map |
 | `active-cell-reachability-report.md` | Standalone evidence | Records trial/010's systematic 12-cell reachability and stock-boundary pressure |
 | `trial-013-low-actionability-report.md` | Sealed Meaning Gate evidence | Preserves trial/013 training evidence and H-A verdict candidate while keeping the holdout unrevealed and unexecuted |
+| `trial-e01-belief-actionability-taste-report.md` | Bounded presentation evidence | Records the Publication-fed wrong/matching-belief taste, exact gates, captures, and the still-open manual verdict |
 | `runtime-contract-proposal.md` | Ratified law | Runtime Contract v0.1 (R1–R7 with amendments): current executable runtime law, semantic rulings, and the durability gap |
 | `runtime-target-map.md` | Active work map | Orders runtime falsifiers and capability-scoped dependency sweeps by authority; carries per-target status |
 | `rs01-live-render-report.md` | Standalone evidence | Records the RS01 capability red, live Publication/receipt render proof, screenshot evidence, and bounded claims |
