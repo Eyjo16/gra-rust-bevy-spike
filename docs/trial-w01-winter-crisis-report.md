@@ -192,3 +192,137 @@ nothing in the truth layer consumes it, and no oracle depends on it. The
 truth layer still has no concept of a need, a cow, a mouth or a roof.
 The moment consumption becomes a rule it is a licensed spec evolution
 with its own trial — it does not arrive through a report.
+
+---
+
+# Evidence
+
+Author: Fable 5 (lead). Toolchain: `rustc 1.97.1 (8bab26f4f 2026-07-14)`,
+`cargo 1.97.1 (c980f4866 2026-06-30)`. Base commit `605e32a`;
+`tested_commit` `0672405` (clean tree).
+
+## E1. Predicted vs executed
+
+Every predicted number was met exactly. The comparison is machine-made,
+not eyeballed: `every_plan_matches_its_pre_registered_end_state` holds
+the §4 table as a constant and fails on any drift.
+
+| Plan | Stamina | Household totals | Shortfall | Site stocks |
+|------|---------|------------------|-----------|-------------|
+| A | 53 / 48 / 33 / 7 ✓ | fodder 4000, food 0, timber 0 ✓ | 2000 / 2500 / 1200 ✓ | 0 / 2500 / 1800 ✓ |
+| B | 43 / 48 / 13 / 10 ✓ | fodder 2400, food 0, timber 2400 ✓ | 3600 / 2500 / 0 ✓ | 1600 / 100 / 1800 ✓ |
+| C | 58 / 48 / 18 / 7 ✓ | fodder 2400, food 1600, timber 0 ✓ | 3600 / 900 / 1200 ✓ | 1600 / 2500 / 200 ✓ |
+
+Two independent implementations of the grammar — the crate, and the
+prediction script written from the documented rules — produce identical
+receipts and identical end states for all three plans. That is a real
+cross-check, and it is bounded: the script was written by the same
+author who wrote the trials, on the same reading of the same documents,
+so it catches transcription and arithmetic errors, not a shared
+misreading of the law. It is not an independent audit and must not be
+quoted as one.
+
+## E2. Gate and oracles
+
+```text
+winter_shortfall plan=A kind=fodder held=4000g need=6000g short=2000g
+winter_shortfall plan=A kind=food   held=0g    need=2500g short=2500g
+winter_shortfall plan=A kind=timber held=0g    need=1200g short=1200g
+winter_shortfall plan=B kind=fodder held=2400g need=6000g short=3600g
+winter_shortfall plan=B kind=food   held=0g    need=2500g short=2500g
+winter_shortfall plan=B kind=timber held=2400g need=1200g short=0g
+winter_shortfall plan=C kind=fodder held=2400g need=6000g short=3600g
+winter_shortfall plan=C kind=food   held=1600g need=2500g short=900g
+winter_shortfall plan=C kind=timber held=0g    need=1200g short=1200g
+envelope scene=W01 plan=A ... fixture=0x288ef6dbfad7e800 receipts=0xf7226e43a85603ab world=0x8955528b452a8dde oracles=10v6
+envelope scene=W01 plan=B ... fixture=0x1ac3857f928579d5 receipts=0x87e56f06f1bd4870 world=0xd2b2803a6c1b77d7 oracles=10v6
+envelope scene=W01 plan=C ... fixture=0x209b45a394eddc4a receipts=0x62e99e5a4817d370 world=0xb898728c0ccd0b48 oracles=10v6
+```
+
+Thirty oracle verdicts, ten per plan, all PASS; `cargo run winter` exits
+0. Test counts: `default 81` · `bevy-host 90` · `bevy-render 98` ·
+`e01-taste 104`.
+
+**The standard trial's envelope is byte-identical to V01's**
+(`grammar=0x7dd8c6706e0b949f fixture=0x93afba3f312bd89d
+receipts=0x2d52250d86f0638b world=0xb500dee0e5d883d8`), which is the
+measurable form of "this trial changed no law".
+
+## E3. The pre-registered questions, answered
+
+| ID | Answer | Evidence |
+|----|--------|----------|
+| W1 | **Yes, partially.** The triage is real and costed: each plan is defensible, none is right, and the price of each is visible in the ledger | the three shortfall rows; `no_plan_can_meet_every_need` |
+| W2 | **Yes.** Three kinds expressed the whole scene. Nothing in it needed a fourth kind to be *stated* | the scene compiles and runs with `ResourceKind::ALL` unchanged |
+| W3 | **No — as pre-registered.** The herd-loss shape is not expressible. There is no herd, no consumption, no spring, and no game-over; the scene can *state* a 2 000 g fodder shortfall but nothing happens because of it | `WINTER_NEED` is arithmetic in a projection; no oracle and no rule reads it |
+| W4 | **Yes, minimally.** The unwitnessed claim makes legitimacy cost stamina before any work is possible, and it costs a *different* person in plan A than in plan B; give lets the household consolidate a stock in one pair of hands | plan A receipts 4–6 (refusal, attestation, partial); plan B receipt 4; the closing give in each plan |
+| W5 | **No lie found, one risk named.** The shortfall table is the only statement in the scene that sounds like a rule and is not | E4 finding 1 |
+
+## E4. What the scene proves the truth layer cannot yet say
+
+This is the trial's real output. Each item is a *finding*, not a
+licence: none of them is implemented here.
+
+1. **Nothing is consumed, so nothing is at stake.** The shortfall is a
+   sentence in a report, not a fate. Until something eats, burns, rots
+   or shelters, "the cattle need 6 000 g" is the scene's opinion. This
+   is the single largest gap between the current truth layer and the
+   game the author is building.
+2. **There is no winter.** No time, no season, no ordering beyond the
+   command sequence (Runtime Contract A1: immediate and sequential).
+   "The ninth week" is prose. Every plan happens in an instant.
+3. **There are no cattle, and no household.** The four characters are
+   related only by the fixture's prose and by the scene projection that
+   sums their holdings. The truth layer has no household, so "the
+   household's stock" is arithmetic over four separate people; a give
+   between them is exactly as social as a give between strangers.
+4. **A plan is not a thing.** The three plans exist as Rust functions.
+   Nothing in truth can hold "what we intend to do this week", which is
+   what O01's charter is for.
+5. **Nobody can refuse.** Auðr's attestation in plan A is unconditional:
+   the head spends 5 points because the command says so. `actor_unwilling`
+   does not exist, so consent to *labour* is not modelled even though
+   consent to *give* now is.
+6. **Site stock is the only scarcity with texture.** The hayfield running
+   out mid-work (partial, then `site_empty`) is the most alive moment in
+   the scene, and it comes entirely from the existing gather verb. The
+   4×4 cell earns its keep here.
+7. **Turf and fuel are still missing names.** Plan B calls the scrub
+   wood `timber`; a real winter roof is turf, and a real winter fire is
+   peat. The kind list survived because the scene was written to fit it —
+   an honest bias, worth stating: W2's "yes" is weaker than it looks.
+
+## E5. Reconstruction recipe
+
+The prediction script (`w01_predict.py`) is reproduced here rather than
+committed to the crate, per the same rule as RES01's fingerprint
+predictor: nothing in the crate may read a projection back. It
+re-implements bands, costs, yields, the three verbs' gates and the
+zero-normalization of holdings, then prints the end state of each plan.
+Its structure is the same as the RES01 predictor's — plain integers,
+its own literals, no import from the crate — and running it reproduces
+the §4 tables exactly.
+
+Verification commands for this trial:
+
+```sh
+cargo test winter
+BASELINE_COMMIT=$(git rev-parse --short HEAD) cargo run winter
+```
+
+## E6. Claims table
+
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
+|---|--------------|-------|---------------|--------------------|
+| 1 | All three plans execute with every oracle green | the W01 fixture and the three named command sequences | oracle | thirty `oracle PASS plan=…` lines; `every_plan_passes_all_ten_oracles` |
+| 2 | Every executed number equals the number predicted before the scene existed | stamina, holdings, site stocks and shortfalls of all three plans | measurement | §4 table committed at `fa28712`; `every_plan_matches_its_pre_registered_end_state` |
+| 3 | No plan meets every winter need, and the best result per kind comes from a different plan | the three plans as written | derivation | `no_plan_can_meet_every_need` pins the best achievable shortfall per kind at `[2000, 900, 0]` |
+| 4 | The scene changes no law: same grammar, same oracle suite, and the standard trial's identity is unmoved | the whole branch | measurement | standard envelope at `0672405` identical to V01's; `the_scene_adds_no_rule` |
+| 5 | Legitimacy is a real cost before work: an unwitnessed claim stops the boy until someone spends stamina attesting it | plan A receipts 4–6, plan B receipt 4 | behavioral | `the_scene_beats_are_the_ones_the_scene_claims` |
+| 6 | The winter need is not a rule and is read back by nothing | the whole crate | derivation | `WINTER_NEED` is used only by `household_totals`/`shortfall`/`run`, none of which any oracle or owner calls |
+| 7 | The herd-loss shape from the lead iteration map is not expressible today | the current truth layer | derivation | E4 findings 1–3: no consumption, no time, no household |
+
+What this trial does **not** claim: that these numbers are balance, that
+three plans exhaust the strategy space, that the scene is fun, or that a
+player would understand it — the last is RS01-human's question, and this
+scene has no rendering.
