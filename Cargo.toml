@@ -16,6 +16,7 @@ edition = "2024"
 default = []
 bevy-host = ["dep:bevy_ecs"]
 bevy-render = ["bevy-host", "dep:bevy"]
+e01-taste = ["bevy-render"]
 bevy-full = ["bevy-render", "bevy/default"]
 
 [dependencies]

@@ -17,6 +17,8 @@
 mod anticipation;
 mod boundary;
 mod character;
+#[cfg(feature = "e01-taste")]
+mod e01_taste;
 mod economy;
 #[cfg(feature = "bevy-host")]
 mod host_bevy;
@@ -171,6 +173,49 @@ fn main() -> ExitCode {
             #[cfg(not(feature = "bevy-render"))]
             {
                 eprintln!("rs01-capture requires --features bevy-render");
+                return ExitCode::FAILURE;
+            }
+        }
+        if command == "e01-render" {
+            #[cfg(feature = "e01-taste")]
+            {
+                let arguments: Vec<String> = args.collect();
+                let proof = arguments.as_slice() == ["--proof"];
+                if !arguments.is_empty() && !proof {
+                    eprintln!("usage: e01-render [--proof]");
+                    return ExitCode::FAILURE;
+                }
+                return if e01_taste::run_interactive(proof) {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                };
+            }
+            #[cfg(not(feature = "e01-taste"))]
+            {
+                eprintln!("e01-render requires --features e01-taste");
+                return ExitCode::FAILURE;
+            }
+        }
+        if command == "e01-capture" {
+            #[cfg(feature = "e01-taste")]
+            {
+                let dir = args.next().unwrap_or_else(|| "e01-render".to_owned());
+                let arguments: Vec<String> = args.collect();
+                let proof = arguments.as_slice() == ["--proof"];
+                if !arguments.is_empty() && !proof {
+                    eprintln!("usage: e01-capture [outdir] [--proof]");
+                    return ExitCode::FAILURE;
+                }
+                return if e01_taste::capture(std::path::Path::new(&dir), proof) {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                };
+            }
+            #[cfg(not(feature = "e01-taste"))]
+            {
+                eprintln!("e01-capture requires --features e01-taste");
                 return ExitCode::FAILURE;
             }
         }
