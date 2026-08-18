@@ -1482,3 +1482,46 @@ from existing actors.
 is spent on their behalf, but the assertion is currently unrefusable.
 (3) A give leaves no memory outside the receipt ledger; debt and
 obligation wait on the E-layers.
+
+## Trial V01 — repair pass after review (2026-08-18)
+
+Branch `trial/V01-give`, repair base `605e32a`, repair tested_commit
+`cccbfcd`. Reviewer: Sol 5.6, verdict **hold**, five material findings.
+Full response: `docs/trial-v01-give-report.md` §E7–E9.
+
+**All four V01 findings accepted.** The two that mattered most:
+
+- The named witness never reached the receipt — two valid attesters
+  produced byte-identical receipts. `Receipt` now carries
+  `transfer_witness: Option<CharacterId>`, the overloaded boolean is
+  `claim_witnessed`, and the shadow evaluator compares the attester's
+  identity.
+- "Consent by construction" was an overclaim. Restated as attribution:
+  *no accepted transfer debits a holding other than the command's named
+  source*. Consent stays unproven until an issuer, seat, delegation or
+  actor intent exists.
+
+**Author licence, 2026-08-18**: the give language evolution, and a
+three-way split of canonical identity — grammar (semantics and policies)
+/ command encoding (canonical command bytes) / receipt format (canonical
+receipt fields and order). Both new fingerprints were predicted at
+`4d1cc65` before implementation and hit exactly:
+
+```text
+envelope baseline_commit=cccbfcd grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132 fixture=0x93afba3f312bd89d receipts=0xc0b4da51744bcf19 world=0xb500dee0e5d883d8 oracles=10v7
+```
+
+The grammar did not move (no policy or value changed) while the receipt
+format did — which is the distinction the split exists to make visible.
+
+**Oracle suite v6 → v7.** Oracle 3's transfer count is
+`unattributed_transfers`, documented as a ledger-shape check that does
+not prove consent. Oracle 9 gained the attester-identity comparison and
+is strictly stronger.
+
+**Host parity widened**: 375 → 900 enumerated inputs, 80 000 commands,
+all byte-identical, now reaching `empty_transfer` (2 743) and
+`unknown_witness` (4 274). Side effect recorded honestly: the incidental
+band×tier density in the trace thinned; cell reachability rests on the
+purpose-built trial/010 tests, and the trace count was not tuned to make
+a missing cell reappear.
