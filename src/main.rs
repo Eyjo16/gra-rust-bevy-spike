@@ -27,6 +27,7 @@ mod oracles;
 mod render_bevy;
 mod shapes;
 mod social;
+mod winter;
 
 use std::process::ExitCode;
 
@@ -179,6 +180,17 @@ fn main() -> ExitCode {
             }
             println!("truth_shapes emitted dir={dir} source_commit={source_commit}");
             return ExitCode::SUCCESS;
+        }
+        if command == "winter" {
+            // W01: the winter-crisis scene. A separate fixture and three
+            // command sequences through the same boundary and the same
+            // ten oracles; it adds no rule and touches no identity of
+            // the standard trial.
+            return if winter::run() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            };
         }
         if command == "rs01-render" {
             #[cfg(feature = "bevy-render")]
