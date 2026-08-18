@@ -247,6 +247,85 @@ pub const GIVE_COST: u8 = 3;
 /// the full stamina range, and every closed reason code. Change any of them and every subsequent
 /// receipt carries a different fingerprint, so a trial record always says
 /// which grammar version produced it.
+/// Separator between declared fields in a format fingerprint: without
+/// it, `("ab", "c")` and `("a", "bc")` would hash alike.
+const FORMAT_FIELD_SEP: u8 = 0x1f;
+
+/// The canonical command encoding, declared: each verb code, then every
+/// field it contributes to `Command::canonical_bytes`, in order, with
+/// the byte width that field occupies. An optional id is width 9 — one
+/// presence byte plus eight. This table is the *declaration* of the
+/// encoding; `canonical_bytes` is its implementation, and
+/// `command_encoding_matches_its_declaration` proves they agree.
+pub const COMMAND_ENCODING: [(&str, &[(&str, u8)]); 3] = [
+    ("gather", &[("actor", 8), ("claim", 8), ("site", 8)]),
+    ("witness", &[("witness", 8), ("claim", 8)]),
+    (
+        "give",
+        &[
+            ("giver", 8),
+            ("recipient", 8),
+            ("kind", 1),
+            ("grams", 8),
+            ("witness", 9),
+        ],
+    ),
+];
+
+/// The canonical receipt format, declared: the field names of
+/// `Receipt::canonical_line`, in printed order. Same relationship as
+/// above — `receipt_format_matches_its_declaration` proves the printed
+/// line agrees with this list.
+pub const RECEIPT_FIELDS: [&str; 19] = [
+    "seq",
+    "verb",
+    "actor",
+    "claim",
+    "site",
+    "to",
+    "outcome",
+    "reason",
+    "claim_witnessed",
+    "transfer_witness",
+    "stamina_before",
+    "band",
+    "tier",
+    "kind",
+    "spent",
+    "mass_g",
+    "grammar",
+    "world_before",
+    "world",
+];
+
+/// Identity of the canonical command bytes — what a foreign caller must
+/// produce for its input to mean anything. Deliberately separate from
+/// the grammar: renaming a command field is not a gameplay change, and
+/// conflating the two makes both unreadable (review finding 3).
+pub fn command_encoding_fingerprint() -> u64 {
+    let mut hasher = Fnv1a::default();
+    for (verb, fields) in COMMAND_ENCODING {
+        hasher.update(verb.as_bytes());
+        hasher.update(&[FORMAT_FIELD_SEP]);
+        for (name, width) in fields {
+            hasher.update(name.as_bytes());
+            hasher.update(&[*width, FORMAT_FIELD_SEP]);
+        }
+    }
+    hasher.finish()
+}
+
+/// Identity of the canonical receipt line — what a reader of the ledger
+/// must expect. Separate from the grammar for the same reason.
+pub fn receipt_format_fingerprint() -> u64 {
+    let mut hasher = Fnv1a::default();
+    for field in RECEIPT_FIELDS {
+        hasher.update(field.as_bytes());
+        hasher.update(&[FORMAT_FIELD_SEP]);
+    }
+    hasher.finish()
+}
+
 /// The grammar identity this crate is licensed to carry. Moving it is a
 /// declared spec evolution: the author licenses the move, a trial
 /// pre-registers the new value from the declared inputs, and this
@@ -256,6 +335,17 @@ pub const GIVE_COST: u8 = 3;
 /// `0x7dd8c6706e0b949f` (V01: the give verb).
 #[cfg(test)]
 pub const LICENSED_GRAMMAR_FINGERPRINT: u64 = 0x7dd8_c670_6e0b_949f;
+
+/// The canonical-command-encoding identity this crate is licensed to
+/// carry (author licence, 2026-08-18). Pre-registered in
+/// `docs/trial-v01-repair-preregistration.md` §2 before implementation.
+#[cfg(test)]
+pub const LICENSED_COMMAND_ENCODING_FINGERPRINT: u64 = 0xfa37_eefa_3594_cfe3;
+
+/// The canonical-receipt-format identity this crate is licensed to
+/// carry, pre-registered in the same place.
+#[cfg(test)]
+pub const LICENSED_RECEIPT_FORMAT_FINGERPRINT: u64 = 0x7e62_1526_22bb_9132;
 
 pub fn grammar_fingerprint() -> u64 {
     let mut hasher = Fnv1a::default();
@@ -532,11 +622,18 @@ pub struct WitnessCommand {
     pub claim: ClaimId,
 }
 
-/// A voluntary transfer (V01). The giver is the actor: there is no
-/// command shape in which one character moves another's holding, so
-/// theft is unrepresentable rather than refused. The witness, when
-/// named, is recorded on the receipt and pays nothing — nobody else's
-/// act may spend a third party's stamina or mass.
+/// An attributed transfer (V01). The command names its source, and no
+/// accepted transfer debits a holding other than that named source — so
+/// a command shape that moves someone else's stock does not exist.
+///
+/// That is **attribution, not consent**: nothing here proves the named
+/// giver wanted it. Whether a character wills an act needs an issuer, a
+/// player seat, delegation, or actor intent, none of which exists yet
+/// (review finding 2). The design intent is a voluntary transfer; the
+/// evidence is attribution, and the two must not be confused.
+///
+/// The witness, when named, is recorded on the receipt by identity and
+/// pays nothing — nobody else's act may spend a third party.
 #[derive(Debug, Clone, Copy)]
 pub struct GiveCommand {
     pub giver: CharacterId,
@@ -723,7 +820,16 @@ pub struct Receipt {
     /// or stamina is spent.
     pub recipient: Option<CharacterId>,
     pub outcome: OutcomeKind,
-    pub witnessed: bool,
+    /// Whether the claim this verb acted through was witnessed. Claim
+    /// witnessing only — a transfer acts through no claim and always
+    /// reports `false` here (review finding 1: one boolean must not
+    /// carry two verb-local meanings).
+    pub claim_witnessed: bool,
+    /// The third party a transfer named as its witness, by identity.
+    /// `None` for an unwitnessed transfer and for every verb that has no
+    /// transfer witness. Recorded, never stateful: the named witness
+    /// pays nothing and no owner state changes.
+    pub transfer_witness: Option<CharacterId>,
     pub stamina_before: Option<Stamina>,
     pub band: Option<StaminaBand>,
     pub tier: Option<InfraTier>,
@@ -756,8 +862,12 @@ impl Receipt {
         let claim = self
             .claim
             .map_or_else(|| "-".to_owned(), |k| format!("K{}", k.0));
+        let transfer_witness = self
+            .transfer_witness
+            .map_or_else(|| "-".to_owned(), |c| format!("C{}", c.0));
         format!(
-            "seq={} verb={} actor=C{} claim={} site={} to={} outcome={} reason={} witnessed={} \
+            "seq={} verb={} actor=C{} claim={} site={} to={} outcome={} reason={} \
+             claim_witnessed={} transfer_witness={} \
              stamina_before={} band={} tier={} kind={} spent={} mass_g={} \
              grammar=0x{:016x} world_before=0x{:016x} world=0x{:016x}",
             self.seq,
@@ -768,7 +878,8 @@ impl Receipt {
             recipient,
             self.outcome.code(),
             self.outcome.reason_code(),
-            self.witnessed,
+            self.claim_witnessed,
+            transfer_witness,
             stamina_before,
             band,
             tier,
@@ -1042,7 +1153,8 @@ fn submit_gather(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
             site: Some(cmd.site),
             recipient: None,
             outcome: OutcomeKind::Refused(reason),
-            witnessed,
+            claim_witnessed: witnessed,
+            transfer_witness: None,
             stamina_before,
             band: stamina_before.map(Stamina::band),
             tier: world.economy.tier(cmd.site),
@@ -1072,7 +1184,8 @@ fn submit_gather(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
                 site: Some(cmd.site),
                 recipient: None,
                 outcome,
-                witnessed,
+                claim_witnessed: witnessed,
+                transfer_witness: None,
                 stamina_before,
                 band: Some(band),
                 tier: Some(tier),
@@ -1103,7 +1216,8 @@ fn submit_witness(world: &mut World, seq: u64, cmd: WitnessCommand) -> Receipt {
             site,
             recipient: None,
             outcome: OutcomeKind::Refused(reason),
-            witnessed,
+            claim_witnessed: witnessed,
+            transfer_witness: None,
             stamina_before,
             band: stamina_before.map(Stamina::band),
             tier: None,
@@ -1128,7 +1242,8 @@ fn submit_witness(world: &mut World, seq: u64, cmd: WitnessCommand) -> Receipt {
                 site,
                 recipient: None,
                 outcome: OutcomeKind::Accepted,
-                witnessed,
+                claim_witnessed: witnessed,
+                transfer_witness: None,
                 stamina_before,
                 band: stamina_before.map(Stamina::band),
                 tier: None,
@@ -1144,15 +1259,16 @@ fn submit_witness(world: &mut World, seq: u64, cmd: WitnessCommand) -> Receipt {
 }
 
 /// A give's receipt records what a transfer is: who acted, who received,
-/// which kind, how much, and whether anyone attested it. `witnessed` on
-/// this verb means "this transfer had a named witness" — the field's
-/// gather meaning ("the claim was witnessed") does not apply, because a
-/// transfer acts through no claim, and the `claim=-` field says so.
+/// which kind, how much, and **which third party** was named as its
+/// witness. The witness is recorded by identity, not by a flag: two
+/// transfers attested by different people are different facts, and a
+/// ledger that cannot tell them apart is not a ledger (review finding
+/// 1). `claim_witnessed` is always false here — a transfer acts through
+/// no claim, and `claim=-` says so.
 fn submit_give(world: &mut World, seq: u64, cmd: GiveCommand) -> Receipt {
     let world_hash_before = world.hash();
     let grammar = grammar_fingerprint();
     let stamina_before = world.characters.stamina(cmd.giver);
-    let witnessed = cmd.witness.is_some();
 
     match plan_give(world, &cmd) {
         Err(reason) => Receipt {
@@ -1163,7 +1279,8 @@ fn submit_give(world: &mut World, seq: u64, cmd: GiveCommand) -> Receipt {
             site: None,
             recipient: Some(cmd.recipient),
             outcome: OutcomeKind::Refused(reason),
-            witnessed,
+            claim_witnessed: false,
+            transfer_witness: cmd.witness,
             stamina_before,
             band: stamina_before.map(Stamina::band),
             tier: None,
@@ -1187,7 +1304,8 @@ fn submit_give(world: &mut World, seq: u64, cmd: GiveCommand) -> Receipt {
                 site: None,
                 recipient: Some(cmd.recipient),
                 outcome: OutcomeKind::Accepted,
-                witnessed,
+                claim_witnessed: false,
+                transfer_witness: cmd.witness,
                 stamina_before,
                 band: stamina_before.map(Stamina::band),
                 tier: None,
@@ -1266,6 +1384,196 @@ mod tests {
             LICENSED_GRAMMAR_FINGERPRINT,
             "the grammar moved without a licensed, pre-registered move"
         );
+    }
+
+    /// The licensed canonical-language identities (V01 repair). Each is
+    /// computed from a disjoint declared input set, so an edit to one
+    /// input moves exactly one number and turns exactly one pin red —
+    /// which is what makes the three-way split real rather than
+    /// cosmetic (falsifier R3).
+    #[test]
+    fn canonical_language_identities_match_their_licensed_values() {
+        assert_eq!(
+            command_encoding_fingerprint(),
+            LICENSED_COMMAND_ENCODING_FINGERPRINT,
+            "the canonical command encoding moved without a licensed, pre-registered move"
+        );
+        assert_eq!(
+            receipt_format_fingerprint(),
+            LICENSED_RECEIPT_FORMAT_FINGERPRINT,
+            "the canonical receipt format moved without a licensed, pre-registered move"
+        );
+        // The three identities are distinct numbers over disjoint
+        // inputs: a coincidence here would hide a move.
+        assert_ne!(command_encoding_fingerprint(), receipt_format_fingerprint());
+        assert_ne!(command_encoding_fingerprint(), grammar_fingerprint());
+        assert_ne!(receipt_format_fingerprint(), grammar_fingerprint());
+    }
+
+    /// The command-encoding declaration is not decorative: the bytes a
+    /// command actually produces have exactly the declared width, verb
+    /// by verb.
+    #[test]
+    fn command_encoding_matches_its_declaration() {
+        let samples = [
+            Command::Gather(GatherCommand {
+                actor: CharacterId(1),
+                claim: ClaimId(2),
+                site: SiteId(3),
+            }),
+            Command::Witness(WitnessCommand {
+                witness: CharacterId(1),
+                claim: ClaimId(2),
+            }),
+            Command::Give(GiveCommand {
+                giver: CharacterId(1),
+                recipient: CharacterId(2),
+                kind: ResourceKind::Food,
+                grams: MassGrams::new(5),
+                witness: Some(CharacterId(3)),
+            }),
+        ];
+        for (sample, (verb, fields)) in samples.iter().zip(COMMAND_ENCODING) {
+            let bytes = sample.canonical_bytes();
+            let declared: usize = verb.len()
+                + fields
+                    .iter()
+                    .map(|(_, width)| *width as usize)
+                    .sum::<usize>();
+            assert_eq!(
+                bytes.len(),
+                declared,
+                "{verb} encodes {} bytes, declares {declared}",
+                bytes.len()
+            );
+            assert!(bytes.starts_with(verb.as_bytes()), "{verb} prefix");
+        }
+        // The optional witness field is the declared 9 bytes only when
+        // present; absent, it is the presence byte alone.
+        let silent = Command::Give(GiveCommand {
+            giver: CharacterId(1),
+            recipient: CharacterId(2),
+            kind: ResourceKind::Food,
+            grams: MassGrams::new(5),
+            witness: None,
+        });
+        assert_eq!(
+            silent.canonical_bytes().len(),
+            samples[2].canonical_bytes().len() - 8
+        );
+    }
+
+    /// The receipt-format declaration is not decorative either: the
+    /// printed line's field names are exactly `RECEIPT_FIELDS`, in
+    /// order, for every verb.
+    #[test]
+    fn receipt_format_matches_its_declaration() {
+        let mut world = give_world();
+        let receipts = [
+            submit(
+                &mut world,
+                1,
+                Command::Gather(GatherCommand {
+                    actor: CharacterId(1),
+                    claim: ClaimId(1),
+                    site: SiteId(1),
+                }),
+            ),
+            submit(
+                &mut world,
+                2,
+                Command::Witness(WitnessCommand {
+                    witness: CharacterId(2),
+                    claim: ClaimId(1),
+                }),
+            ),
+            submit(
+                &mut world,
+                3,
+                give(1, 2, ResourceKind::Fodder, 100, Some(3)),
+            ),
+        ];
+        for receipt in receipts {
+            let line = receipt.canonical_line();
+            let names: Vec<&str> = line
+                .split(' ')
+                .map(|field| {
+                    field
+                        .split_once('=')
+                        .expect("every receipt field is name=value")
+                        .0
+                })
+                .collect();
+            assert_eq!(
+                names, RECEIPT_FIELDS,
+                "receipt field names or order drifted"
+            );
+        }
+    }
+
+    /// Falsifier R1 (V01 repair): two transfers alike in everything but
+    /// the witness's identity are different facts. The receipts must
+    /// differ; the world state must not.
+    #[test]
+    fn falsification_two_witnesses_must_produce_two_different_receipts() {
+        let mut by_c3 = give_world();
+        let mut by_c4 = give_world();
+        let first = submit(
+            &mut by_c3,
+            3,
+            give(1, 2, ResourceKind::Fodder, 400, Some(3)),
+        );
+        let second = submit(
+            &mut by_c4,
+            3,
+            give(1, 2, ResourceKind::Fodder, 400, Some(4)),
+        );
+        assert_eq!(first.transfer_witness, Some(CharacterId(3)));
+        assert_eq!(second.transfer_witness, Some(CharacterId(4)));
+        assert_ne!(
+            first.canonical_line(),
+            second.canonical_line(),
+            "two different attesters produced the same receipt"
+        );
+        assert!(first.canonical_line().contains(" transfer_witness=C3 "));
+        assert!(second.canonical_line().contains(" transfer_witness=C4 "));
+        assert_eq!(
+            by_c3.canonical_state(),
+            by_c4.canonical_state(),
+            "naming a different witness changed canonical state"
+        );
+        assert_eq!(by_c3.hash(), by_c4.hash());
+    }
+
+    /// Falsifier R4 (V01 repair): claim witnessing and transfer
+    /// witnessing are separately named on every receipt. A gather
+    /// through a witnessed claim reports `claim_witnessed=true` and no
+    /// transfer witness; a witnessed transfer reports the reverse.
+    #[test]
+    fn claim_witnessing_and_transfer_witnessing_are_never_the_same_field() {
+        let mut world = give_world();
+        let gathered = submit(
+            &mut world,
+            1,
+            Command::Gather(GatherCommand {
+                actor: CharacterId(1),
+                claim: ClaimId(1),
+                site: SiteId(1),
+            }),
+        );
+        assert!(gathered.claim_witnessed);
+        assert_eq!(gathered.transfer_witness, None);
+
+        let given = submit(
+            &mut world,
+            2,
+            give(1, 2, ResourceKind::Fodder, 100, Some(3)),
+        );
+        assert!(
+            !given.claim_witnessed,
+            "a transfer acts through no claim and must never report one witnessed"
+        );
+        assert_eq!(given.transfer_witness, Some(CharacterId(3)));
     }
 
     /// Falsifier F4 (RES01): the kind vocabulary is closed — every code
@@ -1976,6 +2284,9 @@ mod tests {
                 (CharacterId(1), Stamina::new(90).unwrap()),
                 (CharacterId(2), Stamina::new(50).unwrap()),
                 (CharacterId(3), Stamina::new(2).unwrap()),
+                // A fourth character exists only so that two DIFFERENT
+                // third parties can attest the same transfer (R1).
+                (CharacterId(4), Stamina::new(40).unwrap()),
             ])
             .unwrap(),
             economy: EconomyOwner::seed_sites([
@@ -2048,11 +2359,14 @@ mod tests {
         assert_eq!(world.economy.total_mass(), before_total);
     }
 
-    /// Falsifier G2 (V01): consent. The receipt's actor is always the
-    /// character whose holding decreases; a give never reduces a third
-    /// party, and there is no command shape that could ask it to.
+    /// Falsifier G2 (V01, restated after review): **attribution**, not
+    /// consent. The receipt's actor is always the character whose
+    /// holding decreases, a give never reduces a third party, and no
+    /// command shape could ask it to. What this does NOT show is that
+    /// the named giver willed the transfer — any caller may submit a
+    /// command naming any character until an issuer or seat exists.
     #[test]
-    fn falsification_give_never_moves_a_third_partys_holding() {
+    fn falsification_give_debits_only_the_commands_named_source() {
         let mut world = give_world();
         let before_c3 = world.economy.holding(CharacterId(3), ResourceKind::Timber);
         let receipt = submit(
@@ -2153,8 +2467,8 @@ mod tests {
             3,
             give(1, 2, ResourceKind::Fodder, 400, None),
         );
-        assert!(witnessed.witnessed);
-        assert!(!silent.witnessed);
+        assert_eq!(witnessed.transfer_witness, Some(CharacterId(3)));
+        assert_eq!(silent.transfer_witness, None);
         assert_ne!(witnessed.canonical_line(), silent.canonical_line());
         assert_eq!(
             witnessed_world.canonical_state(),

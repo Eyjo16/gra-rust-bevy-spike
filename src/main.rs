@@ -32,8 +32,9 @@ use std::process::ExitCode;
 
 use boundary::{
     CharacterId, ClaimId, Command, GatherCommand, GiveCommand, InfraTier, MassGrams, Receipt,
-    ResourceKind, SiteId, Stamina, WitnessCommand, World, fixture_identity, grammar_fingerprint,
-    receipt_chain_digest, submit, validate_world_coherence,
+    ResourceKind, SiteId, Stamina, WitnessCommand, World, command_encoding_fingerprint,
+    fixture_identity, grammar_fingerprint, receipt_chain_digest, receipt_format_fingerprint,
+    submit, validate_world_coherence,
 };
 use character::CharacterOwner;
 use economy::EconomyOwner;
@@ -271,7 +272,12 @@ fn main() -> ExitCode {
 
     let mut world = fixture();
     validate_world_coherence(&world).expect("fixture is referentially coherent");
-    println!("grammar=0x{:016x}", grammar_fingerprint());
+    println!(
+        "grammar=0x{:016x} cmdfmt=0x{:016x} rcptfmt=0x{:016x}",
+        grammar_fingerprint(),
+        command_encoding_fingerprint(),
+        receipt_format_fingerprint()
+    );
     let fixture_hash = world.hash();
     let baseline_by_kind = oracles::baseline_by_kind(&world);
     let cmds = commands();
@@ -393,10 +399,12 @@ fn main() -> ExitCode {
     // comparison. baseline_commit is runner-supplied (git knows it, the
     // binary does not); everything else is recomputed from the run itself.
     println!(
-        "envelope baseline_commit={} grammar=0x{:016x} fixture=0x{:016x} \
-         receipts=0x{:016x} world=0x{:016x} oracles={}v{}",
+        "envelope baseline_commit={} grammar=0x{:016x} cmdfmt=0x{:016x} rcptfmt=0x{:016x} \
+         fixture=0x{:016x} receipts=0x{:016x} world=0x{:016x} oracles={}v{}",
         std::env::var("BASELINE_COMMIT").unwrap_or_else(|_| "-".to_owned()),
         grammar_fingerprint(),
+        command_encoding_fingerprint(),
+        receipt_format_fingerprint(),
         fixture_identity(fixture_hash, &cmds),
         receipt_chain_digest(&log),
         world.hash(),
