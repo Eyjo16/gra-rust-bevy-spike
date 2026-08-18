@@ -5,6 +5,11 @@
 //! scene adds no rule: no verb, no kind, no value, no oracle. It is a
 //! fixture and three command sequences.
 //!
+//! Language discipline (review finding 5): the plans **stockpile**. They
+//! do not feed cattle, close roofs or feed people, because gathering and
+//! transferring stock is all the truth layer does. Every consequence word
+//! was removed from this file rather than left to be read as a promise.
+//!
 //! Authority note, hard: `WINTER_NEED` and the shortfall table are
 //! **scene arithmetic**, not truth. The truth layer has no concept of a
 //! need, a cow, a mouth or a roof — nothing consumes anything. The
@@ -15,8 +20,9 @@
 
 use crate::boundary::{
     CharacterId, ClaimId, Command, GatherCommand, GiveCommand, InfraTier, KIND_COUNT, MassGrams,
-    Receipt, ResourceKind, SiteId, Stamina, WitnessCommand, World, fixture_identity,
-    grammar_fingerprint, receipt_chain_digest, submit, validate_world_coherence,
+    Receipt, ResourceKind, SiteId, Stamina, WitnessCommand, World, command_encoding_fingerprint,
+    fixture_identity, grammar_fingerprint, receipt_chain_digest, receipt_format_fingerprint,
+    submit, validate_world_coherence,
 };
 use crate::character::CharacterOwner;
 use crate::economy::EconomyOwner;
@@ -115,9 +121,10 @@ pub fn plans() -> Vec<Plan> {
     vec![
         Plan {
             id: "A",
-            name: "feed the cattle",
+            name: "stockpile fodder",
             intent: "every hand to the hayfield, including the boy's — \
-                     which first costs the head the stamina to attest his claim",
+                     which first costs the head the stamina to attest his claim. \
+                     Whether the cattle live is not a fact this layer holds",
             commands: vec![
                 gather(1, 1, 1),
                 gather(2, 2, 1),
@@ -132,9 +139,10 @@ pub fn plans() -> Vec<Plan> {
         },
         Plan {
             id: "B",
-            name: "save the roof",
-            intent: "two to the wood and two to the hay; the roof closes, \
-                     and the cattle take the loss",
+            name: "stockpile building material",
+            intent: "two to the wood and two to the hay; the household ends \
+                     holding more timber than the stated roof figure, and less \
+                     fodder. Nothing is repaired: no structure exists",
             commands: vec![
                 gather(1, 5, 2),
                 gather(2, 6, 2),
@@ -148,9 +156,9 @@ pub fn plans() -> Vec<Plan> {
         },
         Plan {
             id: "C",
-            name: "feed the people",
-            intent: "the shore and the hayfield; the household eats, the \
-                     roof stays open, the cattle take the loss",
+            name: "stockpile food",
+            intent: "the shore and the hayfield; the household ends closest to \
+                     the stated food figure. Nobody eats: no consumption exists",
             commands: vec![
                 gather(3, 7, 3),
                 gather(4, 8, 3),
@@ -207,6 +215,39 @@ pub fn run_plan(plan: &Plan) -> PlanRun {
     }
 }
 
+/// Exact pure/host parity for one plan: the Bevy-hosted replay must
+/// reproduce the pure run's receipt lines, its receipt-chain digest, its
+/// exact canonical state and its world hash. Every winter plan carries
+/// an attested transfer, so this also covers receipts whose only unusual
+/// field is the attester's identity (review finding 6).
+#[cfg(feature = "bevy-host")]
+pub fn host_parity(plan: &Plan, run: &PlanRun) -> bool {
+    let mut host = crate::host_bevy::Host::new(fixture);
+    host.run_trial(&run.commands);
+    let pure_lines: Vec<String> = run.log.iter().map(Receipt::canonical_line).collect();
+    let receipts_match = host.receipts() == pure_lines
+        && receipt_chain_digest(host.receipt_log()) == receipt_chain_digest(&run.log);
+    let state_match = host.truth_state() == run.world.canonical_state();
+    let world_match = host.truth_hash() == run.world.hash();
+    let attested = run
+        .log
+        .iter()
+        .filter(|receipt| receipt.transfer_witness.is_some())
+        .count();
+    println!(
+        "winter_host_parity plan={} receipts_match={} state_match={} world_match={} \
+         attested_transfers={} receipts=0x{:016x} world=0x{:016x}",
+        plan.id,
+        receipts_match,
+        state_match,
+        world_match,
+        attested,
+        receipt_chain_digest(host.receipt_log()),
+        host.truth_hash(),
+    );
+    receipts_match && state_match && world_match
+}
+
 /// Runs all three plans, prints receipts, state, oracle verdicts,
 /// shortfall and one envelope per plan. Returns false if any oracle
 /// fails, so `cargo run winter` is a gate like every other run.
@@ -256,12 +297,19 @@ pub fn run() -> bool {
             );
             all_pass &= verdict.pass;
         }
+        #[cfg(feature = "bevy-host")]
+        {
+            all_pass &= host_parity(&plan, &run);
+        }
         println!(
-            "envelope scene=W01 plan={} baseline_commit={} grammar=0x{:016x} fixture=0x{:016x} \
-             receipts=0x{:016x} world=0x{:016x} oracles={}v{}",
+            "envelope scene=W01 plan={} baseline_commit={} grammar=0x{:016x} cmdfmt=0x{:016x} \
+             rcptfmt=0x{:016x} fixture=0x{:016x} receipts=0x{:016x} world=0x{:016x} \
+             oracles={}v{}",
             plan.id,
             std::env::var("BASELINE_COMMIT").unwrap_or_else(|_| "-".to_owned()),
             grammar_fingerprint(),
+            command_encoding_fingerprint(),
+            receipt_format_fingerprint(),
             fixture_identity(fixture_hash, &run.commands),
             receipt_chain_digest(&run.log),
             run.world.hash(),
@@ -399,11 +447,13 @@ mod tests {
         );
     }
 
-    /// No plan meets every need — the scene is a triage, and each plan
-    /// pays for what it saves. If this ever passes trivially (a plan
-    /// meeting all three needs), the fixture stopped being a crisis.
+    /// No *registered* plan meets every need — the scene is a triage,
+    /// and each plan pays for what it saves. Scope, stated because the
+    /// original wording did not (review finding 6): "best" here means
+    /// best among these three sequences, not best over the reachable
+    /// strategy space, which is unbounded and unsearched.
     #[test]
-    fn no_plan_can_meet_every_need() {
+    fn no_registered_plan_can_meet_every_need() {
         let mut best_by_kind = [u64::MAX; KIND_COUNT];
         for plan in plans() {
             let run = run_plan(&plan);
@@ -417,23 +467,90 @@ mod tests {
                 best_by_kind[kind.index()] = best_by_kind[kind.index()].min(short[kind.index()]);
             }
         }
-        // Each kind is best served by a different plan: the triage is
-        // real, not a dominant strategy wearing three names.
+        // Each kind is best served by a different one of the three: the
+        // triage is real, not a dominant strategy wearing three names.
+        // This is the best among the REGISTERED plans only.
         assert_eq!(
             best_by_kind,
             [2_000, 900, 0],
-            "the best achievable shortfall per kind changed"
+            "the best shortfall per kind among the three registered plans changed"
         );
     }
 
-    /// The scene changes no law: it runs on the same grammar as the
-    /// standard trial, and its own fixture is coherent.
+    /// Falsifier (review finding 6): every winter plan must replay
+    /// byte-for-byte inside the Bevy host — receipts, chain digest,
+    /// exact canonical state and world hash. Each plan carries at least
+    /// one attested transfer, so the attester's identity travels through
+    /// the host too.
+    #[cfg(feature = "bevy-host")]
     #[test]
-    fn the_scene_adds_no_rule() {
+    fn every_plan_replays_identically_inside_the_host() {
+        for plan in plans() {
+            let run = run_plan(&plan);
+            assert!(
+                run.log
+                    .iter()
+                    .any(|receipt| receipt.transfer_witness.is_some()),
+                "plan {} has no attested transfer, so this parity check is weaker than claimed",
+                plan.id
+            );
+            assert!(
+                host_parity(&plan, &run),
+                "plan {} diverged between the pure and hosted runs",
+                plan.id
+            );
+        }
+    }
+
+    /// The scene changes no law. The original form of this test compared
+    /// `grammar_fingerprint()` to itself and proved nothing — the review
+    /// was right to call it tautological. What proves the claim is the
+    /// STANDARD trial's identities being unmoved by this branch, so they
+    /// are pinned here: if the winter scene ever reaches into the
+    /// grammar, a value, a verb or the standard fixture, one of these
+    /// six numbers moves and this test fails.
+    #[test]
+    fn the_scene_moves_no_identity_of_the_standard_trial() {
+        let mut world = crate::fixture();
+        let fixture_hash = world.hash();
+        let cmds = crate::commands();
+        let log: Vec<Receipt> = cmds
+            .iter()
+            .enumerate()
+            .map(|(i, cmd)| submit(&mut world, i as u64 + 1, *cmd))
+            .collect();
+
         assert_eq!(
             grammar_fingerprint(),
-            crate::boundary::grammar_fingerprint()
+            0x7dd8_c670_6e0b_949f,
+            "the winter scene moved the grammar"
         );
+        assert_eq!(
+            command_encoding_fingerprint(),
+            0xfa37_eefa_3594_cfe3,
+            "the winter scene moved the canonical command encoding"
+        );
+        assert_eq!(
+            receipt_format_fingerprint(),
+            0x7e62_1526_22bb_9132,
+            "the winter scene moved the canonical receipt format"
+        );
+        assert_eq!(
+            fixture_identity(fixture_hash, &cmds),
+            0x93af_ba3f_312b_d89d,
+            "the winter scene moved the standard fixture identity"
+        );
+        assert_eq!(
+            receipt_chain_digest(&log),
+            0xc0b4_da51_744b_cf19,
+            "the winter scene changed what the standard trial receipts"
+        );
+        assert_eq!(
+            world.hash(),
+            0xb500_dee0_e5d8_83d8,
+            "the winter scene changed where the standard trial ends"
+        );
+
         validate_world_coherence(&fixture()).expect("winter fixture is coherent");
         // Total mass in the scene is the sum of its three sites; nothing
         // is created by seeding people who hold nothing.
