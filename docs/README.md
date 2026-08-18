@@ -37,6 +37,7 @@ decision, migration account, and approval.
 | `active-cell-reachability-report.md` | Standalone evidence | Records trial/010's systematic 12-cell reachability and stock-boundary pressure |
 | `trial-013-low-actionability-report.md` | Sealed Meaning Gate evidence | Preserves trial/013 training evidence and H-A verdict candidate while keeping the holdout unrevealed and unexecuted |
 | `trial-res01-resource-kinds-report.md` | Standalone evidence | Records the author-licensed resource-kind vocabulary, the pre-registered grammar move, and the per-kind conservation oracle |
+| `trial-v01-give-report.md` | Standalone evidence | Records the third verb: structural consent, exact transfers, receipted-not-stateful witnessing, and the mass-authority oracle |
 | `trial-e01-belief-actionability-taste-report.md` | Bounded presentation evidence | Records the Publication-fed wrong/matching-belief taste, exact gates, captures, and the still-open manual verdict |
 | `runtime-contract-proposal.md` | Ratified law | Runtime Contract v0.1 (R1–R7 with amendments): current executable runtime law, semantic rulings, and the durability gap |
 | `runtime-target-map.md` | Active work map | Orders runtime falsifiers and capability-scoped dependency sweeps by authority; carries per-target status |
