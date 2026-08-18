@@ -39,9 +39,15 @@ author should work or rest.
 ## Frozen identities and the gate
 
 ```
-grammar=0x7dd8c6706e0b949f  fixture=0x93afba3f312bd89d
-receipts=0x2d52250d86f0638b world=0xb500dee0e5d883d8  oracles=10v6
+grammar=0x7dd8c6706e0b949f  cmdfmt=0xfa37eefa3594cfe3  rcptfmt=0x7e62152622bb9132
+fixture=0x93afba3f312bd89d  receipts=0xc0b4da51744bcf19
+world=0xb500dee0e5d883d8    oracles=10v7
 ```
+
+Canonical language is identified three ways since 2026-08-18 (author
+licence): **grammar** = gameplay semantics and policies; **cmdfmt** =
+canonical command bytes; **rcptfmt** = canonical receipt fields and
+order. A presentation change moves one number and not the others.
 
 Those are the identities of the **V01 line** (RES01 + Give), which is
 review-ready and not yet merged. Merged master still carries the
@@ -77,16 +83,19 @@ line, `cargo run winter` too (thirty oracle verdicts, three plans).
 
 - Master `1f3cbc6`: trials 001–010, 013, 014, R01–R03, D01, TS01 and
   **E01** merged. E01 closed the belief→action legibility question.
-- **Three stacked review-ready branches, gates green, nothing pushed**:
-  `trial/RES01-resource-kinds` (`4f2443c`) — closed kind vocabulary
-  fodder/food/timber, author-licensed 2026-08-18, per-kind conservation;
-  `trial/V01-give` (`605e32a`) — the third verb, structural consent,
-  exact transfers, receipted-not-stateful witnessing;
-  `trial/W01-winter-crisis` (`a173383`) — the first playable scene,
-  three plans, thirty oracle verdicts.
-  Synthesis: `docs/sprint-2026-08-18-overview.md`.
-- The grammar moved twice, both times to a value pre-registered before
-  implementation, and is now pinned by a test.
+- **Three stacked branches, reviewed once and repaired, gates green,
+  nothing pushed**: `trial/RES01-resource-kinds` (`d4f7ebe`) — closed
+  kind vocabulary fodder/food/timber, author-licensed, per-kind
+  conservation; `trial/V01-give` (`f83796d`) — the third verb,
+  **attributed** transfers (consent is NOT proven), attester recorded by
+  identity; `trial/W01-winter-crisis` (`8656e73`) — the first playable
+  scene, three stockpiling plans, thirty oracle verdicts, per-plan host
+  parity. Synthesis: `docs/sprint-2026-08-18-overview.md`.
+- Four identity values moved or were created this sprint, every one
+  predicted before implementation and now pinned by tests.
+- **Vocabulary discipline**: say *attributed*, never *voluntary* or
+  *consented*, about a transfer. Consent needs a seat, an issuer,
+  delegation or actor intent, none of which exists.
 - **The load-bearing open finding: nothing is consumed, so nothing is at
   stake.** W01 can state a shortfall; it cannot make one hurt. Time,
   household, refusal of labour, and turf/fuel names are the next gaps.

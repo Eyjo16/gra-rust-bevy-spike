@@ -1,8 +1,11 @@
 # Sprint overview — 2026-08-18 · E01 merge, RES01, V01, W01
 
-Author: Fable 5 (lead). Instrument: this document is a synthesis over
-four bundles that each ran under their own envelope; it introduces no
-claim of its own that is not already evidenced in one of them.
+**Second pass.** The first version of this document was held in review
+for repeating V01's consent overclaim and W01's over-strong framing.
+Both are corrected below, and the review round itself is now part of the
+record (§8). Author: Fable 5 (lead). Instrument: a synthesis over four
+bundles that each ran under their own envelope; it introduces no claim of
+its own that is not already evidenced in one of them.
 
 **Read the bundles, not this page, when you review**:
 `docs/trial-res01-resource-kinds-report.md`,
@@ -32,10 +35,9 @@ Deviations from Sol's proposal, all deliberate:
   catch-all absorbs exactly the pressure that should force a named kind
   and a permissioned move, and it makes cross-kind leakage
   unfalsifiable.
-- **Give carries an optional named witness**, receipted and never
-  stateful. Sol's shape asked for witnessed and unwitnessed gives to be
-  separately receipted; this is the cheapest honest way to do that
-  without inventing social state or spending a third party's stamina.
+- **Give carries an optional named witness**, receipted **by identity**
+  and never stateful. (First pass recorded only a boolean; the review
+  caught it, and it is fixed.)
 - **W01 became a triage, not a scenario.** The scene is built so no plan
   can win, because the interesting output is the list of what the truth
   layer cannot yet say.
@@ -45,30 +47,45 @@ Deviations from Sol's proposal, all deliberate:
 | Branch | Tip | Gate | Terminal state |
 |--------|-----|------|----------------|
 | `master` | `1f3cbc6` | green (default · bevy-host · bevy-render · e01-taste) | **E01 merged on the author's instruction** |
-| `trial/RES01-resource-kinds` | `4f2443c` | green | review-ready |
-| `trial/V01-give` | `605e32a` | green | review-ready, stacked on RES01 |
-| `trial/W01-winter-crisis` | `a173383` | green (+ `cargo run winter`) | review-ready, stacked on V01 |
-| `agent/sprint-2026-08-18-overview` | this | — | review-ready |
+| `trial/RES01-resource-kinds` | `d4f7ebe` | green | conditions applied; awaiting the merge word |
+| `trial/V01-give` | `f83796d` | green | repaired after *hold*; review-ready (second pass) |
+| `trial/W01-winter-crisis` | `8656e73` | green (+ `cargo run winter`) | repaired, rebased onto the repaired V01 |
+| `agent/sprint-2026-08-18-overview` | this | green | second pass |
+
+Tip gates: RES01 and V01 pass every applicable step (the `cargo run
+winter` step exists only on W01 and downstream). W01 and this branch
+pass all fourteen.
 
 Nothing is pushed and nothing beyond E01 is merged. The three trials are
 stacked because they are genuinely dependent (give needs kinds; the
 scene needs both), and each is separately reviewable at its own tip.
 
-Test counts across the sprint: `58 → 81` default, `67 → 90` bevy-host,
-`75 → 98` bevy-render, `89 → 104` e01-taste.
+Test counts across the sprint: `58 → 87` default, `67 → 97` bevy-host,
+`75 → 105` bevy-render, `89 → 111` e01-taste.
 
 ## 3. Identity ledger — what moved, and what runs are still comparable
 
-| Stage | grammar | standard fixture | receipts | world | oracles |
-|-------|---------|------------------|----------|-------|---------|
-| master before E01 (`9a766ca`) | `0x530003916889b952` | `0x3805f1e20c001051` | `0x6c5b0e011471d985` | `0x36221d3fdb8aed9a` | 10v4 |
-| master with E01 (`1f3cbc6`) | unchanged | unchanged | unchanged | unchanged | 10v4 |
-| RES01 (`7c30816`) | **`0xc5d782ec145af0a5`** | `0x13524a85dd14d068` | `0x392e759fb4238743` | `0x77100bd059984f29` | 10v5 |
-| V01 (`15e1bc7`) | **`0x7dd8c6706e0b949f`** | `0x93afba3f312bd89d` | `0x2d52250d86f0638b` | `0xb500dee0e5d883d8` | 10v6 |
-| W01 (`0672405`) | unchanged | unchanged | unchanged | unchanged | 10v6 |
+Canonical language is now identified three ways (author licence,
+2026-08-18): **grammar** = gameplay semantics and policies;
+**cmdfmt** = canonical command bytes; **rcptfmt** = canonical receipt
+fields and order. The split exists so that a presentation change and a
+gameplay change can never again be the same number.
 
-Both grammar moves were **predicted before implementation** and hit
-exactly. The predictor's control stage reproduces the pre-sprint
+| Stage | grammar | cmdfmt | rcptfmt | standard fixture | receipts | world | oracles |
+|-------|---------|--------|---------|------------------|----------|-------|---------|
+| master before E01 (`9a766ca`) | `0x530003916889b952` | — | — | `0x3805f1e20c001051` | `0x6c5b0e011471d985` | `0x36221d3fdb8aed9a` | 10v4 |
+| master with E01 (`1f3cbc6`) | unchanged | — | — | unchanged | unchanged | unchanged | 10v4 |
+| RES01 (`7c30816`) | **`0xc5d782ec145af0a5`** | — | — | `0x13524a85dd14d068` | `0x392e759fb4238743` | `0x77100bd059984f29` | 10v5 |
+| V01 first pass (`15e1bc7`) | **`0x7dd8c6706e0b949f`** | — | — | `0x93afba3f312bd89d` | `0x2d52250d86f0638b` | `0xb500dee0e5d883d8` | 10v6 |
+| V01 repaired (`cccbfcd`) | unchanged | **`0xfa37eefa3594cfe3`** | **`0x7e62152622bb9132`** | unchanged | `0xc0b4da51744bcf19` | unchanged | 10v7 |
+| W01 repaired (`333ce29`) | unchanged | unchanged | unchanged | unchanged | unchanged | unchanged | 10v7 |
+
+The V01 repair row is the split doing its work: the receipt format moved
+and the grammar did not, so the estate can see that nothing about play
+changed when the ledger's columns did.
+
+All four identity values — two grammar moves and the two new format
+identities — were **predicted before implementation** and hit exactly. The predictor's control stage reproduces the pre-sprint
 fingerprint `0x530003916889b952` from its declared inputs, which is what
 makes its two predictions checkable rather than decorative. The
 fingerprint is now pinned in a test (`LICENSED_GRAMMAR_FINGERPRINT`), so
@@ -97,14 +114,18 @@ grammar.
   witness verb's policy of a flat cost with no exhausted gate, and the
   standard trial now contains a receipt where an exhausted character
   hands over 550 g (receipt 27) — visible, deliberate, and gated.
+- **Oracle 3's transfer clause** is named for what it proves:
+  `unattributed_transfers`. It is a ledger-shape check — a mass-moving
+  receipt with no site must name a source, a distinct recipient and a
+  kind — and it does not prove consent.
 - **The shadow evaluator** independently recomputes kinds for every
-  receipt and reimplements give end to end, so both new capabilities are
-  audited by a judge that trusts no receipt field.
-- **Host parity** now enumerates 375 inputs including gives; 32 000
-  commands byte-identical between the pure and hosted runs. Two give
-  refusals (`empty_transfer`, `unknown_witness`) are absent from that
-  enumerated space and are stated as such in the V01 bundle rather than
-  covered by silence.
+  receipt, reimplements give end to end, and compares the attester's
+  *identity*, so a receipt naming the wrong witness diverges.
+- **Host parity** enumerates 900 inputs across 80 000 commands, all
+  byte-identical, and now reaches every give refusal including
+  `empty_transfer` and `unknown_witness`. Each W01 plan additionally
+  replays byte-for-byte in the host — receipts, chain digest, canonical
+  state and world hash.
 
 ## 5. Findings for the author, ranked by how much they cost later
 
@@ -119,18 +140,19 @@ grammar.
    consent to *work* is not modelled at all (`actor_unwilling` belongs
    to O01). In plan A the head spends stamina attesting a claim because
    the command says so.
-4. **`witnessed` now carries two verb-local meanings** — "the claim was
-   witnessed" (gather) and "this transfer had a named witness" (give).
-   Structurally disambiguated today by `claim=-`; if a third reading
-   appears, split the field.
+4. **Consent is not modelled anywhere.** A transfer is *attributed* to a
+   named source; nothing shows the source willed it, and any caller may
+   submit a command naming any character. This waits on the
+   seat/issuer/delegation ruling, and until then no bundle may use the
+   word "voluntary" as evidence.
 5. **A third party can be named as a witness without consenting.**
    Nothing is spent on their behalf, so nothing is stolen, but the truth
-   layer currently lets anyone assert "X saw this" about anyone. Meaning
-   question, not a mechanics bug.
+   layer currently lets anyone assert "X attested this" about anyone.
+   Meaning question, not a mechanics bug.
 6. **Turf and fuel have no names.** RS01's scene says "turf" and the
    nearest licensed kind is `timber`; a winter fire has no kind at all.
-   The kind list survived W01 partly because W01 was written to fit it —
-   stated as a bias, not hidden.
+   W01 is **not** evidence that three kinds suffice — the scene was
+   written to fit the list, so its verdict on the list is inconclusive.
 7. **Scene arithmetic is one careless step from becoming a rule.**
    `WINTER_NEED` is a projection today. The moment consumption is
    licensed it must arrive through a trial, not by promoting a number
@@ -161,11 +183,12 @@ grammar.
    with a re-gate — they are already stacked in that order, so a merge
    of the W01 tip carries all three, which is faster and loses the
    ability to stop between them.
-2. **Cross-review dispatch.** These bundles are mine; `AGENTS.md` §7
-   forbids self-certification. Sol should re-derive at minimum: the two
-   grammar predictions, oracle 3's re-scope (is the extraction clause
-   really unchanged in force?), and whether V01's consent claim is
-   structural or merely untested.
+2. **Second cross-review.** The first round did its job — three of the
+   four bundles came back with material findings, and every finding was
+   accepted. The repairs now need the same treatment: the two new format
+   identities, whether the attribution restatement is exactly the size of
+   its evidence, whether oracle 3's clause name matches its check, and
+   whether W01's language purge missed a promise.
 3. **Consumption.** The W01 finding stack points at one next trial:
    something that eats. That is a contract-shaped decision — it needs a
    licence, a shape, and a pre-registered red, and it is the first thing
@@ -175,3 +198,28 @@ grammar.
 5. **Whether `cargo run winter` joins the standard gate.** It is a
    scene, not law; adding it makes scene drift loud, which is why I ran
    it in this sprint's gate.
+
+## 8. Review round one — what it caught, and what it cost
+
+Reviewer: Sol 5.6, 2026-08-18. Verdicts: RES01 *conditional accept*,
+V01 *hold*, W01 *accept as pressure evidence, hold integration*, this
+overview *hold*. **Every material finding was accepted; none was
+contested**, so no disagreement circle was opened.
+
+| # | Finding | Where it landed |
+|---|---------|-----------------|
+| 1 | The named witness never reached the receipt | `Receipt.transfer_witness`, shadow comparison, R1/R2 falsifiers |
+| 2 | "Consent by construction" was an overclaim | Claim restated as attribution; the word purged as evidence from code, projection, reports and this page |
+| 3 | Receipt/command evolution had no authority identity | Author licence + the three-way identity split, pre-registered and pinned |
+| 4 | Oracle 3's transfer clause was misnamed | `unattributed_transfers`, with a doc that states its limit |
+| 5 | W01's output got ahead of truth | Stockpiling language; kind-list verdict downgraded to inconclusive |
+| 6 | W01 parity and proof gaps | Per-plan host parity; the tautological test replaced by six pinned identities; "best" scoped to the three registered plans |
+
+What it cost: one repair pass, two new falsifiers, one widened host
+domain, and a receipt-format identity move. What it bought: the estate
+no longer contains a claim that the boundary does not carry.
+
+The lesson worth keeping, stated plainly because it is mine: the
+mechanics in both trials were sound, and the failures were all in the
+*sizing of claims* about them — exactly the failure class the meaning
+gate exists to catch, caught by review rather than by me.
