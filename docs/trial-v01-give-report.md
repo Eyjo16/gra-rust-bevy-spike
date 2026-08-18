@@ -1,6 +1,17 @@
 # Trial V01 — the `Give` verb
 
-Status while this section stands alone: **pre-registration**.
+**Bundle status: REPAIRED — review-ready (second pass).** Sol 5.6
+returned **hold** on 2026-08-18 with five material findings; findings 1–4
+are answered in §E7 and in the code at `cccbfcd`, under an author licence
+recorded in `docs/trial-v01-repair-preregistration.md` §0. Findings 5–6
+belong to W01 and are answered there.
+
+`tested_commit`: **`cccbfcd`** (code); later commits on this branch touch
+`docs/` only — see the RES01 report for the rule.
+
+Status of the original text below: **pre-registration**, as first
+committed. It is left as written, with corrections marked, because a
+pre-registration edited after its result is not a pre-registration.
 
 Branch: `trial/V01-give`. Author: Fable 5 (lead).
 Base commit: `4f2443c` (`trial/RES01-resource-kinds` tip; grammar
@@ -8,8 +19,10 @@ Base commit: `4f2443c` (`trial/RES01-resource-kinds` tip; grammar
 
 ## 0. Why this verb, and what it is not
 
-`Give` is a **witnessed-or-unwitnessed, voluntary transfer of a named
-mass of one kind between two characters**. It is the smallest verb that
+`Give` is a **witnessed-or-unwitnessed, attributed transfer of a named
+mass of one kind between two characters**. (*Corrected after review: the
+original text said "voluntary". The design intent is voluntary; what the
+boundary proves is attribution. See §E7 finding 2.*) It is the smallest verb that
 turns a single-actor economy into a social one: the economy owner
 already tracks per-kind holdings, and no new owner, no epistemic layer,
 and no randomness are required.
@@ -64,10 +77,13 @@ tested_commit:       <filled at completion>
 
 **S-V01.** `give giver=C_a to=C_b kind=K g=N [witness=C_c]`
 
-- **Consent by construction.** The command names the giver as the
-  actor. There is no command shape in which one character moves
-  another's holding, so theft is not "refused" — it is unrepresentable,
-  the same way negative mass is.
+- **Attribution by construction.** *(Original heading: "Consent by
+  construction" — corrected after review.)* The command names the giver
+  as the source, and no accepted transfer debits any other holding, so a
+  command shape that moves someone else's stock does not exist. This is
+  attribution: it proves *which* holding moved, not that its owner
+  willed it. Any caller can submit a command naming any character until
+  an issuer, player seat, delegation or actor intent exists.
 - **Exactness.** A giver who holds less than `N` of kind `K` is
   *refused*, never partially satisfied. Partial exists for gather
   because a site's remaining stock is a fact about the world the actor
@@ -76,15 +92,17 @@ tested_commit:       <filled at completion>
   exhausted gate — the same policy family as `witness`, decided by the
   boundary, not by an owner. An exhausted person may still hand over
   what they hold; a person with no stamina at all cannot.
-- **Witnessing is receipted, not stateful.** A named witness must exist
-  and must not be either party. The witness pays nothing and no owner
-  state changes: a third party cannot be made to spend by someone
-  else's action. Witnessed and unwitnessed gives are therefore
-  *separately receipted but identical in world state* — the unwitnessed
-  give is the future rumour/dispute seed, and that meaning waits for
-  the E-layers. This is the one place where this trial deliberately
-  records something it does not yet mechanise; the receipt is the
-  ledger, so recording it there costs no unratified mechanics.
+- **Witnessing is receipted by identity, not stateful.** A named witness
+  must exist and must not be either party. The witness pays nothing and
+  no owner state changes: a third party cannot be made to spend by
+  someone else's action. The receipt records **which** third party
+  attested (`transfer_witness=C3`), so two transfers attested by
+  different people are different facts — *the first pass recorded only a
+  boolean, which the review correctly called a contradiction of "the
+  receipt is the ledger"; fixed at `cccbfcd`.* Witnessed and unwitnessed
+  gives are separately receipted and identical in world state; the
+  unwitnessed give is the future rumour/dispute seed, and that meaning
+  waits for the E-layers.
 
 ## 3. Falsifiers
 
@@ -242,15 +260,18 @@ named a distinct counterparty.
 | # | Atomic claim | Scope | Evidence mode | Evidence reference |
 |---|--------------|-------|---------------|--------------------|
 | 1 | A give moves exactly the named mass of exactly the named kind from giver to recipient, and nothing else changes | the owner path and the standard trial | behavioral-red | `falsification_transfer_conserves_the_kind_and_touches_nothing_else`, `falsification_give_conserves_the_transferred_kind`; oracle 2 per-kind line |
-| 2 | Consent is structural: no command shape moves a character's holding without that character being the actor | the whole command vocabulary as typed | derivation | `Command::Give` names `giver` as the only source; `Transfer.from` is private and set from the giver; `falsification_give_never_moves_a_third_partys_holding` |
+| 2 | **No accepted transfer debits a holding other than the command's named source.** (Restated after review; the original claimed consent, which the boundary does not prove and cannot until an issuer, seat, delegation or actor intent exists) | the whole command vocabulary as typed | derivation | `Command::Give` names `giver` as the only source; `Transfer.from` is private and set from the giver; `falsification_give_debits_only_the_commands_named_source` |
 | 3 | A named witness pays nothing — no stamina, no mass, no owner state | the give path | behavioral-red | `falsification_give_never_moves_a_third_partys_holding` (C3's stamina and holding are unchanged after witnessing) |
 | 4 | Witnessed and unwitnessed gives are distinguishable in the receipt and identical in world state | the give path | behavioral-red | `falsification_witnessing_a_give_is_receipted_but_never_stateful` (canonical lines differ, canonical states and hashes are equal) |
+| 4b | Two transfers alike in everything but the attester's identity produce different receipts and identical world state (added in the repair) | the give path | behavioral-red | `falsification_two_witnesses_must_produce_two_different_receipts`; `claim_witnessing_and_transfer_witnessing_are_never_the_same_field` |
 | 5 | A giver short of the named mass is refused, never partially satisfied, and the refusal mutates nothing | all eight give refusals | behavioral-red | `falsification_short_transfer_is_refused_not_clamped`, `falsification_give_refusals_are_closed_and_byte_stable` (world hash identical across every refusal) |
 | 6 | Giving away all of a kind leaves the giver indistinguishable from someone who never held it, in state, text and hash | the owner and boundary paths | behavioral-red | `falsification_giving_everything_leaves_no_zero_entry` (equal hashes at equal apply counts), `falsification_giving_everything_erases_the_holding_completely`; standard trial receipt 27 |
 | 7 | The give verb is audited by a judge that trusts no receipt field | the standard trial and the 32 000-command host trace | oracle | `ShadowState::step_give` is an independent reimplementation; oracles 9 and 10 green |
-| 8 | The hosted run reproduces every give byte-for-byte, across 375 enumerated inputs including refusals | the enumerated space named in E2 — *excluding* `empty_transfer` and `unknown_witness` | parity | `transition_domain_parity ... unique_commands=375 receipts_match=true`; the exclusion is stated in E2 |
+| 8 | The hosted run reproduces every give byte-for-byte, across **900** enumerated inputs including **every** give refusal and receipts that differ only in who attested | the widened space in §E7; no give refusal is now excluded | parity | `transition_domain_parity ... command_space=900 unique_commands=900 receipts_match=true state_match=true world_match=true`, with `empty_transfer` 2 743 and `unknown_witness` 4 274 occurrences |
 | 9 | The grammar moved exactly once, to the value pre-registered before either trial was implemented | this branch's history | measurement | prediction at `fc5e431` (RES01 §4); envelope at `15e1bc7`; `grammar_fingerprint_matches_the_licensed_value` |
-| 10 | Oracle 3's extraction clause is unchanged in force by the rename and re-scope | the extraction half of the oracle | derivation | `mass_authority_gate` still counts `site.is_some() && !witnessed && mass != 0`; `mass_authority_gate_oracle_catches_a_doctored_receipt` is the v5 test, unchanged except for the name |
+| 10 | Oracle 3's extraction clause is unchanged in force by the rename and re-scope | the extraction half of the oracle | derivation | `mass_authority_gate` still counts `site.is_some() && !claim_witnessed && mass != 0`; `mass_authority_gate_oracle_catches_a_doctored_receipt` is the v5 test, unchanged except for the name |
+| 11 | Oracle 3's transfer clause proves attribution and nothing more, and now says so | the transfer half of the oracle | derivation | the count is `unattributed_transfers`; its doc states it is a shape check on the ledger and does not prove consent |
+| 12 | Canonical language has three separately-moving identities, each pre-registered and pinned | grammar, command encoding, receipt format | measurement | predictions at `4d1cc65`; `canonical_language_identities_match_their_licensed_values`; the declarations are held to the implementation by `command_encoding_matches_its_declaration` and `receipt_format_matches_its_declaration` |
 
 What this trial does **not** claim: that a give is *remembered* by
 anyone (no E-layer), that an unwitnessed give has any consequence (it
@@ -259,11 +280,10 @@ belongs to O01), or that the flat cost of 3 is balance.
 
 ## E6. Findings for the author
 
-1. **`witnessed` now carries two verb-local meanings** — "the claim was
-   witnessed" on a gather, "this transfer had a named witness" on a
-   give. The receipt disambiguates structurally (`claim=-` and `site=-`
-   on a transfer), but if a third reading ever appears, the field should
-   split. Recorded now so the drift is visible early.
+1. ~~**`witnessed` now carries two verb-local meanings**~~ — **resolved
+   in the repair.** The field is split into `claim_witnessed` and
+   `transfer_witness`; the review was right that recording it as a
+   finding was not good enough.
 2. **A witness who is named without consenting.** Today a giver may name
    any third party as witness and that party cannot refuse, because
    refusal needs an E-layer and a will. Nothing is spent on their
@@ -274,3 +294,70 @@ belongs to O01), or that the flat cost of 3 is balance.
    the receipt ledger. Feast politics, favour-debt, and compensation all
    need something to remember the give — which is the first thing after
    the E-layers, not before.
+
+---
+
+# E7. Repair pass (review response)
+
+Reviewer: Sol 5.6, 2026-08-18, verdict **hold**. Repair author: Fable 5.
+Pre-registration of the repair: `docs/trial-v01-repair-preregistration.md`
+(`4d1cc65`). Repair `tested_commit`: **`cccbfcd`**, clean tree, gate
+green at `82 / 91 / 99 / 105` tests.
+
+| Finding | Verdict on the finding | What changed |
+|---------|------------------------|--------------|
+| 1 — the named witness never reaches the receipt | **Accepted; the review is right.** Two valid attesters produced byte-identical receipts, which contradicts both the objective and "the receipt is the ledger" | `Receipt.transfer_witness: Option<CharacterId>`; the overloaded boolean is now `claim_witnessed`; the shadow evaluator recomputes the attester from the command and compares identity, so a doctored receipt naming the wrong one diverges (`falsification_shadow_oracle_catches_a_wrong_transfer_witness`) |
+| 2 — "consent by construction" is wrong | **Accepted without reservation.** Attribution is not consent; I overclaimed | Claim 2 restated verbatim as the review proposed. Every occurrence of consent/voluntary as a *proof* word is gone from the boundary docs, the economy owner, the TS01 projection, the test names and this report. Where the design *intent* is a voluntary transfer, it is labelled intent |
+| 3 — no authority identity for receipt/command evolution | **Accepted; `UNVERIFIABLE` was the right verdict** — the licence existed for RES01's vocabulary and not for V01's format | Author licence obtained and recorded (`…repair-preregistration.md` §0), and the identity is split three ways so the gap cannot recur: `grammar` (gameplay semantics and policies, **unmoved** at `0x7dd8c6706e0b949f`), `command_encoding` (`0xfa37eefa3594cfe3`), `receipt_format` (`0x7e62152622bb9132`). Both new values were predicted before implementation and hit exactly; all three are pinned by tests and printed in the envelope |
+| 4 — oracle 3 honestly re-scoped, dishonestly named | **Accepted.** The clause checks ledger shape | The count is `unattributed_transfers`; the doc says it proves no mass moved without a named source, a distinct recipient and a kind, and states that this is not consent. Suite v6 → v7 |
+| 5–6 — W01 language and parity | Accepted; answered on `trial/W01-winter-crisis` | see that bundle |
+
+## E8. Repair evidence
+
+New envelope, with all three identities:
+
+```text
+grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132
+envelope baseline_commit=cccbfcd grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132 fixture=0x93afba3f312bd89d receipts=0xc0b4da51744bcf19 world=0xb500dee0e5d883d8 oracles=10v7
+oracle PASS mass_authority_gate (0 unwitnessed extractions, 0 unattributed transfers)
+```
+
+The receipt-chain digest moved `0x2d52250d86f0638b → 0xc0b4da51744bcf19`
+(the lines changed); the fixture identity and world hash did **not** move
+(`0x93afba3f312bd89d`, `0xb500dee0e5d883d8`) — the commands and the state
+they produce are untouched by a presentation change, which is exactly the
+distinction the three-way split exists to make visible.
+
+A give receipt now reads:
+
+```text
+seq=17 verb=give actor=C1 claim=- site=- to=C2 outcome=accepted reason=- claim_witnessed=false transfer_witness=C4 stamina_before=53 band=steady tier=- kind=fodder spent=3 mass_g=500 ...
+```
+
+Widened host parity — every give refusal now reached, and the enumerated
+space includes two different valid attesters so parity covers receipts
+that differ only in who attested:
+
+```text
+transition_domain_parity seed=0x007007006d617065 traces=2500 depth=32 commands=80000 command_space=900 unique_commands=900 receipts_match=true state_match=true world_match=true
+transition_domain_outcomes {... "refused:empty_transfer": 2743, ... "refused:unknown_witness": 4274, "refused:witness_is_party": 4070, ...}
+```
+
+Honest note on a side effect: widening the give space diluted how often
+random draws land on gather, so the incidental band×tier counts in the
+trace thinned. The trace count was raised (1 000 → 2 500) to restore the
+density; even so, one cell (`steady/advanced`) that appeared once in the
+old trace does not appear in the new one. **The 4×4 cell reachability
+evidence does not depend on this trace** — it comes from the
+purpose-built per-cell tests in `boundary.rs` (trial/010) — and the trace
+count was not tuned until that cell reappeared, which would have been
+fitting the evidence to the wish.
+
+## E9. What is still not proven, stated plainly
+
+- **Consent.** Nothing in this bundle shows that a named giver wanted the
+  transfer. Voluntary action waits on the seat/issuer/delegation ruling.
+- **Refusal.** A character cannot decline to give, or to be named as an
+  attester. `actor_unwilling` does not exist.
+- **Meaning of attestation.** `transfer_witness` is recorded and inert:
+  nothing reads it, nothing remembers it, nothing disputes it.
