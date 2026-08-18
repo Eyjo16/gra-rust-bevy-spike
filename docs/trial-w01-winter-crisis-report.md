@@ -1,8 +1,19 @@
 # Trial W01 — the winter-crisis vertical slice
 
-Status while this section stands alone: **pre-registration**. Every
-number in §4 was computed and committed *before* the scene existed in
-Rust.
+**Bundle status: REPAIRED — review-ready (second pass).** Sol 5.6:
+*accept as pressure evidence, hold integration*, with findings 5 and 6.
+Both are answered in §E7. `tested_commit`: **`333ce29`** (code); later
+commits touch `docs/` only.
+
+Rebase reference map (workflow note S2): this branch was rebased onto the
+repaired `trial/V01-give` tip `f83796d`. Old → new:
+`fa28712 → 1ff6dea` (pre-registration), `0672405 → 0725af5` (scene),
+`a173383 → 6d8f6bd` (evidence). The rebase changed no content; the
+`docs/trial-log.md` conflict was resolved by keeping both the V01 repair
+entry and the W01 entry.
+
+Status of the original text below: **pre-registration**, as first
+committed, left as written with corrections marked.
 
 Branch: `trial/W01-winter-crisis`. Author: Fable 5 (lead).
 Base commit: `605e32a` (`trial/V01-give` tip; grammar
@@ -100,11 +111,15 @@ and the choice is which shortfall to accept.
 
 ## 3. The three plans
 
-- **A — feed the cattle.** Every hand to the hayfield, including
+*(Plan names corrected after review — the originals were "feed the
+cattle", "save the roof", "feed the people", which name consequences the
+truth layer cannot enact. What the plans do is stockpile.)*
+
+- **A — stockpile fodder.** Every hand to the hayfield, including
   Hallr's, which first costs Auðr the stamina to attest his claim.
-- **B — save the roof.** Auðr and Ketill to the wood, Gróa and Hallr to
-  the hay; Gróa pays for the attestation this time.
-- **C — feed the people.** Gróa and Hallr work the shore, Auðr and
+- **B — stockpile building material.** Auðr and Ketill to the wood, Gróa
+  and Hallr to the hay; Gróa pays for the attestation this time.
+- **C — stockpile food.** Gróa and Hallr work the shore, Auðr and
   Ketill the hay.
 
 Each plan ends with one give: the household consolidates a stock in the
@@ -179,7 +194,7 @@ Pre-registered so the answers cannot be adjusted afterwards:
 | ID | Question the scene must answer | Pre-registered expectation |
 |----|-------------------------------|----------------------------|
 | W1 | Can a household's winter triage be expressed with three kinds, three verbs and stamina alone? | **Yes, partially** — the choice between plans is real and costed, and no plan meets every need |
-| W2 | Does the kind list survive its first scene? | **Yes** — nothing in the scene needs a fourth kind to be *stated*; fuel and turf are folded into timber, which is a naming compromise, not a mechanical gap |
+| W2 | Does the kind list survive its first scene? | **Yes** — nothing in the scene needs a fourth kind to be *stated*; fuel and turf are folded into timber, which is a naming compromise, not a mechanical gap. *(This pre-registered expectation was answered **inconclusive** — see §E3 and §E7 finding 5b: the scene was written to fit the list, so it cannot be evidence that the list fits scenes.)* |
 | W3 | Is the herd-loss shape (`losing the dairy herd threatens the preservation chain and forces painful alternatives, never immediate game-over`) expressible? | **No** — there is no herd, no consumption, and no game-over. The scene can state the shortfall but cannot make it *happen* |
 | W4 | Does the social layer earn its place in the scene? | **Yes, minimally** — the unwitnessed claim makes legitimacy cost stamina before work, and give lets a household consolidate a stock |
 | W5 | Is anything in the scene forced to lie? | **Expected: no** — but the winter need itself is scene arithmetic, not a rule; if it ever looks like a rule, the projection is lying |
@@ -253,7 +268,7 @@ measurable form of "this trial changed no law".
 | ID | Answer | Evidence |
 |----|--------|----------|
 | W1 | **Yes, partially.** The triage is real and costed: each plan is defensible, none is right, and the price of each is visible in the ledger | the three shortfall rows; `no_plan_can_meet_every_need` |
-| W2 | **Yes.** Three kinds expressed the whole scene. Nothing in it needed a fourth kind to be *stated* | the scene compiles and runs with `ResourceKind::ALL` unchanged |
+| W2 | **INCONCLUSIVE** (corrected after review; the first pass answered "yes"). Three kinds expressed this scene — but the scene was authored against the three-kind list, so its success is evidence about the author, not about the list. Turf and fuel were folded into timber by decision, not by discovery | the scene runs with `ResourceKind::ALL` unchanged, which shows expressibility and nothing about sufficiency |
 | W3 | **No — as pre-registered.** The herd-loss shape is not expressible. There is no herd, no consumption, no spring, and no game-over; the scene can *state* a 2 000 g fodder shortfall but nothing happens because of it | `WINTER_NEED` is arithmetic in a projection; no oracle and no rule reads it |
 | W4 | **Yes, minimally.** The unwitnessed claim makes legitimacy cost stamina before any work is possible, and it costs a *different* person in plan A than in plan B; give lets the household consolidate a stock in one pair of hands | plan A receipts 4–6 (refusal, attestation, partial); plan B receipt 4; the closing give in each plan |
 | W5 | **No lie found, one risk named.** The shortfall table is the only statement in the scene that sounds like a rule and is not | E4 finding 1 |
@@ -316,13 +331,61 @@ BASELINE_COMMIT=$(git rev-parse --short HEAD) cargo run winter
 |---|--------------|-------|---------------|--------------------|
 | 1 | All three plans execute with every oracle green | the W01 fixture and the three named command sequences | oracle | thirty `oracle PASS plan=…` lines; `every_plan_passes_all_ten_oracles` |
 | 2 | Every executed number equals the number predicted before the scene existed | stamina, holdings, site stocks and shortfalls of all three plans | measurement | §4 table committed at `fa28712`; `every_plan_matches_its_pre_registered_end_state` |
-| 3 | No plan meets every winter need, and the best result per kind comes from a different plan | the three plans as written | derivation | `no_plan_can_meet_every_need` pins the best achievable shortfall per kind at `[2000, 900, 0]` |
-| 4 | The scene changes no law: same grammar, same oracle suite, and the standard trial's identity is unmoved | the whole branch | measurement | standard envelope at `0672405` identical to V01's; `the_scene_adds_no_rule` |
+| 3 | No **registered** plan meets every winter need, and the best result per kind comes from a different one of the three | **the three plans as written — not the reachable strategy space, which is unbounded and unsearched** (scope corrected after review) | derivation | `no_registered_plan_can_meet_every_need` pins the best shortfall per kind among these three at `[2000, 900, 0]` |
+| 4 | The scene changes no law: the standard trial's grammar, command encoding, receipt format, fixture identity, receipt digest and world hash are all unmoved by this branch | the whole branch | measurement | `the_scene_moves_no_identity_of_the_standard_trial` pins all six. *(The first pass cited `the_scene_adds_no_rule`, which compared a function to itself and proved nothing — the review was right; the test is replaced, not re-worded.)* |
 | 5 | Legitimacy is a real cost before work: an unwitnessed claim stops the boy until someone spends stamina attesting it | plan A receipts 4–6, plan B receipt 4 | behavioral | `the_scene_beats_are_the_ones_the_scene_claims` |
 | 6 | The winter need is not a rule and is read back by nothing | the whole crate | derivation | `WINTER_NEED` is used only by `household_totals`/`shortfall`/`run`, none of which any oracle or owner calls |
 | 7 | The herd-loss shape from the lead iteration map is not expressible today | the current truth layer | derivation | E4 findings 1–3: no consumption, no time, no household |
+| 8 | Every plan replays byte-for-byte inside the Bevy host — receipts, chain digest, exact canonical state and world hash — including the attester's identity on its transfer (added in the repair) | the three plans | parity | `every_plan_replays_identically_inside_the_host`; three `winter_host_parity … receipts_match=true state_match=true world_match=true attested_transfers=1` lines |
 
 What this trial does **not** claim: that these numbers are balance, that
 three plans exhaust the strategy space, that the scene is fun, or that a
 player would understand it — the last is RS01-human's question, and this
 scene has no rendering.
+
+---
+
+# E7. Repair pass (review response)
+
+Reviewer: Sol 5.6, 2026-08-18: **accept as pressure evidence, hold
+integration.** Repair `tested_commit`: **`333ce29`**, clean tree, gate
+green at `87 / 97 / 105 / 111` tests plus `cargo run winter` exit 0.
+Base: the repaired `trial/V01-give` (`f83796d`), so this scene now runs
+on attributed transfers with attester identities in the ledger.
+
+| Finding | Verdict | What changed |
+|---------|---------|--------------|
+| 5a — the output gets ahead of truth ("feed the cattle", "the roof closes", "the household eats") | **Accepted.** The terminal was making promises the layer cannot keep | Plans renamed to *stockpile fodder / building material / food*; every consequence clause replaced with what actually happens, including the explicit negatives ("Nothing is repaired: no structure exists", "Nobody eats: no consumption exists"). A module-level note records the language discipline so it is not quietly reintroduced |
+| 5b — W01 did not prove the three-kind list sufficient | **Accepted.** The scene was written to fit the list | W2's answer is now **inconclusive**, in both the question table and the claims table, with the bias stated in the same sentence as the result |
+| 6a — no exact pure/Bevy comparison for the winter traces | **Accepted.** The host feature ran the plans through the pure runner only | `winter::host_parity` compares receipts, chain digest, exact canonical state and world hash per plan; it runs inside `cargo run --features bevy-host winter` and as a test. Each plan is asserted to carry an attested transfer first, so the check cannot silently become weaker than claimed |
+| 6b — `the_scene_adds_no_rule` is tautological | **Accepted; it proved nothing** | Replaced by `the_scene_moves_no_identity_of_the_standard_trial`, which pins all six standard identities |
+| 6c — "best achievable" overreaches | **Accepted** | Renamed `no_registered_plan_can_meet_every_need`; scope stated in the test, the assertion message and claim 3 |
+
+## E8. Repair evidence
+
+```text
+plan A stockpile fodder — every hand to the hayfield, including the boy's — which first costs the head the stamina to attest his claim. Whether the cattle live is not a fact this layer holds
+winter_host_parity plan=A receipts_match=true state_match=true world_match=true attested_transfers=1 receipts=0x260782d648ffef68 world=0x8955528b452a8dde
+envelope scene=W01 plan=A baseline_commit=333ce29 grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132 fixture=0x288ef6dbfad7e800 receipts=0x260782d648ffef68 world=0x8955528b452a8dde oracles=10v7
+winter_host_parity plan=B receipts_match=true state_match=true world_match=true attested_transfers=1 receipts=0xb67361c3ef45ffca world=0xd2b2803a6c1b77d7
+winter_host_parity plan=C receipts_match=true state_match=true world_match=true attested_transfers=1 receipts=0xf6528f6ae509bdb4 world=0xb898728c0ccd0b48
+```
+
+The three plans' *world* hashes are unchanged from the first pass
+(`0x8955528b452a8dde`, `0xd2b2803a6c1b77d7`, `0xb898728c0ccd0b48`): the
+V01 repair changed how receipts are written, not what happens. Their
+receipt digests moved with the receipt format, as they must.
+
+The pre-registered §4 predictions still hold exactly on the repaired
+base — stamina, holdings, site stocks and shortfalls are unchanged, and
+`every_plan_matches_its_pre_registered_end_state` is unmodified.
+
+## E9. What this bundle is, after the repair
+
+**Pressure evidence, and nothing more.** It shows that a household's
+winter triage is *expressible* as a choice between costed plans, and it
+enumerates what the truth layer cannot say — consumption, time,
+household, plans, refusal of labour, and names for turf and fuel. It
+does not show that the kind list is sufficient, that these numbers are
+balance, that the strategy space was searched, or that anything is at
+stake.

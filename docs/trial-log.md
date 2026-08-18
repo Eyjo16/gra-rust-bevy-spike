@@ -1556,3 +1556,42 @@ winter; there is no household and no herd; a plan is not a thing; nobody
 can refuse labour (`actor_unwilling` does not exist). Site stock is the
 only scarcity with texture today, and it comes from the existing gather
 verb. Stated bias: the kind list "survived" a scene written to fit it.
+
+## Trial W01 — repair pass after review (2026-08-18)
+
+Branch `trial/W01-winter-crisis`, rebased onto the repaired
+`trial/V01-give` (`f83796d`); repair tested_commit `333ce29`. Reviewer:
+Sol 5.6, *accept as pressure evidence, hold integration*. Full response:
+`docs/trial-w01-winter-crisis-report.md` §E7–E9.
+
+Rebase reference map (S2): `fa28712 → 1ff6dea`, `0672405 → 0725af5`,
+`a173383 → 6d8f6bd`; no content changed in the rebase.
+
+**Both findings accepted.**
+
+- *Language*: the plans now **stockpile fodder / building material /
+  food**. No consequence word survives in `src/winter.rs`: nothing feeds,
+  closes or eats, and the intents say so explicitly.
+- *Kind-list verdict*: downgraded to **inconclusive**. The scene was
+  written to fit the three-kind list, so it is pressure against the list,
+  not evidence for it.
+- *No-law proof*: `the_scene_adds_no_rule` compared a function to itself.
+  Replaced by `the_scene_moves_no_identity_of_the_standard_trial`, which
+  pins grammar, command encoding, receipt format, fixture identity,
+  receipt digest and world hash.
+- *Host parity*: each plan now replays byte-for-byte inside the Bevy host
+  — receipts, chain digest, exact canonical state, world hash — and each
+  is asserted to carry an attested transfer so the check cannot weaken
+  silently.
+- *Scope*: "best achievable" is now "best among the three registered
+  plans", in the test name, the assertion message and the claim.
+
+```text
+winter_host_parity plan=A receipts_match=true state_match=true world_match=true attested_transfers=1
+winter_host_parity plan=B receipts_match=true state_match=true world_match=true attested_transfers=1
+winter_host_parity plan=C receipts_match=true state_match=true world_match=true attested_transfers=1
+```
+
+Gate green at 87 / 97 / 105 / 111 tests, `cargo run winter` exit 0, and
+the three plans' world hashes are unchanged from the first pass — the
+V01 repair changed how receipts are written, not what happens.
