@@ -1436,3 +1436,49 @@ member is `timber` — recorded, not resolved. (2) Kinds have no
 behaviour; nothing yet forbids feeding cattle timber, because no
 consumption exists. (3) Zero-holding normalization is implemented and
 unit-tested; its reachable case arrives with V01's give-to-zero.
+
+## Trial V01 — the give verb (2026-08-18)
+
+Branch `trial/V01-give`, base `4f2443c`, tested_commit `15e1bc7`.
+Full report: `docs/trial-v01-give-report.md`.
+
+**Shape.** `give giver=C_a to=C_b kind=K g=N [witness=C_c]` — voluntary,
+exact, flat-cost, no exhausted gate; a named witness must exist, must be
+neither party, and pays nothing. Consent is structural: no command shape
+moves another character's holding, so theft is unrepresentable rather
+than refused.
+
+**Red (capability, verbatim).** `c192b75`, falsifiers only: 24 compile
+errors — the verb, its six new refusal reasons, its receipt field and
+its owner path did not exist.
+
+**Green.** 76 / 85 / 93 / 99 tests across the four feature sets; ten
+oracles and every host probe green.
+
+```text
+oracle PASS mass_authority_gate (0 unwitnessed extractions, 0 unconsented transfers)
+oracle PASS exhausted_gate (0 exhausted or band-less receipts drained a site)
+transition_domain_parity ... command_space=375 unique_commands=375 receipts_match=true state_match=true world_match=true
+envelope baseline_commit=15e1bc7 grammar=0x7dd8c6706e0b949f fixture=0x93afba3f312bd89d receipts=0x2d52250d86f0638b world=0xb500dee0e5d883d8 oracles=10v6
+```
+
+**Identity move, pre-registered.** grammar `0xc5d782ec145af0a5` ->
+`0x7dd8c6706e0b949f` — the value registered in RES01 §4 at `fc5e431`,
+before either trial was implemented.
+
+**Oracle suite v5 -> v6.** Oracle 3 `witnessed_gate` -> `mass_authority_
+gate`: extraction clause unchanged in force, plus a transfer clause (a
+mass-moving receipt with no site must name a counterparty distinct from
+the actor, and a kind). Oracle 4 keys on site extraction — the gather
+verb's policy made explicit, since give follows the witness policy.
+
+**Scope limits stated in the bundle.** Host parity for `empty_transfer`
+and `unknown_witness` is argued from the shared `submit` path, not
+measured: the enumerated host space fixes the mass and draws witnesses
+from existing actors.
+
+**Open findings.** (1) `witnessed` now has two verb-local meanings.
+(2) A third party can be named as a witness without consenting — nothing
+is spent on their behalf, but the assertion is currently unrefusable.
+(3) A give leaves no memory outside the receipt ledger; debt and
+obligation wait on the E-layers.
