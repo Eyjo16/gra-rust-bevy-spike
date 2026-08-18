@@ -20,7 +20,7 @@
 
 use bevy_ecs::prelude::{Component, Entity, Or, ResMut, Resource, Schedule, With};
 
-use crate::boundary::{Command, Receipt, World, submit};
+use crate::boundary::{Command, KIND_COUNT, Receipt, ResourceKind, World, submit};
 
 /// The whole truth layer as one ECS resource: the host custodies it but
 /// never holds a second mutation path into it — every write still goes
@@ -56,7 +56,9 @@ fn submit_next(mut truth: ResMut<Truth>, mut queue: ResMut<CommandQueue>) {
 struct CharacterView {
     id: u64,
     stamina: u8,
-    inventory_g: u64,
+    /// Per-kind holdings, indexed by `ResourceKind::index` (RES01). A
+    /// copied array, not a handle: the projection still owns nothing.
+    holdings_g: [u64; KIND_COUNT],
     derived_from: u64,
 }
 
@@ -65,6 +67,7 @@ struct CharacterView {
 struct SiteView {
     id: u64,
     tier: &'static str,
+    kind: &'static str,
     stock_g: u64,
     derived_from: u64,
 }
@@ -233,15 +236,21 @@ impl Host {
         let (derived_from, characters, sites, claims) = {
             let world = &self.ecs.resource::<Truth>().world;
             let derived_from = world.hash();
-            let characters: Vec<(u64, u8, u64)> = world
+            let characters: Vec<(u64, u8, [u64; KIND_COUNT])> = world
                 .characters
                 .iter()
-                .map(|(id, s)| (id.0, s.points(), world.economy.inventory(id).grams()))
+                .map(|(id, s)| {
+                    let mut holdings = [0u64; KIND_COUNT];
+                    for kind in ResourceKind::ALL {
+                        holdings[kind.index()] = world.economy.holding(id, kind).grams();
+                    }
+                    (id.0, s.points(), holdings)
+                })
                 .collect();
-            let sites: Vec<(u64, &'static str, u64)> = world
+            let sites: Vec<(u64, &'static str, &'static str, u64)> = world
                 .economy
                 .sites_iter()
-                .map(|(id, tier, stock)| (id.0, tier.code(), stock.grams()))
+                .map(|(id, tier, kind, stock)| (id.0, tier.code(), kind.code(), stock.grams()))
                 .collect();
             let claims: Vec<(u64, u64, u64, bool)> = world
                 .social
@@ -257,18 +266,19 @@ impl Host {
         for entity in stale {
             self.ecs.despawn(entity);
         }
-        for (id, stamina, inventory_g) in characters {
+        for (id, stamina, holdings_g) in characters {
             self.ecs.spawn(CharacterView {
                 id,
                 stamina,
-                inventory_g,
+                holdings_g,
                 derived_from,
             });
         }
-        for (id, tier, stock_g) in sites {
+        for (id, tier, kind, stock_g) in sites {
             self.ecs.spawn(SiteView {
                 id,
                 tier,
+                kind,
                 stock_g,
                 derived_from,
             });
@@ -293,13 +303,15 @@ impl Host {
             query
                 .iter(&self.ecs)
                 .map(|v| {
-                    (
-                        v.id,
-                        format!(
-                            "character C{} stamina={} inventory_g={}",
-                            v.id, v.stamina, v.inventory_g
-                        ),
-                    )
+                    let mut line = format!("character C{} stamina={}", v.id, v.stamina);
+                    for kind in ResourceKind::ALL {
+                        line.push_str(&format!(
+                            " {}_g={}",
+                            kind.code(),
+                            v.holdings_g[kind.index()]
+                        ));
+                    }
+                    (v.id, line)
                 })
                 .collect()
         };
@@ -310,7 +322,10 @@ impl Host {
                 .map(|v| {
                     (
                         v.id,
-                        format!("site S{} tier={} stock_g={}", v.id, v.tier, v.stock_g),
+                        format!(
+                            "site S{} tier={} kind={} stock_g={}",
+                            v.id, v.tier, v.kind, v.stock_g
+                        ),
                     )
                 })
                 .collect()
@@ -367,7 +382,7 @@ impl Host {
                 .map(|view| PublishedCharacter {
                     id: view.id,
                     stamina: view.stamina,
-                    inventory_g: view.inventory_g,
+                    holdings_g: view.holdings_g,
                     derived_from: view.derived_from,
                 })
                 .collect()
@@ -379,6 +394,7 @@ impl Host {
                 .map(|view| PublishedSite {
                     id: view.id,
                     tier: view.tier,
+                    kind: view.kind,
                     stock_g: view.stock_g,
                     derived_from: view.derived_from,
                 })
@@ -443,8 +459,17 @@ struct PublishedFacts {
 pub(crate) struct PublishedCharacter {
     pub id: u64,
     pub stamina: u8,
-    pub inventory_g: u64,
+    pub holdings_g: [u64; KIND_COUNT],
     pub derived_from: u64,
+}
+
+#[cfg(feature = "bevy-render")]
+impl PublishedCharacter {
+    /// Typed read of one kind's holding, so a consumer cannot index the
+    /// array with a number it invented.
+    pub fn holding_g(&self, kind: ResourceKind) -> u64 {
+        self.holdings_g[kind.index()]
+    }
 }
 
 #[cfg(feature = "bevy-render")]
@@ -452,6 +477,7 @@ pub(crate) struct PublishedCharacter {
 pub(crate) struct PublishedSite {
     pub id: u64,
     pub tier: &'static str,
+    pub kind: &'static str,
     pub stock_g: u64,
     pub derived_from: u64,
 }

@@ -17,8 +17,8 @@
 use std::collections::BTreeMap;
 
 use crate::boundary::{
-    Command, MassGrams, OutcomeKind, Receipt, STAMINA_COST_BY_BAND, Stamina, StaminaBand, Verb,
-    WITNESS_COST, World, YIELD_TABLE_GRAMS, submit,
+    Command, KIND_COUNT, MassGrams, OutcomeKind, Receipt, ResourceKind, STAMINA_COST_BY_BAND,
+    Stamina, StaminaBand, Verb, WITNESS_COST, World, YIELD_TABLE_GRAMS, submit,
 };
 
 pub const ORACLE_COUNT: usize = 10;
@@ -35,7 +35,10 @@ pub const ORACLE_COUNT: usize = 10;
 /// v4: oracle 2's mass total is exact checked arithmetic under the
 /// coherence-validated aggregate bound; saturation can no longer make a
 /// mass-loss defect appear conserved.
-pub const ORACLE_SUITE_VERSION: u32 = 4;
+/// v5 (RES01): oracle 2 checks conservation PER KIND as well as in
+/// aggregate. Strictly stronger — the aggregate check passes on a world
+/// where a gram of fodder became a gram of timber, and this one does not.
+pub const ORACLE_SUITE_VERSION: u32 = 5;
 
 pub struct OracleVerdict {
     pub name: &'static str,
@@ -49,9 +52,22 @@ impl OracleVerdict {
     }
 }
 
+/// The fixture's per-kind mass baseline, indexed by `ResourceKind::index`.
+pub type KindBaseline = [MassGrams; KIND_COUNT];
+
+/// The per-kind baseline of a seeded fixture — the value oracle 2 audits
+/// every later state against.
+pub fn baseline_by_kind(world: &World) -> KindBaseline {
+    let mut baseline = [MassGrams::ZERO; KIND_COUNT];
+    for kind in ResourceKind::ALL {
+        baseline[kind.index()] = world.economy.total_mass_of(kind);
+    }
+    baseline
+}
+
 pub struct OracleCtx<'a> {
     pub world: &'a World,
-    pub baseline_mass: MassGrams,
+    pub baseline_by_kind: KindBaseline,
     pub build_fixture: fn() -> World,
     pub commands: &'a [Command],
     pub log: &'a [Receipt],
@@ -92,20 +108,39 @@ fn stamina_in_bounds(ctx: &OracleCtx<'_>) -> OracleVerdict {
     )
 }
 
-/// 2. Exact total mass (sites + inventories) equals the fixture baseline.
-///    Fixture coherence proves both sums fit `u64`; no saturating arithmetic
-///    can make an overflow-driven mass loss look conserved.
+/// 2. Exact mass conservation, per kind and in aggregate (RES01). Every
+///    kind's total across sites and holdings equals its own fixture
+///    baseline, and the sum of the kinds equals the whole. The aggregate
+///    check alone cannot see a gram of fodder becoming a gram of timber;
+///    the per-kind check can. Fixture coherence proves the sums fit
+///    `u64`, so no saturating arithmetic can make a mass loss look
+///    conserved.
 fn mass_conserved(ctx: &OracleCtx<'_>) -> OracleVerdict {
-    let current = ctx.world.economy.total_mass();
-    OracleVerdict::new(
-        "mass_conserved",
-        current == ctx.baseline_mass,
-        format!(
-            "baseline={}g current={}g",
-            ctx.baseline_mass.grams(),
-            current.grams()
-        ),
-    )
+    let mut detail = Vec::with_capacity(KIND_COUNT + 1);
+    let mut pass = true;
+    let mut baseline_total = MassGrams::ZERO;
+    for kind in ResourceKind::ALL {
+        let baseline = ctx.baseline_by_kind[kind.index()];
+        let current = ctx.world.economy.total_mass_of(kind);
+        pass &= current == baseline;
+        baseline_total = baseline_total
+            .checked_add(baseline)
+            .expect("coherent world: baseline total fits u64");
+        detail.push(format!(
+            "{}={}g/{}g",
+            kind.code(),
+            current.grams(),
+            baseline.grams()
+        ));
+    }
+    let current_total = ctx.world.economy.total_mass();
+    pass &= current_total == baseline_total;
+    detail.push(format!(
+        "total={}g/{}g",
+        current_total.grams(),
+        baseline_total.grams()
+    ));
+    OracleVerdict::new("mass_conserved", pass, detail.join(" "))
 }
 
 /// 3. The witnessed claim is a boolean gate: no receipt moves mass without
@@ -269,7 +304,7 @@ fn shadow_expectation(ctx: &OracleCtx<'_>) -> OracleVerdict {
 
 /// 10. Independent final-state proof: after stepping every command, the
 ///     shadow evaluator's final state must equal the actual final world —
-///     stamina, inventories, site stocks, and claim gates.
+///     stamina, per-kind holdings, site stocks and kinds, and claim gates.
 ///     `replay_determinism` trusts the implementation twice (run and
 ///     replay); this oracle trusts it zero times, so a bug shared by run
 ///     and replay still fails here.
@@ -292,8 +327,11 @@ fn shadow_final_state(ctx: &OracleCtx<'_>) -> OracleVerdict {
 /// tables only.
 struct ShadowState {
     stamina: BTreeMap<u64, u8>,
-    inventories: BTreeMap<u64, u64>,
-    sites: BTreeMap<u64, (usize, u64)>,
+    /// Keyed by (character, kind index) — zero-valued entries are never
+    /// stored, matching the owner's normalization, so the comparison in
+    /// oracle 10 is between two canonical maps.
+    holdings: BTreeMap<(u64, usize), u64>,
+    sites: BTreeMap<u64, (usize, usize, u64)>,
     claims: BTreeMap<u64, (u64, u64, bool)>,
 }
 
@@ -306,6 +344,10 @@ struct ShadowExpectation {
     mass_grams: u64,
     band_index: Option<usize>,
     tier_index: Option<usize>,
+    /// Recomputed from the fixture, never read from the receipt, and
+    /// compared on every receipt — including refusals, where the kind is
+    /// the addressed site's kind and a wrong one is still a lie.
+    kind_index: Option<usize>,
 }
 
 fn shadow_band_index(points: u8) -> usize {
@@ -326,21 +368,31 @@ impl ShadowState {
                 .iter()
                 .map(|(id, s)| (id.0, s.points()))
                 .collect(),
-            inventories: fixture
-                .characters
-                .iter()
-                .map(|(id, _)| (id.0, fixture.economy.inventory(id).grams()))
+            holdings: fixture
+                .economy
+                .holdings_iter()
+                .map(|(id, kind, grams)| ((id.0, kind.index()), grams.grams()))
                 .collect(),
             sites: fixture
                 .economy
                 .sites_iter()
-                .map(|(id, tier, stock)| (id.0, (tier.index(), stock.grams())))
+                .map(|(id, tier, kind, stock)| (id.0, (tier.index(), kind.index(), stock.grams())))
                 .collect(),
             claims: fixture
                 .social
                 .claims_iter()
                 .map(|(id, holder, site, witnessed)| (id.0, (holder.0, site.0, witnessed)))
                 .collect(),
+        }
+    }
+
+    /// Mirrors the owner's zero-normalization: a holding that reaches
+    /// zero is removed, so two states that print alike compare alike.
+    fn add_holding(&mut self, id: u64, kind: usize, grams: u64) {
+        let entry = self.holdings.entry((id, kind)).or_insert(0);
+        *entry += grams;
+        if *entry == 0 {
+            self.holdings.remove(&(id, kind));
         }
     }
 
@@ -356,6 +408,7 @@ impl ShadowState {
             .claims
             .get(&cmd.claim.0)
             .is_some_and(|(_, _, flag)| *flag);
+        let site_kind = self.sites.get(&cmd.site.0).map(|(_, kind, _)| *kind);
         let refuse = |reason: &'static str| ShadowExpectation {
             verb_code: "gather",
             outcome_code: "refused",
@@ -365,6 +418,7 @@ impl ShadowState {
             mass_grams: 0,
             band_index: None,
             tier_index: None,
+            kind_index: site_kind,
         };
 
         // Gate 1: social.
@@ -393,7 +447,7 @@ impl ShadowState {
             return refuse("insufficient_stamina");
         }
         // Gate 3: economy and the 4x4 cell.
-        let Some(&(tier, stock)) = self.sites.get(&cmd.site.0) else {
+        let Some(&(tier, kind, stock)) = self.sites.get(&cmd.site.0) else {
             return refuse("unknown_site");
         };
         if stock == 0 {
@@ -401,10 +455,12 @@ impl ShadowState {
         }
         let requested = YIELD_TABLE_GRAMS[band][tier];
         let granted = requested.min(stock);
-        // Apply to shadow state.
+        // Apply to shadow state. The grant lands in the holding of the
+        // site's kind — the shadow decides that independently, so a
+        // boundary that leaked across kinds diverges here.
         self.stamina.insert(cmd.actor.0, points - cost);
-        self.sites.insert(cmd.site.0, (tier, stock - granted));
-        *self.inventories.entry(cmd.actor.0).or_insert(0) += granted;
+        self.sites.insert(cmd.site.0, (tier, kind, stock - granted));
+        self.add_holding(cmd.actor.0, kind, granted);
         let (outcome_code, reason_code) = if granted < requested {
             ("partial", "site_nearly_depleted")
         } else {
@@ -419,6 +475,7 @@ impl ShadowState {
             mass_grams: granted,
             band_index: Some(band),
             tier_index: Some(tier),
+            kind_index: Some(kind),
         }
     }
 
@@ -438,6 +495,7 @@ impl ShadowState {
             mass_grams: 0,
             band_index: None,
             tier_index: None,
+            kind_index: None,
         };
 
         // Gate 1: social.
@@ -469,6 +527,7 @@ impl ShadowState {
             mass_grams: 0,
             band_index: None,
             tier_index: None,
+            kind_index: None,
         }
     }
 
@@ -482,15 +541,15 @@ impl ShadowState {
             .iter()
             .map(|(id, s)| (id.0, s.points()))
             .collect();
-        let actual_inventories: BTreeMap<u64, u64> = world
-            .characters
-            .iter()
-            .map(|(id, _)| (id.0, world.economy.inventory(id).grams()))
+        let actual_holdings: BTreeMap<(u64, usize), u64> = world
+            .economy
+            .holdings_iter()
+            .map(|(id, kind, grams)| ((id.0, kind.index()), grams.grams()))
             .collect();
-        let actual_sites: BTreeMap<u64, (usize, u64)> = world
+        let actual_sites: BTreeMap<u64, (usize, usize, u64)> = world
             .economy
             .sites_iter()
-            .map(|(id, tier, stock)| (id.0, (tier.index(), stock.grams())))
+            .map(|(id, tier, kind, stock)| (id.0, (tier.index(), kind.index(), stock.grams())))
             .collect();
         let actual_claims: BTreeMap<u64, (u64, u64, bool)> = world
             .social
@@ -498,7 +557,7 @@ impl ShadowState {
             .map(|(id, holder, site, witnessed)| (id.0, (holder.0, site.0, witnessed)))
             .collect();
         usize::from(actual_stamina != self.stamina)
-            + usize::from(actual_inventories != self.inventories)
+            + usize::from(actual_holdings != self.holdings)
             + usize::from(actual_sites != self.sites)
             + usize::from(actual_claims != self.claims)
     }
@@ -521,7 +580,11 @@ impl ShadowExpectation {
             }
             _ => true,
         };
-        codes_match && cell_match
+        // The kind is compared on EVERY receipt, refusals included: the
+        // shadow derives it from the fixture, so a receipt naming a kind
+        // its site does not yield is caught whether or not mass moved.
+        let kind_match = receipt.kind.map(|k| k.index()) == self.kind_index;
+        codes_match && cell_match && kind_match
     }
 }
 
@@ -546,8 +609,18 @@ mod tests {
             ])
             .unwrap(),
             economy: EconomyOwner::seed_sites([
-                (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
-                (SiteId(2), InfraTier::Crude, MassGrams::new(300)),
+                (
+                    SiteId(1),
+                    InfraTier::Established,
+                    ResourceKind::Fodder,
+                    MassGrams::new(2000),
+                ),
+                (
+                    SiteId(2),
+                    InfraTier::Crude,
+                    ResourceKind::Timber,
+                    MassGrams::new(300),
+                ),
             ])
             .unwrap(),
             social: SocialOwner::seed_claims([
@@ -583,10 +656,10 @@ mod tests {
         ]
     }
 
-    fn run_fixture() -> (World, Vec<Command>, Vec<Receipt>, MassGrams) {
+    fn run_fixture() -> (World, Vec<Command>, Vec<Receipt>, KindBaseline) {
         let mut world = fixture();
         validate_world_coherence(&world).unwrap();
-        let baseline = world.economy.total_mass();
+        let baseline = baseline_by_kind(&world);
         let cmds = commands();
         let log: Vec<Receipt> = cmds
             .iter()
@@ -623,7 +696,7 @@ mod tests {
         let (world, cmds, log, baseline) = run_fixture();
         let ctx = OracleCtx {
             world: &world,
-            baseline_mass: baseline,
+            baseline_by_kind: baseline,
             build_fixture: fixture,
             commands: &cmds,
             log: &log,
@@ -647,12 +720,70 @@ mod tests {
         let world = World {
             characters: CharacterOwner::seed([(CharacterId(1), Stamina::new(90).unwrap())])
                 .unwrap(),
-            economy: EconomyOwner::seed_sites([(SiteId(1), InfraTier::Crude, MassGrams::new(100))])
-                .unwrap(),
+            economy: EconomyOwner::seed_sites([(
+                SiteId(1),
+                InfraTier::Crude,
+                ResourceKind::Fodder,
+                MassGrams::new(100),
+            )])
+            .unwrap(),
             social: SocialOwner::seed_claims([(ClaimId(1), CharacterId(99), SiteId(1), true)])
                 .unwrap(),
         };
         assert!(validate_world_coherence(&world).is_err());
+    }
+
+    /// Falsifier F2 (RES01), oracle form: a world where 300 g of fodder
+    /// became 300 g of timber conserves mass in aggregate and must still
+    /// fail conservation. The v4 oracle could not see this; v5 must.
+    #[test]
+    fn falsification_kind_swap_must_fail_conservation_at_equal_total() {
+        let (world, cmds, log, baseline) = run_fixture();
+        let mut swapped = baseline;
+        swapped[ResourceKind::Fodder.index()] =
+            MassGrams::new(baseline[ResourceKind::Fodder.index()].grams() + 300);
+        swapped[ResourceKind::Timber.index()] =
+            MassGrams::new(baseline[ResourceKind::Timber.index()].grams() - 300);
+        let aggregate_before: u64 = baseline.iter().map(|m| m.grams()).sum();
+        let aggregate_after: u64 = swapped.iter().map(|m| m.grams()).sum();
+        assert_eq!(
+            aggregate_before, aggregate_after,
+            "the staged swap must be invisible to an aggregate-only check"
+        );
+        let ctx = OracleCtx {
+            world: &world,
+            baseline_by_kind: swapped,
+            build_fixture: fixture,
+            commands: &cmds,
+            log: &log,
+        };
+        assert!(
+            !mass_conserved(&ctx).pass,
+            "a kind swap at an equal total passed conservation"
+        );
+    }
+
+    /// Falsifier F3 (RES01), shadow form: a receipt that names a kind its
+    /// site does not yield is internally consistent — mass, band, tier
+    /// and codes all agree — and only an independent recomputation
+    /// refuses it.
+    #[test]
+    fn falsification_shadow_oracle_catches_a_mislabelled_kind() {
+        let (world, cmds, mut log, baseline) = run_fixture();
+        log[0].kind = Some(ResourceKind::Timber);
+        let ctx = OracleCtx {
+            world: &world,
+            baseline_by_kind: baseline,
+            build_fixture: fixture,
+            commands: &cmds,
+            log: &log,
+        };
+        assert!(cell_bounds(&ctx).pass);
+        assert!(mass_conserved(&ctx).pass);
+        assert!(
+            !shadow_expectation(&ctx).pass,
+            "a mislabelled kind survived the shadow evaluator"
+        );
     }
 
     #[test]
@@ -661,7 +792,7 @@ mod tests {
         log[0].witnessed = false;
         let ctx = OracleCtx {
             world: &world,
-            baseline_mass: baseline,
+            baseline_by_kind: baseline,
             build_fixture: fixture,
             commands: &cmds,
             log: &log,
@@ -681,7 +812,7 @@ mod tests {
         log[0].stamina_spent = 15;
         let ctx = OracleCtx {
             world: &world,
-            baseline_mass: baseline,
+            baseline_by_kind: baseline,
             build_fixture: fixture,
             commands: &cmds,
             log: &log,
@@ -699,7 +830,7 @@ mod tests {
         log[2].world_hash_after = log[2].world_hash_after.wrapping_add(1);
         let ctx = OracleCtx {
             world: &world,
-            baseline_mass: baseline,
+            baseline_by_kind: baseline,
             build_fixture: fixture,
             commands: &cmds,
             log: &log,
@@ -754,7 +885,7 @@ mod tests {
         );
         let ctx = OracleCtx {
             world: &world,
-            baseline_mass: baseline,
+            baseline_by_kind: baseline,
             build_fixture: fixture,
             commands: &cmds,
             log: &log,

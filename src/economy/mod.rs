@@ -1,11 +1,12 @@
-//! Economy owner: the single writer of mass — site stock and inventories.
+//! Economy owner: the single writer of mass — site stock and per-kind
+//! holdings.
 //!
 //! Internals are private. The only mutation path is `validate_extract`
 //! (fallible, read-only) followed by `apply_extract`, which consumes the
 //! proof token by value — one token, one apply. The token carries the
 //! entity revisions it was minted against — the site it drains and
-//! the inventory it fills — so extractions touching disjoint entities
-//! never conflict. Applying a stale token panics, because that is a
+//! the (character, kind) holding it fills — so extractions touching
+//! disjoint entities never conflict. Applying a stale token panics, because that is a
 //! boundary bug, never a game outcome. Mass is
 //! `MassGrams` (backed by `u64`), so negative mass is unrepresentable
 //! anywhere in this owner.
@@ -13,24 +14,32 @@
 use std::collections::BTreeMap;
 
 use crate::boundary::{
-    CharacterId, FixtureFault, Fnv1a, InfraTier, MassGrams, RefusalReason, SiteId,
+    CharacterId, FixtureFault, Fnv1a, InfraTier, MassGrams, RefusalReason, ResourceKind, SiteId,
 };
 
 struct SiteState {
     tier: InfraTier,
+    /// Fixed at seed time: a site yields exactly one kind. Nothing in
+    /// this owner can change it, so a gather cannot choose what a site
+    /// gives up.
+    kind: ResourceKind,
     stock: MassGrams,
 }
 
 pub struct EconomyOwner {
     sites: BTreeMap<SiteId, SiteState>,
-    inventories: BTreeMap<CharacterId, MassGrams>,
+    /// Holdings are per (character, kind). A zero-valued entry is never
+    /// stored, so the hash and the canonical text are both functions of
+    /// the same visible truth: a holding spent to nothing is
+    /// indistinguishable from one that never existed.
+    holdings: BTreeMap<(CharacterId, ResourceKind), MassGrams>,
     /// Per-entity conflict granularity: an extraction binds to the one
     /// site and the one inventory it touches, so extractions at
     /// different sites for different actors never false-conflict.
     /// Derived bookkeeping, not truth state — excluded from the world
     /// hash (the owner-wide apply counter is hashed).
     site_revisions: BTreeMap<SiteId, u64>,
-    inventory_revisions: BTreeMap<CharacterId, u64>,
+    holding_revisions: BTreeMap<(CharacterId, ResourceKind), u64>,
     revision: u64,
 }
 
@@ -41,33 +50,39 @@ pub struct EconomyOwner {
 pub struct Extraction {
     site: SiteId,
     to: CharacterId,
+    kind: ResourceKind,
     granted: MassGrams,
     from_site_revision: u64,
-    from_inventory_revision: u64,
+    from_holding_revision: u64,
 }
 
 impl Extraction {
     pub fn granted(&self) -> MassGrams {
         self.granted
     }
+
+    /// The kind the drained site yields — never a caller's choice.
+    pub fn kind(&self) -> ResourceKind {
+        self.kind
+    }
 }
 
 impl EconomyOwner {
     /// Seeding rejects duplicate IDs — no silent last-write-wins.
     pub fn seed_sites(
-        entries: impl IntoIterator<Item = (SiteId, InfraTier, MassGrams)>,
+        entries: impl IntoIterator<Item = (SiteId, InfraTier, ResourceKind, MassGrams)>,
     ) -> Result<Self, FixtureFault> {
         let mut sites = BTreeMap::new();
-        for (id, tier, stock) in entries {
-            if sites.insert(id, SiteState { tier, stock }).is_some() {
+        for (id, tier, kind, stock) in entries {
+            if sites.insert(id, SiteState { tier, kind, stock }).is_some() {
                 return Err(FixtureFault::DuplicateSite(id));
             }
         }
         Ok(Self {
             sites,
-            inventories: BTreeMap::new(),
+            holdings: BTreeMap::new(),
             site_revisions: BTreeMap::new(),
-            inventory_revisions: BTreeMap::new(),
+            holding_revisions: BTreeMap::new(),
             revision: 0,
         })
     }
@@ -76,8 +91,22 @@ impl EconomyOwner {
         self.site_revisions.get(&site).copied().unwrap_or(0)
     }
 
-    fn inventory_revision(&self, id: CharacterId) -> u64 {
-        self.inventory_revisions.get(&id).copied().unwrap_or(0)
+    fn holding_revision(&self, id: CharacterId, kind: ResourceKind) -> u64 {
+        self.holding_revisions
+            .get(&(id, kind))
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// The one write path for a holding. Normalizes zero to absence, so
+    /// no state that prints identically can hash differently.
+    fn set_holding(&mut self, id: CharacterId, kind: ResourceKind, grams: MassGrams) {
+        if grams.is_zero() {
+            self.holdings.remove(&(id, kind));
+        } else {
+            self.holdings.insert((id, kind), grams);
+        }
+        *self.holding_revisions.entry((id, kind)).or_insert(0) += 1;
     }
 
     /// True when the token still matches the revisions of both entities
@@ -85,28 +114,46 @@ impl EconomyOwner {
     /// plan BEFORE any owner mutates, so a stale plan is all-or-nothing.
     pub fn extraction_is_fresh(&self, extraction: &Extraction) -> bool {
         self.site_revision(extraction.site) == extraction.from_site_revision
-            && self.inventory_revision(extraction.to) == extraction.from_inventory_revision
+            && self.holding_revision(extraction.to, extraction.kind)
+                == extraction.from_holding_revision
     }
 
     pub fn tier(&self, site: SiteId) -> Option<InfraTier> {
         self.sites.get(&site).map(|s| s.tier)
     }
 
-    pub fn inventory(&self, id: CharacterId) -> MassGrams {
-        self.inventories
-            .get(&id)
+    pub fn site_kind(&self, site: SiteId) -> Option<ResourceKind> {
+        self.sites.get(&site).map(|s| s.kind)
+    }
+
+    pub fn holding(&self, id: CharacterId, kind: ResourceKind) -> MassGrams {
+        self.holdings
+            .get(&(id, kind))
             .copied()
             .unwrap_or(MassGrams::ZERO)
+    }
+
+    /// Every stored holding, in deterministic key order. Zero-valued
+    /// entries are never stored, so this iterator is exactly the set of
+    /// characters who hold something.
+    pub fn holdings_iter(
+        &self,
+    ) -> impl Iterator<Item = (CharacterId, ResourceKind, MassGrams)> + '_ {
+        self.holdings
+            .iter()
+            .map(|((id, kind), grams)| (*id, *kind, *grams))
     }
 
     pub fn revision(&self) -> u64 {
         self.revision
     }
 
-    pub fn sites_iter(&self) -> impl Iterator<Item = (SiteId, InfraTier, MassGrams)> + '_ {
+    pub fn sites_iter(
+        &self,
+    ) -> impl Iterator<Item = (SiteId, InfraTier, ResourceKind, MassGrams)> + '_ {
         self.sites
             .iter()
-            .map(|(id, state)| (*id, state.tier, state.stock))
+            .map(|(id, state)| (*id, state.tier, state.kind, state.stock))
     }
 
     /// Exact total mass across sites and inventories, or `None` when an
@@ -115,8 +162,30 @@ impl EconomyOwner {
         self.sites
             .values()
             .map(|site| site.stock)
-            .chain(self.inventories.values().copied())
+            .chain(self.holdings.values().copied())
             .try_fold(MassGrams::ZERO, MassGrams::checked_add)
+    }
+
+    /// Exact total of one kind across sites and holdings, or `None` when
+    /// an invalid fixture exceeds the canonical `u64` representation.
+    pub fn checked_total_mass_of(&self, kind: ResourceKind) -> Option<MassGrams> {
+        self.sites
+            .values()
+            .filter(|site| site.kind == kind)
+            .map(|site| site.stock)
+            .chain(
+                self.holdings
+                    .iter()
+                    .filter(|((_, held), _)| *held == kind)
+                    .map(|(_, grams)| *grams),
+            )
+            .try_fold(MassGrams::ZERO, MassGrams::checked_add)
+    }
+
+    /// Total of one kind in a world that passed `validate_world_coherence`.
+    pub fn total_mass_of(&self, kind: ResourceKind) -> MassGrams {
+        self.checked_total_mass_of(kind)
+            .expect("coherent world: per-kind total fits u64")
     }
 
     /// Total mass in a world that passed `validate_world_coherence`.
@@ -141,12 +210,14 @@ impl EconomyOwner {
             return Err(RefusalReason::SiteEmpty);
         }
         let granted = requested.min(state.stock);
+        let kind = state.kind;
         Ok(Extraction {
             site,
             to,
+            kind,
             granted,
             from_site_revision: self.site_revision(site),
-            from_inventory_revision: self.inventory_revision(to),
+            from_holding_revision: self.holding_revision(to, kind),
         })
     }
 
@@ -172,21 +243,20 @@ impl EconomyOwner {
             .stock
             .checked_sub(extraction.granted)
             .expect("fresh token: validated granted <= stock");
-        let next_inventory = self
-            .inventories
-            .get(&extraction.to)
-            .copied()
-            .unwrap_or(MassGrams::ZERO)
+        // The grant lands in the holding of the SITE's kind. Nothing on
+        // this path can name a different kind, so cross-kind leakage is
+        // unreachable rather than merely untested.
+        let next_holding = self
+            .holding(extraction.to, extraction.kind)
             .checked_add(extraction.granted)
-            .expect("coherent world: inventory addition fits total-mass bound");
+            .expect("coherent world: holding addition fits total-mass bound");
 
         self.sites
             .get_mut(&extraction.site)
             .expect("fresh token: validated site exists")
             .stock = next_stock;
-        self.inventories.insert(extraction.to, next_inventory);
+        self.set_holding(extraction.to, extraction.kind, next_holding);
         *self.site_revisions.entry(extraction.site).or_insert(0) += 1;
-        *self.inventory_revisions.entry(extraction.to).or_insert(0) += 1;
         self.revision += 1;
     }
 
@@ -196,12 +266,14 @@ impl EconomyOwner {
             hasher.update(b"sit");
             hasher.update(&id.0.to_be_bytes());
             hasher.update(&[state.tier.index() as u8]);
+            hasher.update(&[state.kind.index() as u8]);
             hasher.update(&state.stock.grams().to_be_bytes());
         }
-        for (id, inventory) in &self.inventories {
-            hasher.update(b"inv");
+        for ((id, kind), grams) in &self.holdings {
+            hasher.update(b"hld");
             hasher.update(&id.0.to_be_bytes());
-            hasher.update(&inventory.grams().to_be_bytes());
+            hasher.update(&[kind.index() as u8]);
+            hasher.update(&grams.grams().to_be_bytes());
         }
         hasher.update(b"eco-rev");
         hasher.update(&self.revision.to_be_bytes());
@@ -212,10 +284,17 @@ impl EconomyOwner {
 mod tests {
     use super::*;
 
+    const FODDER: ResourceKind = ResourceKind::Fodder;
+
     fn owner() -> EconomyOwner {
         EconomyOwner::seed_sites([
-            (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
-            (SiteId(2), InfraTier::Crude, MassGrams::new(300)),
+            (
+                SiteId(1),
+                InfraTier::Established,
+                FODDER,
+                MassGrams::new(2000),
+            ),
+            (SiteId(2), InfraTier::Crude, FODDER, MassGrams::new(300)),
         ])
         .unwrap()
     }
@@ -223,16 +302,21 @@ mod tests {
     fn stock_of(owner: &EconomyOwner, site: SiteId) -> MassGrams {
         owner
             .sites_iter()
-            .find(|(id, _, _)| *id == site)
-            .map(|(_, _, stock)| stock)
+            .find(|(id, _, _, _)| *id == site)
+            .map(|(_, _, _, stock)| stock)
             .expect("site exists")
     }
 
     #[test]
     fn duplicate_seed_id_is_a_fixture_fault() {
         let result = EconomyOwner::seed_sites([
-            (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
-            (SiteId(1), InfraTier::Crude, MassGrams::new(300)),
+            (
+                SiteId(1),
+                InfraTier::Established,
+                FODDER,
+                MassGrams::new(2000),
+            ),
+            (SiteId(1), InfraTier::Crude, FODDER, MassGrams::new(300)),
         ]);
         assert_eq!(result.err(), Some(FixtureFault::DuplicateSite(SiteId(1))));
     }
@@ -256,7 +340,7 @@ mod tests {
         assert_eq!(extraction.granted(), MassGrams::new(300));
         owner.apply_extract(extraction);
         assert_eq!(stock_of(&owner, SiteId(2)), MassGrams::ZERO);
-        assert_eq!(owner.inventory(CharacterId(2)), MassGrams::new(300));
+        assert_eq!(owner.holding(CharacterId(2), FODDER), MassGrams::new(300));
     }
 
     #[test]
@@ -306,15 +390,20 @@ mod tests {
     }
 
     /// Falsifier (trial/008): an invalid overfull fixture can put
-    /// `u64::MAX` grams in one inventory while another site still holds
+    /// `u64::MAX` grams in one holding while another site still holds
     /// one gram. Applying that last gram must fail loudly before any
-    /// mutation; silently clamping the inventory destroys mass while the
+    /// mutation; silently clamping the holding destroys mass while the
     /// saturating total reports the same value on both sides.
     #[test]
-    fn falsification_overfull_inventory_must_not_silently_clamp() {
+    fn falsification_overfull_holding_must_not_silently_clamp() {
         let mut owner = EconomyOwner::seed_sites([
-            (SiteId(1), InfraTier::Established, MassGrams::new(u64::MAX)),
-            (SiteId(2), InfraTier::Crude, MassGrams::new(1)),
+            (
+                SiteId(1),
+                InfraTier::Established,
+                FODDER,
+                MassGrams::new(u64::MAX),
+            ),
+            (SiteId(2), InfraTier::Crude, FODDER, MassGrams::new(1)),
         ])
         .unwrap();
 
@@ -337,7 +426,7 @@ mod tests {
 
         assert!(
             outcome.is_err(),
-            "u64::MAX + 1 inventory transfer silently clamped instead of failing"
+            "u64::MAX + 1 holding transfer silently clamped instead of failing"
         );
         let mut after = Fnv1a::default();
         owner.hash_into(&mut after);
@@ -449,11 +538,8 @@ mod tests {
             .unwrap();
         owner.apply_extract(extraction);
         assert!(
-            owner
-                .holdings_iter()
-                .all(|(_, _, grams)| !grams.is_zero()),
+            owner.holdings_iter().all(|(_, _, grams)| !grams.is_zero()),
             "a zero-valued holding entry was stored"
         );
     }
-
 }
