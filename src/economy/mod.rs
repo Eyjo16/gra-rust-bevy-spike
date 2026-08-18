@@ -1,9 +1,11 @@
 //! Economy owner: the single writer of mass — site stock and per-kind
 //! holdings.
 //!
-//! Internals are private. The only mutation path is `validate_extract`
-//! (fallible, read-only) followed by `apply_extract`, which consumes the
-//! proof token by value — one token, one apply. The token carries the
+//! Internals are private. The mutation paths are `validate_extract` /
+//! `apply_extract` (site -> holding) and `validate_transfer` /
+//! `apply_transfer` (holding -> holding, V01); each is a fallible
+//! read-only validation followed by an apply that consumes the proof
+//! token by value — one token, one apply. The token carries the
 //! entity revisions it was minted against — the site it drains and
 //! the (character, kind) holding it fills — so extractions touching
 //! disjoint entities never conflict. Applying a stale token panics, because that is a
@@ -41,6 +43,31 @@ pub struct EconomyOwner {
     site_revisions: BTreeMap<SiteId, u64>,
     holding_revisions: BTreeMap<(CharacterId, ResourceKind), u64>,
     revision: u64,
+}
+
+/// Proof that a transfer between two characters was validated against
+/// specific `(character, kind)` holding revisions, with
+/// `grams <= giver's holding` at validation time. Private fields: only
+/// the economy owner can construct one. The giver is named first and is
+/// the only holding that can decrease — the owner has no path that
+/// reduces a holding the actor does not own.
+pub struct Transfer {
+    from: CharacterId,
+    to: CharacterId,
+    kind: ResourceKind,
+    grams: MassGrams,
+    from_holding_revision: u64,
+    to_holding_revision: u64,
+}
+
+impl Transfer {
+    pub fn grams(&self) -> MassGrams {
+        self.grams
+    }
+
+    pub fn kind(&self) -> ResourceKind {
+        self.kind
+    }
 }
 
 /// Proof that an extraction was validated against specific entity
@@ -257,6 +284,64 @@ impl EconomyOwner {
             .stock = next_stock;
         self.set_holding(extraction.to, extraction.kind, next_holding);
         *self.site_revisions.entry(extraction.site).or_insert(0) += 1;
+        self.revision += 1;
+    }
+
+    /// True when the token still matches the revisions of both holdings
+    /// it touches.
+    pub fn transfer_is_fresh(&self, transfer: &Transfer) -> bool {
+        self.holding_revision(transfer.from, transfer.kind) == transfer.from_holding_revision
+            && self.holding_revision(transfer.to, transfer.kind) == transfer.to_holding_revision
+    }
+
+    /// Read-only validation of a voluntary transfer (V01). Exact: a giver
+    /// short of `grams` is refused, never partially satisfied — a giver's
+    /// own store is not a fact they can be surprised by, unlike a site's
+    /// remaining stock. The owner enforces resource semantics only; who
+    /// may give, at what cost, and whether the parties are distinct is
+    /// verb policy and lives in the boundary.
+    pub fn validate_transfer(
+        &self,
+        from: CharacterId,
+        to: CharacterId,
+        kind: ResourceKind,
+        grams: MassGrams,
+    ) -> Result<Transfer, RefusalReason> {
+        let held = self.holding(from, kind);
+        if held.checked_sub(grams).is_none() {
+            return Err(RefusalReason::InsufficientHolding);
+        }
+        Ok(Transfer {
+            from,
+            to,
+            kind,
+            grams,
+            from_holding_revision: self.holding_revision(from, kind),
+            to_holding_revision: self.holding_revision(to, kind),
+        })
+    }
+
+    /// Consumes the token by value: reuse is a compile error. Panics on a
+    /// stale token — a boundary bug, never a game outcome. Both sides of
+    /// the transfer are computed before the first write, so the applied
+    /// move is all-or-nothing and the kind total is unchanged by
+    /// construction: the same grams leave one holding and enter the other.
+    pub fn apply_transfer(&mut self, transfer: Transfer) {
+        assert!(
+            self.transfer_is_fresh(&transfer),
+            "stale proof token (economy transfer) — boundary bug"
+        );
+        let next_from = self
+            .holding(transfer.from, transfer.kind)
+            .checked_sub(transfer.grams)
+            .expect("fresh token: validated grams <= holding");
+        let next_to = self
+            .holding(transfer.to, transfer.kind)
+            .checked_add(transfer.grams)
+            .expect("coherent world: transfer addition fits total-mass bound");
+
+        self.set_holding(transfer.from, transfer.kind, next_from);
+        self.set_holding(transfer.to, transfer.kind, next_to);
         self.revision += 1;
     }
 
@@ -623,7 +708,12 @@ mod tests {
         );
         assert_eq!(
             owner
-                .validate_transfer(CharacterId(1), CharacterId(2), ResourceKind::Timber, MassGrams::new(1))
+                .validate_transfer(
+                    CharacterId(1),
+                    CharacterId(2),
+                    ResourceKind::Timber,
+                    MassGrams::new(1)
+                )
                 .err(),
             Some(RefusalReason::InsufficientHolding),
             "a kind the giver has never held is not a source of mass"
@@ -653,9 +743,9 @@ mod tests {
         owner.apply_transfer(transfer);
 
         assert!(
-            owner.holdings_iter().all(|(id, _, grams)| {
-                id != CharacterId(1) && !grams.is_zero()
-            }),
+            owner
+                .holdings_iter()
+                .all(|(id, _, grams)| { id != CharacterId(1) && !grams.is_zero() }),
             "an emptied holding stayed in the map"
         );
 
@@ -686,5 +776,4 @@ mod tests {
             "an emptied holding is still visible in the hash"
         );
     }
-
 }

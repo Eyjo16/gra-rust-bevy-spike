@@ -835,8 +835,8 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
     use crate::boundary::{
-        CharacterId, ClaimId, GatherCommand, OutcomeKind, RefusalReason, SiteId, Verb,
-        WitnessCommand,
+        CharacterId, ClaimId, GatherCommand, GiveCommand, MassGrams, OutcomeKind, RefusalReason,
+        SiteId, Verb, WitnessCommand,
     };
 
     const TRACE_SEED: u64 = 0x0070_0700_6d61_7065;
@@ -845,9 +845,17 @@ mod tests {
     const ACTORS: [u64; 5] = [1, 2, 3, 4, 9];
     const CLAIMS: [u64; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 99];
     const SITES: [u64; 5] = [1, 2, 3, 4, 9];
+    /// V01: give inputs enumerate giver x recipient x kind, including
+    /// self-gives, unknown ids on both sides, and every kind — so the
+    /// host parity trace covers the third verb's refusals too. The mass
+    /// and the witness slot are fixed per index rather than enumerated:
+    /// the amount's arithmetic is proven in the pure suite, and what the
+    /// host must reproduce is the transition, not the arithmetic.
+    const GIVE_GRAMS: u64 = 500;
     const GATHER_COMMANDS: usize = ACTORS.len() * CLAIMS.len() * SITES.len();
     const WITNESS_COMMANDS: usize = ACTORS.len() * CLAIMS.len();
-    const COMMAND_SPACE: usize = GATHER_COMMANDS + WITNESS_COMMANDS;
+    const GIVE_COMMANDS: usize = ACTORS.len() * ACTORS.len() * KIND_COUNT;
+    const COMMAND_SPACE: usize = GATHER_COMMANDS + WITNESS_COMMANDS + GIVE_COMMANDS;
 
     struct Lcg {
         state: u64,
@@ -902,6 +910,7 @@ mod tests {
         gather_cost_cells: BTreeMap<String, usize>,
         gather_yield_cells: BTreeMap<String, usize>,
         witness_flat_cost_uses: usize,
+        give_flat_cost_uses: usize,
     }
 
     impl Coverage {
@@ -972,6 +981,22 @@ mod tests {
                         self.witness_flat_cost_uses += 1;
                     }
                 }
+                Verb::Give => {
+                    // The flat give cost was consulted exactly when the
+                    // parties gate passed: acceptance, or a refusal from
+                    // the character gate or later.
+                    if matches!(
+                        receipt.outcome,
+                        OutcomeKind::Accepted
+                            | OutcomeKind::Refused(
+                                RefusalReason::UnknownActor
+                                    | RefusalReason::InsufficientStamina
+                                    | RefusalReason::InsufficientHolding
+                            )
+                    ) {
+                        self.give_flat_cost_uses += 1;
+                    }
+                }
             }
         }
     }
@@ -991,13 +1016,32 @@ mod tests {
                 claim: ClaimId(CLAIMS[claim_index]),
                 site: SiteId(SITES[site_index]),
             })
-        } else {
+        } else if index < GATHER_COMMANDS + WITNESS_COMMANDS {
             let witness_index = index - GATHER_COMMANDS;
             let claim_index = witness_index % CLAIMS.len();
             let actor_index = witness_index / CLAIMS.len();
             Command::Witness(WitnessCommand {
                 witness: CharacterId(ACTORS[actor_index]),
                 claim: ClaimId(CLAIMS[claim_index]),
+            })
+        } else {
+            let give_index = index - GATHER_COMMANDS - WITNESS_COMMANDS;
+            let kind_index = give_index % KIND_COUNT;
+            let remaining = give_index / KIND_COUNT;
+            let recipient_index = remaining % ACTORS.len();
+            let giver_index = remaining / ACTORS.len();
+            // Alternate the witness slot so both receipted forms appear,
+            // and point it at an actor that is often a party — that is
+            // how witness_is_party enters the host trace.
+            let witness = give_index
+                .is_multiple_of(2)
+                .then(|| CharacterId(ACTORS[kind_index]));
+            Command::Give(GiveCommand {
+                giver: CharacterId(ACTORS[giver_index]),
+                recipient: CharacterId(ACTORS[recipient_index]),
+                kind: ResourceKind::ALL[kind_index],
+                grams: MassGrams::new(GIVE_GRAMS),
+                witness,
             })
         }
     }
@@ -1137,8 +1181,10 @@ mod tests {
         println!("transition_domain_bands {:?}", coverage.bands_observed);
         println!("transition_domain_tiers {:?}", coverage.tiers_observed);
         println!(
-            "transition_domain_cost_cells gather={:?} witness_flat_uses={}",
-            coverage.gather_cost_cells, coverage.witness_flat_cost_uses
+            "transition_domain_cost_cells gather={:?} witness_flat_uses={} give_flat_uses={}",
+            coverage.gather_cost_cells,
+            coverage.witness_flat_cost_uses,
+            coverage.give_flat_cost_uses
         );
         println!(
             "transition_domain_yield_cells {:?}",

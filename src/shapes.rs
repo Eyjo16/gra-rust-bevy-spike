@@ -18,7 +18,7 @@
 //! from the constants.
 
 use crate::boundary::{
-    ResourceKind, STAMINA_COST_BY_BAND, Stamina, WITNESS_COST, YIELD_TABLE_GRAMS,
+    GIVE_COST, ResourceKind, STAMINA_COST_BY_BAND, Stamina, WITNESS_COST, YIELD_TABLE_GRAMS,
     grammar_fingerprint,
 };
 
@@ -202,6 +202,63 @@ fn shapes() -> Vec<Shape> {
                 "witness_cost".to_owned(),
                 format!("{WITNESS_COST} (fixture)"),
             )],
+        },
+        Shape {
+            id: "verb.give",
+            kind: "verb",
+            meaning_status: "proven",
+            role: "Voluntary transfer of a named mass of one kind from the giver's \
+                   holding to another character's; flat stamina cost, no exhausted \
+                   gate, optional named witness recorded on the receipt only",
+            scope: "mechanics proven on the standard fixture and bounded traces; \
+                    the flat cost is a fixture, not balance. Consent is structural \
+                    (the giver is the actor), not a value: no command shape moves \
+                    another character's holding",
+            evidence_kind: &["capability-red", "oracle", "parity"],
+            dependencies: &["owner.character", "owner.economy"],
+            reads: &["character.stamina", "economy.holdings"],
+            writes: &["character.stamina", "economy.holdings"],
+            mutation_closure: "character and economy entity revisions advance; \
+                               social state is never touched — witnessing a give is \
+                               receipted, never stateful, and the named witness \
+                               pays nothing",
+            guards: &[
+                "giver and recipient distinct and both existing",
+                "named witness exists and is neither party",
+                "nonzero mass",
+                "actor exists, exact stamina headroom (no exhausted gate)",
+                "giver holds the exact mass of the named kind — no partial",
+                "two-phase commit: every token fresh before any owner mutates",
+            ],
+            refusals: &[
+                "cannot_give_to_self",
+                "unknown_recipient",
+                "unknown_witness",
+                "witness_is_party",
+                "empty_transfer",
+                "unknown_actor",
+                "insufficient_stamina",
+                "insufficient_holding",
+            ],
+            receipts: "canonical line with to=, kind, spent and mass; claim=- and \
+                       site=- because a transfer acts through neither; witnessed \
+                       records whether a witness was named",
+            invariants: &[
+                "per-kind conservation between exactly two holdings",
+                "consent: the actor is the only holding that decreases",
+                "refusal zero-mutation",
+                "an emptied holding leaves no trace",
+                "shadow expectation and final state",
+            ],
+            parity_paths: &["pure", "bevy-serial"],
+            source: format!(
+                "src/boundary.rs:{} plan_give, :{} GivePlan::apply, :{} submit_give",
+                line_of(BOUNDARY_SRC, "fn plan_give"),
+                line_of(BOUNDARY_SRC, "impl GivePlan"),
+                line_of(BOUNDARY_SRC, "fn submit_give")
+            ),
+            proof_refs: &["trial/V01", "oracles 1-10"],
+            values: vec![("give_cost".to_owned(), format!("{GIVE_COST} (fixture)"))],
         },
         Shape {
             id: "owner.character",
@@ -603,7 +660,7 @@ mod tests {
     #[test]
     fn projection_covers_every_verb() {
         let yaml = emit_yaml("test");
-        for verb in [Verb::Gather, Verb::Witness] {
+        for verb in [Verb::Gather, Verb::Witness, Verb::Give] {
             assert!(
                 yaml.contains(&format!("id: \"verb.{}\"", verb.code())),
                 "missing verb shape {}",
@@ -625,6 +682,7 @@ mod tests {
             STAMINA_COST_BY_BAND[3]
         )));
         assert!(yaml.contains(&format!("witness_cost: \"{WITNESS_COST} (fixture)\"")));
+        assert!(yaml.contains(&format!("give_cost: \"{GIVE_COST} (fixture)\"")));
         assert!(yaml.contains(&format!("\"0x{:016x}\"", grammar_fingerprint())));
     }
 

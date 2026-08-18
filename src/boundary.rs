@@ -25,7 +25,7 @@
 //! they are not balance and not historical truth.
 
 use crate::character::{CharacterOwner, StaminaSpend};
-use crate::economy::{EconomyOwner, Extraction};
+use crate::economy::{EconomyOwner, Extraction, Transfer};
 use crate::social::{SocialOwner, WitnessGrant, WitnessPass};
 
 // ---------------------------------------------------------------------------
@@ -236,6 +236,12 @@ pub const STAMINA_COST_BY_BAND: [u8; CELL_ROWS] = [0, 15, 12, 10];
 /// exhausted character may still attest. Mechanical example number.
 pub const WITNESS_COST: u8 = 5;
 
+/// Stamina cost of one give. Verb policy, owned by the boundary: a flat
+/// cost with no band table and no exhausted gate — the witness verb's
+/// policy family. An exhausted person may still hand over what they
+/// hold; a person with nothing left cannot. Mechanical example number.
+pub const GIVE_COST: u8 = 3;
+
 /// Fingerprint of the grammar that produced a receipt: the yield table,
 /// the cost table, every resource-kind code, the actual band mapping over
 /// the full stamina range, and every closed reason code. Change any of them and every subsequent
@@ -246,9 +252,10 @@ pub const WITNESS_COST: u8 = 5;
 /// pre-registers the new value from the declared inputs, and this
 /// constant is edited in the same commit that changes them.
 /// History: `0x530003916889b952` (two verbs, undifferentiated mass) ->
-/// `0xc5d782ec145af0a5` (RES01: fodder/food/timber).
+/// `0xc5d782ec145af0a5` (RES01: fodder/food/timber) ->
+/// `0x7dd8c6706e0b949f` (V01: the give verb).
 #[cfg(test)]
-pub const LICENSED_GRAMMAR_FINGERPRINT: u64 = 0xc5d7_82ec_145a_f0a5;
+pub const LICENSED_GRAMMAR_FINGERPRINT: u64 = 0x7dd8_c670_6e0b_949f;
 
 pub fn grammar_fingerprint() -> u64 {
     let mut hasher = Fnv1a::default();
@@ -259,6 +266,7 @@ pub fn grammar_fingerprint() -> u64 {
     }
     hasher.update(&STAMINA_COST_BY_BAND);
     hasher.update(&[WITNESS_COST]);
+    hasher.update(&[GIVE_COST]);
     for kind in ResourceKind::ALL {
         hasher.update(kind.code().as_bytes());
     }
@@ -292,10 +300,16 @@ pub enum RefusalReason {
     SiteEmpty,
     ClaimAlreadyWitnessed,
     CannotWitnessOwnClaim,
+    UnknownRecipient,
+    CannotGiveToSelf,
+    InsufficientHolding,
+    EmptyTransfer,
+    UnknownWitness,
+    WitnessIsParty,
 }
 
 impl RefusalReason {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 17] = [
         Self::UnknownActor,
         Self::UnknownSite,
         Self::UnknownClaim,
@@ -307,6 +321,12 @@ impl RefusalReason {
         Self::SiteEmpty,
         Self::ClaimAlreadyWitnessed,
         Self::CannotWitnessOwnClaim,
+        Self::UnknownRecipient,
+        Self::CannotGiveToSelf,
+        Self::InsufficientHolding,
+        Self::EmptyTransfer,
+        Self::UnknownWitness,
+        Self::WitnessIsParty,
     ];
 
     pub fn code(self) -> &'static str {
@@ -322,6 +342,12 @@ impl RefusalReason {
             Self::SiteEmpty => "site_empty",
             Self::ClaimAlreadyWitnessed => "claim_already_witnessed",
             Self::CannotWitnessOwnClaim => "cannot_witness_own_claim",
+            Self::UnknownRecipient => "unknown_recipient",
+            Self::CannotGiveToSelf => "cannot_give_to_self",
+            Self::InsufficientHolding => "insufficient_holding",
+            Self::EmptyTransfer => "empty_transfer",
+            Self::UnknownWitness => "unknown_witness",
+            Self::WitnessIsParty => "witness_is_party",
         }
     }
 
@@ -480,6 +506,7 @@ impl Fnv1a {
 pub enum Verb {
     Gather,
     Witness,
+    Give,
 }
 
 impl Verb {
@@ -487,6 +514,7 @@ impl Verb {
         match self {
             Self::Gather => "gather",
             Self::Witness => "witness",
+            Self::Give => "give",
         }
     }
 }
@@ -504,10 +532,25 @@ pub struct WitnessCommand {
     pub claim: ClaimId,
 }
 
+/// A voluntary transfer (V01). The giver is the actor: there is no
+/// command shape in which one character moves another's holding, so
+/// theft is unrepresentable rather than refused. The witness, when
+/// named, is recorded on the receipt and pays nothing — nobody else's
+/// act may spend a third party's stamina or mass.
+#[derive(Debug, Clone, Copy)]
+pub struct GiveCommand {
+    pub giver: CharacterId,
+    pub recipient: CharacterId,
+    pub kind: ResourceKind,
+    pub grams: MassGrams,
+    pub witness: Option<CharacterId>,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum Command {
     Gather(GatherCommand),
     Witness(WitnessCommand),
+    Give(GiveCommand),
 }
 
 impl Command {
@@ -531,6 +574,24 @@ impl Command {
                 bytes.extend_from_slice(&witness.claim.0.to_be_bytes());
                 bytes
             }
+            Self::Give(give) => {
+                let mut bytes = Vec::with_capacity(38);
+                bytes.extend_from_slice(b"give");
+                bytes.extend_from_slice(&give.giver.0.to_be_bytes());
+                bytes.extend_from_slice(&give.recipient.0.to_be_bytes());
+                bytes.push(give.kind.index() as u8);
+                bytes.extend_from_slice(&give.grams.grams().to_be_bytes());
+                // Presence byte first: an absent witness and a witness
+                // whose id happens to be zero must not share an encoding.
+                match give.witness {
+                    Some(witness) => {
+                        bytes.push(1);
+                        bytes.extend_from_slice(&witness.0.to_be_bytes());
+                    }
+                    None => bytes.push(0),
+                }
+                bytes
+            }
         }
     }
 }
@@ -545,6 +606,7 @@ pub enum TextCommandFault {
     NonAscii,
     NonCanonicalWhitespace,
     UnknownVerb,
+    UnknownKind,
     WrongFieldCount,
     UnexpectedField,
     EmptyValue,
@@ -588,6 +650,29 @@ pub fn parse_text_command(line: &str) -> Result<Command, TextCommandFault> {
                 claim: ClaimId(parse_text_u64(field_value(fields[2], "claim")?)?),
             }))
         }
+        Some("give") => {
+            if fields.len() != 6 {
+                return Err(TextCommandFault::WrongFieldCount);
+            }
+            let kind_code = field_value(fields[3], "kind")?;
+            let kind = ResourceKind::from_code(kind_code).ok_or(TextCommandFault::UnknownKind)?;
+            let witness_field = field_value(fields[5], "witness")?;
+            // "-" is the only spelling of an absent witness; an empty
+            // value is still a fault, so absence is explicit rather than
+            // inferred from a missing field.
+            let witness = if witness_field == "-" {
+                None
+            } else {
+                Some(CharacterId(parse_text_u64(witness_field)?))
+            };
+            Ok(Command::Give(GiveCommand {
+                giver: CharacterId(parse_text_u64(field_value(fields[1], "giver")?)?),
+                recipient: CharacterId(parse_text_u64(field_value(fields[2], "to")?)?),
+                kind,
+                grams: MassGrams::new(parse_text_u64(field_value(fields[4], "g")?)?),
+                witness,
+            }))
+        }
         Some(_) => Err(TextCommandFault::UnknownVerb),
         None => Err(TextCommandFault::EmptyLine),
     }
@@ -628,8 +713,15 @@ pub struct Receipt {
     pub seq: u64,
     pub verb: Verb,
     pub actor: CharacterId,
-    pub claim: ClaimId,
+    /// The claim a verb acted through. `None` for verbs that act on no
+    /// claim — a transfer moves what the giver already holds, and
+    /// pretending it had a claim would be a receipt that lies.
+    pub claim: Option<ClaimId>,
     pub site: Option<SiteId>,
+    /// The other party of a transfer (V01). `None` for verbs that have
+    /// no counterparty; the actor is always the character whose holding
+    /// or stamina is spent.
+    pub recipient: Option<CharacterId>,
     pub outcome: OutcomeKind,
     pub witnessed: bool,
     pub stamina_before: Option<Stamina>,
@@ -658,15 +750,22 @@ impl Receipt {
         let site = self
             .site
             .map_or_else(|| "-".to_owned(), |s| format!("S{}", s.0));
+        let recipient = self
+            .recipient
+            .map_or_else(|| "-".to_owned(), |c| format!("C{}", c.0));
+        let claim = self
+            .claim
+            .map_or_else(|| "-".to_owned(), |k| format!("K{}", k.0));
         format!(
-            "seq={} verb={} actor=C{} claim=K{} site={} outcome={} reason={} witnessed={} \
+            "seq={} verb={} actor=C{} claim={} site={} to={} outcome={} reason={} witnessed={} \
              stamina_before={} band={} tier={} kind={} spent={} mass_g={} \
              grammar=0x{:016x} world_before=0x{:016x} world=0x{:016x}",
             self.seq,
             self.verb.code(),
             self.actor.0,
-            self.claim.0,
+            claim,
             site,
+            recipient,
             self.outcome.code(),
             self.outcome.reason_code(),
             self.witnessed,
@@ -859,6 +958,63 @@ fn plan_witness(world: &World, cmd: &WitnessCommand) -> Result<WitnessPlan, Refu
     Ok(WitnessPlan { grant, spend })
 }
 
+/// A fully validated give. Same doctrine as the other plans: every gate
+/// passed before any apply, tokens consumed by value.
+struct GivePlan {
+    spend: StaminaSpend,
+    transfer: Transfer,
+}
+
+impl GivePlan {
+    /// Commit phase for a planned transfer; same two-phase doctrine as
+    /// `GatherPlan::apply`. The social owner is untouched: witnessing a
+    /// give is receipted, never stateful.
+    fn apply(self, world: &mut World) {
+        assert!(
+            world.characters.spend_is_fresh(&self.spend)
+                && world.economy.transfer_is_fresh(&self.transfer),
+            "stale plan token — boundary bug (commit refused before any mutation)"
+        );
+        world.characters.apply_spend(self.spend);
+        world.economy.apply_transfer(self.transfer);
+    }
+}
+
+fn plan_give(world: &World, cmd: &GiveCommand) -> Result<GivePlan, RefusalReason> {
+    // 1. Parties gate (boundary verb policy). A transfer needs two
+    //    distinct, existing characters and a nonzero mass; a named
+    //    witness must exist and must not be either party, because a
+    //    party attesting its own transfer attests nothing.
+    if cmd.giver == cmd.recipient {
+        return Err(RefusalReason::CannotGiveToSelf);
+    }
+    if world.characters.stamina(cmd.recipient).is_none() {
+        return Err(RefusalReason::UnknownRecipient);
+    }
+    if let Some(witness) = cmd.witness {
+        if world.characters.stamina(witness).is_none() {
+            return Err(RefusalReason::UnknownWitness);
+        }
+        if witness == cmd.giver || witness == cmd.recipient {
+            return Err(RefusalReason::WitnessIsParty);
+        }
+    }
+    if cmd.grams.is_zero() {
+        return Err(RefusalReason::EmptyTransfer);
+    }
+    // 2. Character gate. Give verb policy: flat cost, no band table, no
+    //    exhausted gate — the witness verb's policy family. The owner
+    //    only checks existence and exact headroom.
+    let spend = world.characters.validate_spend(cmd.giver, GIVE_COST)?;
+    // 3. Economy gate: the giver must actually hold the named mass of
+    //    the named kind. Exact — no partial, no clamping.
+    let transfer =
+        world
+            .economy
+            .validate_transfer(cmd.giver, cmd.recipient, cmd.kind, cmd.grams)?;
+    Ok(GivePlan { spend, transfer })
+}
+
 /// Submit one command through the boundary. All validation happens before
 /// any owner apply; the applies consume their proof tokens by value and
 /// panic only on a stale token, which is a boundary bug, never a game
@@ -867,6 +1023,7 @@ pub fn submit(world: &mut World, seq: u64, cmd: Command) -> Receipt {
     match cmd {
         Command::Gather(gather) => submit_gather(world, seq, gather),
         Command::Witness(witness) => submit_witness(world, seq, witness),
+        Command::Give(give) => submit_give(world, seq, give),
     }
 }
 
@@ -881,8 +1038,9 @@ fn submit_gather(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
             seq,
             verb: Verb::Gather,
             actor: cmd.actor,
-            claim: cmd.claim,
+            claim: Some(cmd.claim),
             site: Some(cmd.site),
+            recipient: None,
             outcome: OutcomeKind::Refused(reason),
             witnessed,
             stamina_before,
@@ -910,8 +1068,9 @@ fn submit_gather(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
                 seq,
                 verb: Verb::Gather,
                 actor: cmd.actor,
-                claim,
+                claim: Some(claim),
                 site: Some(cmd.site),
+                recipient: None,
                 outcome,
                 witnessed,
                 stamina_before,
@@ -940,8 +1099,9 @@ fn submit_witness(world: &mut World, seq: u64, cmd: WitnessCommand) -> Receipt {
             seq,
             verb: Verb::Witness,
             actor: cmd.witness,
-            claim: cmd.claim,
+            claim: Some(cmd.claim),
             site,
+            recipient: None,
             outcome: OutcomeKind::Refused(reason),
             witnessed,
             stamina_before,
@@ -964,8 +1124,9 @@ fn submit_witness(world: &mut World, seq: u64, cmd: WitnessCommand) -> Receipt {
                 seq,
                 verb: Verb::Witness,
                 actor: cmd.witness,
-                claim,
+                claim: Some(claim),
                 site,
+                recipient: None,
                 outcome: OutcomeKind::Accepted,
                 witnessed,
                 stamina_before,
@@ -974,6 +1135,65 @@ fn submit_witness(world: &mut World, seq: u64, cmd: WitnessCommand) -> Receipt {
                 kind: None,
                 stamina_spent,
                 mass_moved: MassGrams::ZERO,
+                grammar,
+                world_hash_before,
+                world_hash_after: world.hash(),
+            }
+        }
+    }
+}
+
+/// A give's receipt records what a transfer is: who acted, who received,
+/// which kind, how much, and whether anyone attested it. `witnessed` on
+/// this verb means "this transfer had a named witness" — the field's
+/// gather meaning ("the claim was witnessed") does not apply, because a
+/// transfer acts through no claim, and the `claim=-` field says so.
+fn submit_give(world: &mut World, seq: u64, cmd: GiveCommand) -> Receipt {
+    let world_hash_before = world.hash();
+    let grammar = grammar_fingerprint();
+    let stamina_before = world.characters.stamina(cmd.giver);
+    let witnessed = cmd.witness.is_some();
+
+    match plan_give(world, &cmd) {
+        Err(reason) => Receipt {
+            seq,
+            verb: Verb::Give,
+            actor: cmd.giver,
+            claim: None,
+            site: None,
+            recipient: Some(cmd.recipient),
+            outcome: OutcomeKind::Refused(reason),
+            witnessed,
+            stamina_before,
+            band: stamina_before.map(Stamina::band),
+            tier: None,
+            kind: Some(cmd.kind),
+            stamina_spent: 0,
+            mass_moved: MassGrams::ZERO,
+            grammar,
+            world_hash_before,
+            world_hash_after: world.hash(),
+        },
+        Ok(plan) => {
+            let stamina_spent = plan.spend.cost();
+            let mass_moved = plan.transfer.grams();
+            let kind = plan.transfer.kind();
+            plan.apply(world);
+            Receipt {
+                seq,
+                verb: Verb::Give,
+                actor: cmd.giver,
+                claim: None,
+                site: None,
+                recipient: Some(cmd.recipient),
+                outcome: OutcomeKind::Accepted,
+                witnessed,
+                stamina_before,
+                band: stamina_before.map(Stamina::band),
+                tier: None,
+                kind: Some(kind),
+                stamina_spent,
+                mass_moved,
                 grammar,
                 world_hash_before,
                 world_hash_after: world.hash(),
@@ -1794,13 +2014,7 @@ mod tests {
         world
     }
 
-    fn give(
-        giver: u64,
-        to: u64,
-        kind: ResourceKind,
-        grams: u64,
-        witness: Option<u64>,
-    ) -> Command {
+    fn give(giver: u64, to: u64, kind: ResourceKind, grams: u64, witness: Option<u64>) -> Command {
         Command::Give(GiveCommand {
             giver: CharacterId(giver),
             recipient: CharacterId(to),
@@ -1817,11 +2031,7 @@ mod tests {
         let mut world = give_world();
         let before_total = world.economy.total_mass();
         let before_giver = world.economy.holding(CharacterId(1), ResourceKind::Fodder);
-        let receipt = submit(
-            &mut world,
-            3,
-            give(1, 2, ResourceKind::Fodder, 500, None),
-        );
+        let receipt = submit(&mut world, 3, give(1, 2, ResourceKind::Fodder, 500, None));
         assert_eq!(receipt.outcome, OutcomeKind::Accepted);
         assert_eq!(receipt.verb, Verb::Give);
         assert_eq!(receipt.mass_moved, MassGrams::new(500));
@@ -1875,18 +2085,42 @@ mod tests {
             .holding(CharacterId(1), ResourceKind::Fodder)
             .grams();
         let cases = [
-            (give(1, 1, ResourceKind::Fodder, 10, None), RefusalReason::CannotGiveToSelf),
-            (give(1, 9, ResourceKind::Fodder, 10, None), RefusalReason::UnknownRecipient),
-            (give(1, 2, ResourceKind::Fodder, 10, Some(9)), RefusalReason::UnknownWitness),
-            (give(1, 2, ResourceKind::Fodder, 10, Some(2)), RefusalReason::WitnessIsParty),
-            (give(1, 2, ResourceKind::Fodder, 0, None), RefusalReason::EmptyTransfer),
+            (
+                give(1, 1, ResourceKind::Fodder, 10, None),
+                RefusalReason::CannotGiveToSelf,
+            ),
+            (
+                give(1, 9, ResourceKind::Fodder, 10, None),
+                RefusalReason::UnknownRecipient,
+            ),
+            (
+                give(1, 2, ResourceKind::Fodder, 10, Some(9)),
+                RefusalReason::UnknownWitness,
+            ),
+            (
+                give(1, 2, ResourceKind::Fodder, 10, Some(2)),
+                RefusalReason::WitnessIsParty,
+            ),
+            (
+                give(1, 2, ResourceKind::Fodder, 0, None),
+                RefusalReason::EmptyTransfer,
+            ),
             (
                 give(1, 2, ResourceKind::Fodder, held + 1, None),
                 RefusalReason::InsufficientHolding,
             ),
-            (give(1, 2, ResourceKind::Food, 1, None), RefusalReason::InsufficientHolding),
-            (give(9, 2, ResourceKind::Fodder, 10, None), RefusalReason::UnknownActor),
-            (give(3, 2, ResourceKind::Fodder, 10, None), RefusalReason::InsufficientStamina),
+            (
+                give(1, 2, ResourceKind::Food, 1, None),
+                RefusalReason::InsufficientHolding,
+            ),
+            (
+                give(9, 2, ResourceKind::Fodder, 10, None),
+                RefusalReason::UnknownActor,
+            ),
+            (
+                give(3, 2, ResourceKind::Fodder, 10, None),
+                RefusalReason::InsufficientStamina,
+            ),
         ];
         for (cmd, expected) in cases {
             let before = world.hash();
@@ -1940,11 +2174,7 @@ mod tests {
             .economy
             .holding(CharacterId(1), ResourceKind::Timber)
             .grams();
-        let receipt = submit(
-            &mut world,
-            3,
-            give(1, 2, ResourceKind::Timber, all, None),
-        );
+        let receipt = submit(&mut world, 3, give(1, 2, ResourceKind::Timber, all, None));
         assert_eq!(receipt.outcome, OutcomeKind::Accepted);
         assert_eq!(
             world.economy.holding(CharacterId(1), ResourceKind::Timber),
@@ -2016,5 +2246,4 @@ mod tests {
             );
         }
     }
-
 }
