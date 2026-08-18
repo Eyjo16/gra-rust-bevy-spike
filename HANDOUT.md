@@ -39,15 +39,21 @@ author should work or rest.
 ## Frozen identities and the gate
 
 ```
-grammar=0x530003916889b952  fixture=0x3805f1e20c001051
-receipts=0x6c5b0e011471d985 world=0x36221d3fdb8aed9a  oracles=10v4
+grammar=0x7dd8c6706e0b949f  fixture=0x93afba3f312bd89d
+receipts=0x2d52250d86f0638b world=0xb500dee0e5d883d8  oracles=10v6
 ```
 
+Those are the identities of the **V01 line** (RES01 + Give), which is
+review-ready and not yet merged. Merged master still carries the
+pre-RES01 grammar `0x530003916889b952` / fixture `0x3805f1e20c001051` /
+oracles `10v4`. Runs are cross-comparable only within one line.
+
 Gate (clean tree first; never judge through a pipe): `cargo fmt
---check`; clippy `-D warnings` both feature sets; `cargo test` both;
-`BASELINE_COMMIT=$(git rev-parse --short HEAD) cargo run --features
-bevy-host` exit 0 — all oracles + bevy_host_parity/projection/
-publication/faults probes green.
+--check`; clippy `-D warnings` for default, `bevy-host`, `bevy-render`
+and `e01-taste`; `cargo test` for each; `BASELINE_COMMIT=$(git rev-parse
+--short HEAD) cargo run --features bevy-host` exit 0 — all oracles +
+bevy_host_parity/projection/publication/faults probes green. On the W01
+line, `cargo run winter` too (thirty oracle verdicts, three plans).
 
 ## Core doctrine, compressed
 
@@ -67,21 +73,26 @@ publication/faults probes green.
 - Player: not in truth as a hand; the diegetic seat may be canonical.
   Receipts are the transition ledger, not personal memory.
 
-## Standing state (refresh me!) — as of 2026-08-14
+## Standing state (refresh me!) — as of 2026-08-18
 
-- Truth master `8c1baca`+: trials 001–010, R01–R03, D01, TS01 merged.
-  Held unmerged: 011/012/013 (gameplay evidence awaiting the author's
-  Meaning Gate verdicts — **the critical path**), 014 (Sol's), MB01
-  (meaning brief, review-ready), turn-contract (A2 candidate).
-- `run/NM00` (local-compute): checkpoint bakeoff Nemotron-9B-v2 vs
-  Llama-8B-v1; eval seal `628b8d90…` + measurement seal `0ddd8106…`
-  both frozen pre-inference; baselines await Sol gate. Expert adapters
-  gated: gameplay/UI experts wait on Meaning Gate verdicts; historical
-  expert waits on Icelandic baseline + licensed corpus.
-- The author's decision-frame workbook (13 questions, printed) is the
-  single most valuable pending input; A1/C1 answers unlock 013, stamina
-  semantics shape the first value hypothesis, autonomy rung defines the
-  third verb (`contest`-shaped, story-led, opens contention/T03).
+- Master `1f3cbc6`: trials 001–010, 013, 014, R01–R03, D01, TS01 and
+  **E01** merged. E01 closed the belief→action legibility question.
+- **Three stacked review-ready branches, gates green, nothing pushed**:
+  `trial/RES01-resource-kinds` (`4f2443c`) — closed kind vocabulary
+  fodder/food/timber, author-licensed 2026-08-18, per-kind conservation;
+  `trial/V01-give` (`605e32a`) — the third verb, structural consent,
+  exact transfers, receipted-not-stateful witnessing;
+  `trial/W01-winter-crisis` (`a173383`) — the first playable scene,
+  three plans, thirty oracle verdicts.
+  Synthesis: `docs/sprint-2026-08-18-overview.md`.
+- The grammar moved twice, both times to a value pre-registered before
+  implementation, and is now pinned by a test.
+- **The load-bearing open finding: nothing is consumed, so nothing is at
+  stake.** W01 can state a shortfall; it cannot make one hurt. Time,
+  household, refusal of labour, and turf/fuel names are the next gaps.
+- Still open and author-owned: chronology/seat cluster (workbook 08 + 11
+  + 13), MAP01 push, RS01-human execution, slavery scope, and the merge
+  words for the three branches above.
 
 ## How to be useful in one sentence
 
