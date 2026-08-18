@@ -207,13 +207,16 @@ fn shapes() -> Vec<Shape> {
             id: "verb.give",
             kind: "verb",
             meaning_status: "proven",
-            role: "Voluntary transfer of a named mass of one kind from the giver's \
-                   holding to another character's; flat stamina cost, no exhausted \
-                   gate, optional named witness recorded on the receipt only",
+            role: "Attributed transfer of a named mass of one kind from the named \
+                   source's holding to another character's; flat stamina cost, no \
+                   exhausted gate, optional witness recorded on the receipt by \
+                   identity",
             scope: "mechanics proven on the standard fixture and bounded traces; \
-                    the flat cost is a fixture, not balance. Consent is structural \
-                    (the giver is the actor), not a value: no command shape moves \
-                    another character's holding",
+                    the flat cost is a fixture, not balance. What is proven is \
+                    ATTRIBUTION — no accepted transfer debits a holding other than \
+                    the command's named source. Consent is NOT proven and is not \
+                    provable until an issuer, player seat, delegation or actor \
+                    intent exists; the design intent is a voluntary transfer",
             evidence_kind: &["capability-red", "oracle", "parity"],
             dependencies: &["owner.character", "owner.economy"],
             reads: &["character.stamina", "economy.holdings"],
@@ -241,11 +244,13 @@ fn shapes() -> Vec<Shape> {
                 "insufficient_holding",
             ],
             receipts: "canonical line with to=, kind, spent and mass; claim=- and \
-                       site=- because a transfer acts through neither; witnessed \
-                       records whether a witness was named",
+                       site=- because a transfer acts through neither; \
+                       transfer_witness records WHICH third party attested, by \
+                       identity, and claim_witnessed is always false",
             invariants: &[
                 "per-kind conservation between exactly two holdings",
-                "consent: the actor is the only holding that decreases",
+                "attribution: the only holding that decreases is the command's \
+                 named source",
                 "refusal zero-mutation",
                 "an emptied holding leaves no trace",
                 "shadow expectation and final state",

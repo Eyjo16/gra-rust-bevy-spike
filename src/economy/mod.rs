@@ -294,7 +294,9 @@ impl EconomyOwner {
             && self.holding_revision(transfer.to, transfer.kind) == transfer.to_holding_revision
     }
 
-    /// Read-only validation of a voluntary transfer (V01). Exact: a giver
+    /// Read-only validation of an attributed transfer (V01). The owner
+    /// debits only the named source and can express no other move; that
+    /// is attribution, not proof that the source willed it. Exact: a giver
     /// short of `grams` is refused, never partially satisfied — a giver's
     /// own store is not a fact they can be surprised by, unlike a site's
     /// remaining stock. The owner enforces resource semantics only; who

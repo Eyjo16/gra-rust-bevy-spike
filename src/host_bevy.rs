@@ -840,22 +840,40 @@ mod tests {
     };
 
     const TRACE_SEED: u64 = 0x0070_0700_6d61_7065;
-    const TRACE_COUNT: usize = 1_000;
+    /// Widened with the command space (V01 repair): more give inputs
+    /// means fewer draws land on gather, and the 4x4 cell coverage is
+    /// evidence trial/010 depends on. Raised so the cells stay dense.
+    const TRACE_COUNT: usize = 2_500;
     const TRACE_DEPTH: usize = 32;
     const ACTORS: [u64; 5] = [1, 2, 3, 4, 9];
     const CLAIMS: [u64; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 99];
     const SITES: [u64; 5] = [1, 2, 3, 4, 9];
-    /// V01: give inputs enumerate giver x recipient x kind, including
-    /// self-gives, unknown ids on both sides, and every kind — so the
-    /// host parity trace covers the third verb's refusals too. The mass
-    /// and the witness slot are fixed per index rather than enumerated:
-    /// the amount's arithmetic is proven in the pure suite, and what the
-    /// host must reproduce is the transition, not the arithmetic.
-    const GIVE_GRAMS: u64 = 500;
+    /// V01 (widened after review): give inputs enumerate
+    /// giver x recipient x kind x witness-slot x mass, so the host trace
+    /// reaches every give refusal — including `empty_transfer` (mass 0)
+    /// and `unknown_witness` (an id no character holds), which the first
+    /// enumeration could not produce. The witness slot deliberately
+    /// includes two DIFFERENT valid identities, so host parity covers
+    /// receipts that differ only in who attested.
+    const GIVE_MASSES: [u64; 2] = [0, 500];
+    /// 0 = none, 1 = the giver (a party), 2 = an id no character holds,
+    /// 3 = a fixed third party. Indices, not ids: `witness_slot` maps
+    /// them against the enumerated giver.
+    const GIVE_WITNESS_SLOTS: usize = 4;
     const GATHER_COMMANDS: usize = ACTORS.len() * CLAIMS.len() * SITES.len();
     const WITNESS_COMMANDS: usize = ACTORS.len() * CLAIMS.len();
-    const GIVE_COMMANDS: usize = ACTORS.len() * ACTORS.len() * KIND_COUNT;
+    const GIVE_COMMANDS: usize =
+        ACTORS.len() * ACTORS.len() * KIND_COUNT * GIVE_WITNESS_SLOTS * GIVE_MASSES.len();
     const COMMAND_SPACE: usize = GATHER_COMMANDS + WITNESS_COMMANDS + GIVE_COMMANDS;
+
+    fn witness_slot(slot: usize, giver: u64) -> Option<CharacterId> {
+        match slot {
+            0 => None,
+            1 => Some(CharacterId(giver)),
+            2 => Some(CharacterId(97)),
+            _ => Some(CharacterId(3)),
+        }
+    }
 
     struct Lcg {
         state: u64,
@@ -1026,22 +1044,21 @@ mod tests {
             })
         } else {
             let give_index = index - GATHER_COMMANDS - WITNESS_COMMANDS;
-            let kind_index = give_index % KIND_COUNT;
-            let remaining = give_index / KIND_COUNT;
+            let mass_index = give_index % GIVE_MASSES.len();
+            let remaining = give_index / GIVE_MASSES.len();
+            let slot = remaining % GIVE_WITNESS_SLOTS;
+            let remaining = remaining / GIVE_WITNESS_SLOTS;
+            let kind_index = remaining % KIND_COUNT;
+            let remaining = remaining / KIND_COUNT;
             let recipient_index = remaining % ACTORS.len();
             let giver_index = remaining / ACTORS.len();
-            // Alternate the witness slot so both receipted forms appear,
-            // and point it at an actor that is often a party — that is
-            // how witness_is_party enters the host trace.
-            let witness = give_index
-                .is_multiple_of(2)
-                .then(|| CharacterId(ACTORS[kind_index]));
+            let giver = ACTORS[giver_index];
             Command::Give(GiveCommand {
-                giver: CharacterId(ACTORS[giver_index]),
+                giver: CharacterId(giver),
                 recipient: CharacterId(ACTORS[recipient_index]),
                 kind: ResourceKind::ALL[kind_index],
-                grams: MassGrams::new(GIVE_GRAMS),
-                witness,
+                grams: MassGrams::new(GIVE_MASSES[mass_index]),
+                witness: witness_slot(slot, giver),
             })
         }
     }
