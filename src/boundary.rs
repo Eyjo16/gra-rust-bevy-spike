@@ -1743,4 +1743,278 @@ mod tests {
             "trial013 training_summary accepted_low=1/3 low_spent=15 low_mass=600 meaning_signal=none verdict=inconclusive holdout=sealed_unrevealed"
         );
     }
+
+    // -----------------------------------------------------------------
+    // V01: the give verb
+    // -----------------------------------------------------------------
+
+    /// A two-character world where C1 already holds fodder and timber,
+    /// so a transfer has something to move. Mechanical numbers only.
+    fn give_world() -> World {
+        let mut world = World {
+            characters: CharacterOwner::seed([
+                (CharacterId(1), Stamina::new(90).unwrap()),
+                (CharacterId(2), Stamina::new(50).unwrap()),
+                (CharacterId(3), Stamina::new(2).unwrap()),
+            ])
+            .unwrap(),
+            economy: EconomyOwner::seed_sites([
+                (
+                    SiteId(1),
+                    InfraTier::Established,
+                    ResourceKind::Fodder,
+                    MassGrams::new(5000),
+                ),
+                (
+                    SiteId(2),
+                    InfraTier::Crude,
+                    ResourceKind::Timber,
+                    MassGrams::new(3000),
+                ),
+            ])
+            .unwrap(),
+            social: SocialOwner::seed_claims([
+                (ClaimId(1), CharacterId(1), SiteId(1), true),
+                (ClaimId(2), CharacterId(1), SiteId(2), true),
+            ])
+            .unwrap(),
+        };
+        validate_world_coherence(&world).expect("give fixture is coherent");
+        for (seq, claim, site) in [(1u64, 1u64, 1u64), (2, 2, 2)] {
+            submit(
+                &mut world,
+                seq,
+                Command::Gather(GatherCommand {
+                    actor: CharacterId(1),
+                    claim: ClaimId(claim),
+                    site: SiteId(site),
+                }),
+            );
+        }
+        world
+    }
+
+    fn give(
+        giver: u64,
+        to: u64,
+        kind: ResourceKind,
+        grams: u64,
+        witness: Option<u64>,
+    ) -> Command {
+        Command::Give(GiveCommand {
+            giver: CharacterId(giver),
+            recipient: CharacterId(to),
+            kind,
+            grams: MassGrams::new(grams),
+            witness: witness.map(CharacterId),
+        })
+    }
+
+    /// Falsifier G1 (V01), boundary form: the giver loses exactly what
+    /// the recipient gains, in exactly one kind.
+    #[test]
+    fn falsification_give_conserves_the_transferred_kind() {
+        let mut world = give_world();
+        let before_total = world.economy.total_mass();
+        let before_giver = world.economy.holding(CharacterId(1), ResourceKind::Fodder);
+        let receipt = submit(
+            &mut world,
+            3,
+            give(1, 2, ResourceKind::Fodder, 500, None),
+        );
+        assert_eq!(receipt.outcome, OutcomeKind::Accepted);
+        assert_eq!(receipt.verb, Verb::Give);
+        assert_eq!(receipt.mass_moved, MassGrams::new(500));
+        assert_eq!(receipt.kind, Some(ResourceKind::Fodder));
+        assert_eq!(receipt.recipient, Some(CharacterId(2)));
+        assert_eq!(
+            world.economy.holding(CharacterId(1), ResourceKind::Fodder),
+            MassGrams::new(before_giver.grams() - 500)
+        );
+        assert_eq!(
+            world.economy.holding(CharacterId(2), ResourceKind::Fodder),
+            MassGrams::new(500)
+        );
+        assert_eq!(world.economy.total_mass(), before_total);
+    }
+
+    /// Falsifier G2 (V01): consent. The receipt's actor is always the
+    /// character whose holding decreases; a give never reduces a third
+    /// party, and there is no command shape that could ask it to.
+    #[test]
+    fn falsification_give_never_moves_a_third_partys_holding() {
+        let mut world = give_world();
+        let before_c3 = world.economy.holding(CharacterId(3), ResourceKind::Timber);
+        let receipt = submit(
+            &mut world,
+            3,
+            give(1, 2, ResourceKind::Timber, 100, Some(3)),
+        );
+        assert_eq!(receipt.outcome, OutcomeKind::Accepted);
+        assert_eq!(receipt.actor, CharacterId(1), "the actor is the giver");
+        assert_eq!(
+            world.economy.holding(CharacterId(3), ResourceKind::Timber),
+            before_c3,
+            "a named witness paid mass for someone else's act"
+        );
+        assert_eq!(
+            world.characters.stamina(CharacterId(3)).unwrap().points(),
+            2,
+            "a named witness paid stamina for someone else's act"
+        );
+    }
+
+    /// Falsifier G3/G4 (V01): every give refusal is reachable, names its
+    /// closed reason, and mutates nothing — the world hash is identical
+    /// across the refusal.
+    #[test]
+    fn falsification_give_refusals_are_closed_and_byte_stable() {
+        let mut world = give_world();
+        let held = world
+            .economy
+            .holding(CharacterId(1), ResourceKind::Fodder)
+            .grams();
+        let cases = [
+            (give(1, 1, ResourceKind::Fodder, 10, None), RefusalReason::CannotGiveToSelf),
+            (give(1, 9, ResourceKind::Fodder, 10, None), RefusalReason::UnknownRecipient),
+            (give(1, 2, ResourceKind::Fodder, 10, Some(9)), RefusalReason::UnknownWitness),
+            (give(1, 2, ResourceKind::Fodder, 10, Some(2)), RefusalReason::WitnessIsParty),
+            (give(1, 2, ResourceKind::Fodder, 0, None), RefusalReason::EmptyTransfer),
+            (
+                give(1, 2, ResourceKind::Fodder, held + 1, None),
+                RefusalReason::InsufficientHolding,
+            ),
+            (give(1, 2, ResourceKind::Food, 1, None), RefusalReason::InsufficientHolding),
+            (give(9, 2, ResourceKind::Fodder, 10, None), RefusalReason::UnknownActor),
+            (give(3, 2, ResourceKind::Fodder, 10, None), RefusalReason::InsufficientStamina),
+        ];
+        for (cmd, expected) in cases {
+            let before = world.hash();
+            let receipt = submit(&mut world, 3, cmd);
+            assert_eq!(
+                receipt.outcome,
+                OutcomeKind::Refused(expected),
+                "wrong reason for {:?}",
+                receipt.canonical_line()
+            );
+            assert_eq!(receipt.stamina_spent, 0);
+            assert_eq!(receipt.mass_moved, MassGrams::ZERO);
+            assert_eq!(world.hash(), before, "a refused give mutated the world");
+        }
+    }
+
+    /// Falsifier G5 (V01): a witnessed and an unwitnessed give differ in
+    /// their receipts and are identical in world state.
+    #[test]
+    fn falsification_witnessing_a_give_is_receipted_but_never_stateful() {
+        let mut witnessed_world = give_world();
+        let mut silent_world = give_world();
+        let witnessed = submit(
+            &mut witnessed_world,
+            3,
+            give(1, 2, ResourceKind::Fodder, 400, Some(3)),
+        );
+        let silent = submit(
+            &mut silent_world,
+            3,
+            give(1, 2, ResourceKind::Fodder, 400, None),
+        );
+        assert!(witnessed.witnessed);
+        assert!(!silent.witnessed);
+        assert_ne!(witnessed.canonical_line(), silent.canonical_line());
+        assert_eq!(
+            witnessed_world.canonical_state(),
+            silent_world.canonical_state(),
+            "witnessing changed canonical state"
+        );
+        assert_eq!(witnessed_world.hash(), silent_world.hash());
+    }
+
+    /// Falsifier G6 (V01): giving everything of a kind leaves the giver
+    /// indistinguishable from someone who never held it — in canonical
+    /// text and in the hash.
+    #[test]
+    fn falsification_giving_everything_erases_the_holding_completely() {
+        let mut world = give_world();
+        let all = world
+            .economy
+            .holding(CharacterId(1), ResourceKind::Timber)
+            .grams();
+        let receipt = submit(
+            &mut world,
+            3,
+            give(1, 2, ResourceKind::Timber, all, None),
+        );
+        assert_eq!(receipt.outcome, OutcomeKind::Accepted);
+        assert_eq!(
+            world.economy.holding(CharacterId(1), ResourceKind::Timber),
+            MassGrams::ZERO
+        );
+        assert!(
+            world
+                .economy
+                .holdings_iter()
+                .all(|(id, kind, _)| !(id == CharacterId(1) && kind == ResourceKind::Timber)),
+            "an emptied holding stayed in the map"
+        );
+        assert!(
+            world
+                .canonical_state()
+                .iter()
+                .any(|line| line.starts_with("character C1 ") && line.contains("timber_g=0")),
+            "the canonical line must still print the kind, at zero"
+        );
+    }
+
+    /// The text seam accepts the give spelling and nothing looser.
+    #[test]
+    fn text_seam_accepts_the_give_spelling() {
+        let witnessed = Command::Give(GiveCommand {
+            giver: CharacterId(1),
+            recipient: CharacterId(2),
+            kind: ResourceKind::Fodder,
+            grams: MassGrams::new(500),
+            witness: Some(CharacterId(3)),
+        });
+        let parsed = parse_text_command("give giver=1 to=2 kind=fodder g=500 witness=3")
+            .expect("canonical give spelling");
+        assert_eq!(parsed.canonical_bytes(), witnessed.canonical_bytes());
+
+        let silent = Command::Give(GiveCommand {
+            giver: CharacterId(1),
+            recipient: CharacterId(2),
+            kind: ResourceKind::Fodder,
+            grams: MassGrams::new(500),
+            witness: None,
+        });
+        let parsed_silent = parse_text_command("give giver=1 to=2 kind=fodder g=500 witness=-")
+            .expect("canonical unwitnessed give spelling");
+        assert_eq!(parsed_silent.canonical_bytes(), silent.canonical_bytes());
+        assert_ne!(silent.canonical_bytes(), witnessed.canonical_bytes());
+
+        for (source, expected) in [
+            (
+                "give giver=1 to=2 kind=turf g=500 witness=-",
+                TextCommandFault::UnknownKind,
+            ),
+            (
+                "give giver=1 to=2 kind=fodder g=+500 witness=-",
+                TextCommandFault::NonCanonicalInteger,
+            ),
+            (
+                "give giver=1 to=2 kind=fodder g=500",
+                TextCommandFault::WrongFieldCount,
+            ),
+            (
+                "give giver=1 to=2 kind=fodder g=500 witness=",
+                TextCommandFault::EmptyValue,
+            ),
+        ] {
+            assert!(
+                matches!(parse_text_command(source), Err(actual) if actual == expected),
+                "source {source:?} was not rejected as {expected:?}"
+            );
+        }
+    }
+
 }
