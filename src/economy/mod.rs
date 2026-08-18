@@ -347,4 +347,113 @@ mod tests {
             "failed apply mutated economy before reporting overflow"
         );
     }
+
+    /// Falsifier F1 (RES01). Two sites of different kinds. Extracting
+    /// timber must not move a single gram into the actor's fodder or
+    /// food holding. Undifferentiated mass cannot express this test at
+    /// all: there is one number per character, so a "timber" gather and
+    /// a "fodder" gather are the same fact.
+    #[test]
+    fn falsification_cross_kind_leakage_must_be_impossible() {
+        let mut owner = EconomyOwner::seed_sites([
+            (
+                SiteId(1),
+                InfraTier::Established,
+                ResourceKind::Fodder,
+                MassGrams::new(2000),
+            ),
+            (
+                SiteId(2),
+                InfraTier::Established,
+                ResourceKind::Timber,
+                MassGrams::new(2000),
+            ),
+        ])
+        .unwrap();
+
+        let extraction = owner
+            .validate_extract(SiteId(2), CharacterId(1), MassGrams::new(500))
+            .unwrap();
+        assert_eq!(extraction.kind(), ResourceKind::Timber);
+        owner.apply_extract(extraction);
+
+        assert_eq!(
+            owner.holding(CharacterId(1), ResourceKind::Timber),
+            MassGrams::new(500)
+        );
+        for leaked in [ResourceKind::Fodder, ResourceKind::Food] {
+            assert_eq!(
+                owner.holding(CharacterId(1), leaked),
+                MassGrams::ZERO,
+                "timber extraction leaked into the {} holding",
+                leaked.code()
+            );
+        }
+    }
+
+    /// Falsifier F2 (RES01): every kind's total is conserved on its own,
+    /// not merely in aggregate.
+    #[test]
+    fn falsification_each_kind_total_is_conserved_separately() {
+        let mut owner = EconomyOwner::seed_sites([
+            (
+                SiteId(1),
+                InfraTier::Established,
+                ResourceKind::Fodder,
+                MassGrams::new(2000),
+            ),
+            (
+                SiteId(2),
+                InfraTier::Crude,
+                ResourceKind::Timber,
+                MassGrams::new(300),
+            ),
+        ])
+        .unwrap();
+        let before: Vec<MassGrams> = ResourceKind::ALL
+            .into_iter()
+            .map(|kind| owner.total_mass_of(kind))
+            .collect();
+
+        for (site, actor, grams) in [(1u64, 1u64, 900u64), (2, 2, 400), (1, 2, 100)] {
+            let extraction = owner
+                .validate_extract(SiteId(site), CharacterId(actor), MassGrams::new(grams))
+                .unwrap();
+            owner.apply_extract(extraction);
+        }
+
+        let after: Vec<MassGrams> = ResourceKind::ALL
+            .into_iter()
+            .map(|kind| owner.total_mass_of(kind))
+            .collect();
+        assert_eq!(before, after, "a kind total changed under extraction only");
+        assert_eq!(owner.total_mass(), MassGrams::new(2300));
+    }
+
+    /// Falsifier F5 (RES01 half): the owner never stores a zero-valued
+    /// holding entry, so the world hash stays a function of visible
+    /// truth. Extraction alone cannot reach zero (a granted extraction
+    /// is always positive), so the reachable half of this falsifier is
+    /// V01's give-to-zero; what is proved here is the storage rule.
+    #[test]
+    fn zero_holdings_are_never_stored() {
+        let mut owner = EconomyOwner::seed_sites([(
+            SiteId(1),
+            InfraTier::Established,
+            ResourceKind::Fodder,
+            MassGrams::new(2000),
+        )])
+        .unwrap();
+        let extraction = owner
+            .validate_extract(SiteId(1), CharacterId(1), MassGrams::new(500))
+            .unwrap();
+        owner.apply_extract(extraction);
+        assert!(
+            owner
+                .holdings_iter()
+                .all(|(_, _, grams)| !grams.is_zero()),
+            "a zero-valued holding entry was stored"
+        );
+    }
+
 }
