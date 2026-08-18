@@ -542,4 +542,149 @@ mod tests {
             "a zero-valued holding entry was stored"
         );
     }
+
+    /// Falsifier G1 (V01): a transfer moves exactly one kind between
+    /// exactly two holdings and touches nothing else.
+    #[test]
+    fn falsification_transfer_conserves_the_kind_and_touches_nothing_else() {
+        let mut owner = EconomyOwner::seed_sites([
+            (
+                SiteId(1),
+                InfraTier::Established,
+                FODDER,
+                MassGrams::new(2000),
+            ),
+            (
+                SiteId(2),
+                InfraTier::Established,
+                ResourceKind::Timber,
+                MassGrams::new(2000),
+            ),
+        ])
+        .unwrap();
+        for (site, actor, grams) in [(1u64, 1u64, 500u64), (2, 1, 300), (1, 2, 100)] {
+            let extraction = owner
+                .validate_extract(SiteId(site), CharacterId(actor), MassGrams::new(grams))
+                .unwrap();
+            owner.apply_extract(extraction);
+        }
+        let before: Vec<MassGrams> = ResourceKind::ALL
+            .into_iter()
+            .map(|kind| owner.total_mass_of(kind))
+            .collect();
+
+        let transfer = owner
+            .validate_transfer(CharacterId(1), CharacterId(2), FODDER, MassGrams::new(200))
+            .unwrap();
+        assert_eq!(transfer.grams(), MassGrams::new(200));
+        owner.apply_transfer(transfer);
+
+        assert_eq!(owner.holding(CharacterId(1), FODDER), MassGrams::new(300));
+        assert_eq!(owner.holding(CharacterId(2), FODDER), MassGrams::new(300));
+        assert_eq!(
+            owner.holding(CharacterId(1), ResourceKind::Timber),
+            MassGrams::new(300),
+            "the giver's other kind moved"
+        );
+        assert_eq!(
+            owner.holding(CharacterId(2), ResourceKind::Timber),
+            MassGrams::ZERO,
+            "mass appeared in a kind nobody gave"
+        );
+        let after: Vec<MassGrams> = ResourceKind::ALL
+            .into_iter()
+            .map(|kind| owner.total_mass_of(kind))
+            .collect();
+        assert_eq!(before, after, "a transfer changed a kind total");
+    }
+
+    /// Falsifier G3 (V01): a giver short of the named mass is refused,
+    /// never partially satisfied — the giver's own store is not a fact
+    /// they can be surprised by.
+    #[test]
+    fn falsification_short_transfer_is_refused_not_clamped() {
+        let mut owner = EconomyOwner::seed_sites([(
+            SiteId(1),
+            InfraTier::Established,
+            FODDER,
+            MassGrams::new(2000),
+        )])
+        .unwrap();
+        let extraction = owner
+            .validate_extract(SiteId(1), CharacterId(1), MassGrams::new(500))
+            .unwrap();
+        owner.apply_extract(extraction);
+
+        assert_eq!(
+            owner
+                .validate_transfer(CharacterId(1), CharacterId(2), FODDER, MassGrams::new(501))
+                .err(),
+            Some(RefusalReason::InsufficientHolding)
+        );
+        assert_eq!(
+            owner
+                .validate_transfer(CharacterId(1), CharacterId(2), ResourceKind::Timber, MassGrams::new(1))
+                .err(),
+            Some(RefusalReason::InsufficientHolding),
+            "a kind the giver has never held is not a source of mass"
+        );
+        assert_eq!(owner.holding(CharacterId(1), FODDER), MassGrams::new(500));
+    }
+
+    /// Falsifier G6 (V01), owner half: giving everything of a kind
+    /// leaves no zero entry, so the hash equals that of a world where
+    /// the giver never held it.
+    #[test]
+    fn falsification_giving_everything_leaves_no_zero_entry() {
+        let mut owner = EconomyOwner::seed_sites([(
+            SiteId(1),
+            InfraTier::Established,
+            FODDER,
+            MassGrams::new(2000),
+        )])
+        .unwrap();
+        let extraction = owner
+            .validate_extract(SiteId(1), CharacterId(1), MassGrams::new(500))
+            .unwrap();
+        owner.apply_extract(extraction);
+        let transfer = owner
+            .validate_transfer(CharacterId(1), CharacterId(2), FODDER, MassGrams::new(500))
+            .unwrap();
+        owner.apply_transfer(transfer);
+
+        assert!(
+            owner.holdings_iter().all(|(id, _, grams)| {
+                id != CharacterId(1) && !grams.is_zero()
+            }),
+            "an emptied holding stayed in the map"
+        );
+
+        // A reference world in which C1 never held anything, reached in
+        // the same number of applies so the hashed owner counter matches:
+        // same visible state must mean the same hash.
+        let mut reference = EconomyOwner::seed_sites([(
+            SiteId(1),
+            InfraTier::Established,
+            FODDER,
+            MassGrams::new(2000),
+        )])
+        .unwrap();
+        for _ in 0..2 {
+            let direct = reference
+                .validate_extract(SiteId(1), CharacterId(2), MassGrams::new(250))
+                .unwrap();
+            reference.apply_extract(direct);
+        }
+        let hash_of = |owner: &EconomyOwner| {
+            let mut hasher = Fnv1a::default();
+            owner.hash_into(&mut hasher);
+            hasher.finish()
+        };
+        assert_eq!(
+            hash_of(&owner),
+            hash_of(&reference),
+            "an emptied holding is still visible in the hash"
+        );
+    }
+
 }
