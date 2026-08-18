@@ -1,8 +1,19 @@
 # Trial RES01 — closed resource-kind vocabulary
 
-Status while this section stands alone: **pre-registration**. Nothing
-below is evidence until the "Evidence" section carries a gate
-transcript and a claims table.
+**Bundle status: COMPLETE — review-ready.** Pre-registration (§0–§5) was
+committed at `fc5e431` before any implementation; the Evidence section
+below carries the red, the gate transcript, the identity table and the
+claims table. Reviewed by Sol 5.6 (2026-08-18): *conditional accept*,
+conditions being this status block, the `tested_commit` field, and the
+tightened closure wording in claim 5 — all applied here.
+
+`tested_commit`: **`7c30816`** — the commit that changed code. Every
+commit after it on this branch touches `docs/` only, which the gate
+does not compile; the tip is re-gated all the same, and the exact tip
+hash plus its gate result are recorded in
+`docs/sprint-2026-08-18-overview.md`, which is gated last and therefore
+can name what preceded it. A tested_commit that names a docs commit
+would be certifying a compile that never happened.
 
 Branch: `trial/RES01-resource-kinds`. Author: Fable 5 (lead).
 Base commit: `1f3cbc6` (master, E01 merged, full gate green).
@@ -71,7 +82,9 @@ escalate_when:       the kind list cannot express the W01 winter scene;
                      registry/schema/persistence format looks required;
                      an oracle would have to be weakened rather than
                      re-scoped
-tested_commit:       <filled at completion>
+tested_commit:       7c30816 (the green implementation commit; the
+                     branch tip after the docs commits is re-gated and
+                     recorded in E6 below)
 ```
 
 ## 2. The shape under test
@@ -279,7 +292,7 @@ against the new envelope is a category error.
 | 2 | Every kind's total is conserved separately, not merely in aggregate | the standard fixture run and the owner-level extraction sequence | oracle + behavioral | oracle 2 line above (`fodder=2000g/2000g food=5000g/5000g timber=1300g/1300g`); tests `falsification_each_kind_total_is_conserved_separately`, `falsification_kind_swap_must_fail_conservation_at_equal_total` |
 | 3 | The v5 conservation oracle is strictly stronger than v4, not merely different | the staged kind-swap where the aggregate total is unchanged | behavioral-red | `falsification_kind_swap_must_fail_conservation_at_equal_total` asserts the aggregate is equal *and* the oracle fails |
 | 4 | A receipt's kind is the drained site's kind, and a mislabelled kind is caught by a judge that trusts no receipt field | every receipt in the standard fixture run, refusals included | behavioral-red | `falsification_receipt_kind_is_bound_to_the_drained_site`; `falsification_shadow_oracle_catches_a_mislabelled_kind` (cell_bounds and mass_conserved both still pass on the doctored log) |
-| 5 | The kind vocabulary is closed: three members, distinct codes, round-tripping, contiguous indexes, and no admission path outside the enum | the `ResourceKind` type as written | derivation | `resource_kinds_are_a_closed_vocabulary`; `ResourceKind::ALL` is the only enumeration and `from_code` is test-only |
+| 5 | Within this crate as written, a kind can only come from `ResourceKind::ALL`: three members, distinct codes, contiguous indexes, round-tripping codes, and no runtime path that admits a kind from data or text | the compiled crate at `7c30816` — **not** a claim about future edits, which is governance, not a machine property | derivation | `resource_kinds_are_a_closed_vocabulary`; `ResourceKind::ALL` is the only enumeration, `from_code` is `#[cfg(test)]`, and no owner, boundary or host path constructs a kind from input |
 | 6 | The grammar moved exactly once and exactly to the pre-registered value | this branch's history | measurement | prediction in §4 recorded at `fc5e431`, before implementation; envelope line at `7c30816` reads `grammar=0xc5d782ec145af0a5`; `grammar_fingerprint_matches_the_licensed_value` pins it |
 | 7 | The host projection carries kinds without gaining authority over them | `bevy-host` and `bevy-render` feature sets on the standard fixture | parity | `bevy_host_parity state_match=true`, `bevy_projection views_match=true` above; `PublishedCharacter::holding_g` is a copied array read, no handle into truth |
 | 8 | A holding that reaches zero is stored, hashed and printed identically to one that never existed | the economy owner's storage rule; the *reachable* case (giving to zero) arrives in V01 | derivation | `set_holding` removes on zero; test `zero_holdings_are_never_stored`; shadow mirror `ShadowState::add_holding` |
@@ -306,3 +319,20 @@ H02 dossier.
 3. **Kinds have no behaviour yet.** Nothing prevents a fixture from
    feeding cattle timber, because no consumption exists at all. That is
    W01's question, and stating it here keeps the claim honest.
+
+## E6. Review response (Sol 5.6, 2026-08-18)
+
+Verdict received: **conditional accept**, with independent reproduction
+of the 17-error red and of the extended gate at 67 / 76 / 84 / 90 tests,
+and independent reproduction of the fingerprint chain
+`0x530003916889b952 → 0xc5d782ec145af0a5`.
+
+| Condition | Response |
+|-----------|----------|
+| Finalize the report status | Status block added at the head of this file |
+| Finalize `tested_commit` | Recorded as `7c30816` with the docs-commit rule stated explicitly |
+| Tighten the closure wording | Claim 5 rewritten: closure is a property of the compiled crate, scoped away from any claim about future edits, which are governance and not a machine property |
+
+No claim was withdrawn and no evidence changed; the three edits narrow
+wording to what the evidence carries. The branch is unchanged in code
+from the certified `7c30816`.
