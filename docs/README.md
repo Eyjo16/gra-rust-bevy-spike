@@ -39,6 +39,7 @@ decision, migration account, and approval.
 | `trial-res01-resource-kinds-report.md` | Standalone evidence | Records the author-licensed resource-kind vocabulary, the pre-registered grammar move, and the per-kind conservation oracle |
 | `trial-v01-repair-preregistration.md` | Pre-registration | Records the author licence for the give language, the three-way identity split, and the predicted format fingerprints |
 | `trial-v01-give-report.md` | Standalone evidence | Records the third verb: structural consent, exact transfers, receipted-not-stateful witnessing, and the mass-authority oracle |
+| `trial-w01-winter-crisis-report.md` | Standalone evidence | Records the first playable scene: three plans, thirty oracle verdicts, and the list of what the truth layer cannot yet say |
 | `trial-e01-belief-actionability-taste-report.md` | Bounded presentation evidence | Records the Publication-fed wrong/matching-belief taste, exact gates, captures, and the still-open manual verdict |
 | `runtime-contract-proposal.md` | Ratified law | Runtime Contract v0.1 (R1–R7 with amendments): current executable runtime law, semantic rulings, and the durability gap |
 | `runtime-target-map.md` | Active work map | Orders runtime falsifiers and capability-scoped dependency sweeps by authority; carries per-target status |

@@ -1525,3 +1525,34 @@ all byte-identical, now reaching `empty_transfer` (2 743) and
 band×tier density in the trace thinned; cell reachability rests on the
 purpose-built trial/010 tests, and the trace count was not tuned to make
 a missing cell reappear.
+## Trial W01 — the winter-crisis vertical slice (2026-08-18)
+
+Branch `trial/W01-winter-crisis`, base `605e32a`, tested_commit
+`0672405`. Full report: `docs/trial-w01-winter-crisis-report.md`.
+
+**Instrument.** Measurement trial, `red_required: no` (Meaning Gate F3):
+the scene asks what the current rules produce, so staging a bug to fail
+first would measure the bug, not the winter.
+
+**Scene.** One household of four, a cut-over hayfield (4 000 g fodder),
+scrub wood (2 500 g timber), a shore (1 800 g food), and a stated winter
+need of 6 000 / 2 500 / 1 200. The world holds less fodder and less food
+than the need, so the scene is a triage, not a puzzle. Three plans —
+feed the cattle, save the roof, feed the people.
+
+**Result.** Thirty oracle verdicts green, `cargo run winter` exit 0, and
+every executed number equal to the prediction committed at `fa28712`
+before the module existed. Best achievable shortfall per kind:
+fodder 2 000 (plan A), food 900 (plan C), timber 0 (plan B) — each from
+a different plan.
+
+**No law changed.** The standard trial's envelope is byte-identical to
+V01's: `grammar=0x7dd8c6706e0b949f fixture=0x93afba3f312bd89d
+receipts=0x2d52250d86f0638b world=0xb500dee0e5d883d8 oracles=10v6`.
+
+**The finding.** The scene's value is what it proves inexpressible:
+nothing is consumed, so nothing is at stake; there is no time and no
+winter; there is no household and no herd; a plan is not a thing; nobody
+can refuse labour (`actor_unwilling` does not exist). Site stock is the
+only scarcity with texture today, and it comes from the existing gather
+verb. Stated bias: the kind list "survived" a scene written to fit it.
