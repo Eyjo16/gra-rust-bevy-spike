@@ -26,7 +26,7 @@ use bevy::{
 use crate::{
     boundary::{
         CharacterId, ClaimId, Command, GatherCommand, InfraTier, MassGrams, OutcomeKind, Receipt,
-        RefusalReason, SiteId, Stamina, WitnessCommand, World as TruthWorld,
+        RefusalReason, ResourceKind, SiteId, Stamina, WitnessCommand, World as TruthWorld,
         validate_world_coherence,
     },
     character::CharacterOwner,
@@ -38,6 +38,12 @@ use crate::{
 const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 800;
 const BLOCK_GRAMS: u64 = 200;
+/// The RS01 scene's site yields building material. Under the licensed
+/// RES01 vocabulary the nearest kind is `timber`; the scene's own visual
+/// vocabulary still says "turf", which is a naming tension recorded for
+/// the author in the RES01 report, not resolved here — RS01's frozen
+/// visual-fact map is evidence and is not edited by a later trial.
+const SCENE_KIND: ResourceKind = ResourceKind::Timber;
 const WARMUP_FRAMES: u16 = 12;
 const CAPTURE_TIMEOUT_FRAMES: u16 = 600;
 const POLICY_FOOTER: &str = "Presentation policy: Snorri - Thordur - Hvammur - peat - autumn morning - equal block scale - palette and layout. No danger or emotion is asserted.";
@@ -137,6 +143,13 @@ impl Beat {
         if site.tier != "established" {
             return Err(format!("publication site S1 tier drifted: {}", site.tier));
         }
+        // RES01: the scene draws one material. If the published site's
+        // kind is not the one this scene was built for, the drawing
+        // would be true of a different world — refuse instead of
+        // rendering a plausible lie.
+        if site.kind != SCENE_KIND.code() {
+            return Err(format!("publication site S1 kind drifted: {}", site.kind));
+        }
         if claim.holder != 1 || claim.site != 1 {
             return Err("publication claim K1 no longer binds C1 to S1".to_owned());
         }
@@ -152,7 +165,7 @@ impl Beat {
         }
         Ok(SceneFacts {
             snorri_stamina: snorri.stamina,
-            snorri_inventory_g: snorri.inventory_g,
+            snorri_inventory_g: snorri.holding_g(SCENE_KIND),
             thordur_stamina: thordur.stamina,
             site_stock_g: site.stock_g,
             claim_witnessed: claim.witnessed,
@@ -170,6 +183,7 @@ fn fixture() -> TruthWorld {
         economy: EconomyOwner::seed_sites([(
             SiteId(1),
             InfraTier::Established,
+            SCENE_KIND,
             MassGrams::new(2_000),
         )])
         .expect("unique fixture site"),

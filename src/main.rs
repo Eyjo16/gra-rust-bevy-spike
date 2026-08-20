@@ -31,9 +31,9 @@ mod social;
 use std::process::ExitCode;
 
 use boundary::{
-    CharacterId, ClaimId, Command, GatherCommand, InfraTier, MassGrams, Receipt, SiteId, Stamina,
-    WitnessCommand, World, fixture_identity, grammar_fingerprint, receipt_chain_digest, submit,
-    validate_world_coherence,
+    CharacterId, ClaimId, Command, GatherCommand, InfraTier, MassGrams, Receipt, ResourceKind,
+    SiteId, Stamina, WitnessCommand, World, fixture_identity, grammar_fingerprint,
+    receipt_chain_digest, submit, validate_world_coherence,
 };
 use character::CharacterOwner;
 use economy::EconomyOwner;
@@ -52,10 +52,34 @@ fn fixture() -> World {
         ])
         .expect("no duplicate characters"),
         economy: EconomyOwner::seed_sites([
-            (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
-            (SiteId(2), InfraTier::Crude, MassGrams::new(300)),
-            (SiteId(3), InfraTier::Advanced, MassGrams::new(5000)),
-            (SiteId(4), InfraTier::None, MassGrams::new(1000)),
+            // Site kinds are fixed at seed time (RES01). The standard
+            // fixture deliberately spans all three kinds, so the trial
+            // exercises per-kind conservation rather than one kind with
+            // two labels.
+            (
+                SiteId(1),
+                InfraTier::Established,
+                ResourceKind::Fodder,
+                MassGrams::new(2000),
+            ),
+            (
+                SiteId(2),
+                InfraTier::Crude,
+                ResourceKind::Timber,
+                MassGrams::new(300),
+            ),
+            (
+                SiteId(3),
+                InfraTier::Advanced,
+                ResourceKind::Food,
+                MassGrams::new(5000),
+            ),
+            (
+                SiteId(4),
+                InfraTier::None,
+                ResourceKind::Timber,
+                MassGrams::new(1000),
+            ),
         ])
         .expect("no duplicate sites"),
         social: SocialOwner::seed_claims([
@@ -227,7 +251,7 @@ fn main() -> ExitCode {
     validate_world_coherence(&world).expect("fixture is referentially coherent");
     println!("grammar=0x{:016x}", grammar_fingerprint());
     let fixture_hash = world.hash();
-    let baseline_mass = world.economy.total_mass();
+    let baseline_by_kind = oracles::baseline_by_kind(&world);
     let cmds = commands();
 
     let mut log: Vec<Receipt> = Vec::with_capacity(cmds.len());
@@ -247,7 +271,7 @@ fn main() -> ExitCode {
 
     let ctx = OracleCtx {
         world: &world,
-        baseline_mass,
+        baseline_by_kind,
         build_fixture: fixture,
         commands: &cmds,
         log: &log,

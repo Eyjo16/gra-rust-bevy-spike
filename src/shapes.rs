@@ -18,7 +18,8 @@
 //! from the constants.
 
 use crate::boundary::{
-    STAMINA_COST_BY_BAND, Stamina, WITNESS_COST, YIELD_TABLE_GRAMS, grammar_fingerprint,
+    ResourceKind, STAMINA_COST_BY_BAND, Stamina, WITNESS_COST, YIELD_TABLE_GRAMS,
+    grammar_fingerprint,
 };
 
 const BOUNDARY_SRC: &str = include_str!("boundary.rs");
@@ -89,8 +90,9 @@ fn shapes() -> Vec<Shape> {
             id: "verb.gather",
             kind: "verb",
             meaning_status: "proven",
-            role: "Move mass from a claimed, witnessed site into the actor's \
-                   inventory, paying band-dependent stamina",
+            role: "Move mass of the site's kind from a claimed, witnessed site \
+                   into the actor's holding of that kind, paying band-dependent \
+                   stamina",
             scope: "mechanics proven on the standard fixture and bounded traces \
                     (trial 007); every numeric value is a fixture, not balance",
             evidence_kind: &["behavioral-red", "oracle", "parity"],
@@ -99,9 +101,9 @@ fn shapes() -> Vec<Shape> {
                 "social.claims",
                 "character.stamina",
                 "economy.sites",
-                "economy.inventories (entity revision bound at validation)",
+                "economy.holdings (entity revision bound at validation)",
             ],
-            writes: &["character.stamina", "economy.sites", "economy.inventories"],
+            writes: &["character.stamina", "economy.sites", "economy.holdings"],
             mutation_closure: "character and economy entity revisions advance; \
                                social state is never touched by a gather",
             guards: &[
@@ -121,10 +123,10 @@ fn shapes() -> Vec<Shape> {
                 "unknown_site",
                 "site_empty",
             ],
-            receipts: "canonical line with band, tier, spent, mass, grammar, and \
-                       the world hash chain; partial via site_nearly_depleted",
+            receipts: "canonical line with band, tier, kind, spent, mass, grammar, \
+                       and the world hash chain; partial via site_nearly_depleted",
             invariants: &[
-                "mass conservation",
+                "mass conservation, per kind and in aggregate",
                 "stamina bounds",
                 "cell bounds",
                 "refusal zero-mutation",
@@ -238,26 +240,32 @@ fn shapes() -> Vec<Shape> {
             id: "owner.economy",
             kind: "owner",
             meaning_status: "proven",
-            role: "Single writer of mass — site stock and inventories; negative \
-                   mass unrepresentable, totals bounded at coherence time",
+            role: "Single writer of mass — site stock and per-kind holdings; \
+                   negative mass unrepresentable, totals bounded at coherence \
+                   time, conserved per kind",
             scope: "proven for the current single-writer product state and the \
                     coherence-bounded mass aggregate",
             evidence_kind: &["behavioral-red", "oracle"],
             dependencies: &["boundary primitives only"],
-            reads: &["economy.sites, economy.inventories (own state)"],
-            writes: &["economy.sites, economy.inventories (own state only)"],
+            reads: &["economy.sites, economy.holdings (own state)"],
+            writes: &["economy.sites, economy.holdings (own state only)"],
             mutation_closure: "apply_extract: checked subtraction from the site, \
-                               bounded addition to the inventory; site + inventory \
-                               entity revisions + owner counter advance",
+                               bounded addition to the holding of the SITE's kind; \
+                               site + (character, kind) entity revisions + owner \
+                               counter advance; a holding that reaches zero is \
+                               removed, never stored as zero",
             guards: &[
                 "site exists, stock nonzero",
                 "grant = min(requested, stock) at validation",
-                "token bound to site and inventory entity revisions",
+                "token bound to site and (character, kind) entity revisions",
+                "the kind is the site's, never the caller's",
             ],
             refusals: &["unknown_site", "site_empty"],
             receipts: "none of its own — receipts are boundary artifacts",
             invariants: &[
                 "total mass conserved by every apply",
+                "per-kind mass conserved by every apply",
+                "no cross-kind leakage: a grant lands only in the site's kind",
                 "post-preflight apply totality under the coherence bound",
                 "stale token panics",
             ],
@@ -267,8 +275,18 @@ fn shapes() -> Vec<Shape> {
                 line_of(ECONOMY_SRC, "fn validate_extract"),
                 line_of(ECONOMY_SRC, "fn apply_extract")
             ),
-            proof_refs: &["trial-log round 1", "trial/003", "trial/008"],
-            values: vec![],
+            proof_refs: &["trial-log round 1", "trial/003", "trial/008", "trial/RES01"],
+            values: vec![(
+                "resource_kinds".to_owned(),
+                format!(
+                    "[{}] (closed vocabulary, author-licensed 2026-08-18)",
+                    ResourceKind::ALL
+                        .iter()
+                        .map(|kind| kind.code())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            )],
         },
         Shape {
             id: "owner.social",
@@ -383,6 +401,13 @@ pub fn emit_yaml(source_commit: &str) -> String {
     out.push_str("evidence_kinds:\n");
     for kind in EVIDENCE_KINDS {
         out.push_str(&format!("  - \"{kind}\"\n"));
+    }
+    // The closed resource-kind vocabulary (RES01). Emitted from
+    // `ResourceKind::ALL`, so a kind admitted in code cannot be missing
+    // here, and one listed here cannot be absent from code.
+    out.push_str("resource_kinds:\n");
+    for kind in ResourceKind::ALL {
+        out.push_str(&format!("  - \"{}\"\n", kind.code()));
     }
     out.push_str("shapes:\n");
     for s in shapes() {
@@ -551,6 +576,29 @@ mod tests {
         }
     }
 
+    /// Binding: the projection lists exactly the closed resource-kind
+    /// vocabulary — a kind admitted in code cannot be missing from the
+    /// projection, and the projection cannot invent one.
+    #[test]
+    fn projection_covers_the_resource_kinds() {
+        let yaml = emit_yaml("test");
+        for kind in ResourceKind::ALL {
+            assert!(
+                yaml.contains(&format!("  - \"{}\"\n", kind.code())),
+                "missing resource kind {}",
+                kind.code()
+            );
+        }
+        let listed = yaml
+            .split("resource_kinds:\n")
+            .nth(1)
+            .expect("the projection has a resource_kinds block")
+            .lines()
+            .take_while(|line| line.starts_with("  - "))
+            .count();
+        assert_eq!(listed, ResourceKind::ALL.len(), "kind list length drifted");
+    }
+
     /// Binding: every verb in the closed Verb enum has a shape.
     #[test]
     fn projection_covers_every_verb() {
@@ -638,7 +686,7 @@ mod tests {
     fn falsification_refusal_mapping_must_match_execution() {
         use crate::boundary::{
             CharacterId, ClaimId, Command, GatherCommand, InfraTier, MassGrams, OutcomeKind,
-            SiteId, Stamina, WitnessCommand, World, submit,
+            ResourceKind, SiteId, Stamina, WitnessCommand, World, submit,
         };
         use crate::character::CharacterOwner;
         use crate::economy::EconomyOwner;
@@ -664,8 +712,18 @@ mod tests {
                 ])
                 .unwrap(),
                 economy: EconomyOwner::seed_sites([
-                    (SiteId(1), InfraTier::Established, MassGrams::new(2000)),
-                    (SiteId(2), InfraTier::Crude, MassGrams::new(0)),
+                    (
+                        SiteId(1),
+                        InfraTier::Established,
+                        ResourceKind::Fodder,
+                        MassGrams::new(2000),
+                    ),
+                    (
+                        SiteId(2),
+                        InfraTier::Crude,
+                        ResourceKind::Timber,
+                        MassGrams::new(0),
+                    ),
                 ])
                 .unwrap(),
                 social: SocialOwner::seed_claims([

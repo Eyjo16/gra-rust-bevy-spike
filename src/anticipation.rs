@@ -255,7 +255,7 @@ mod tests {
     };
     use crate::boundary::{
         CharacterId, ClaimId, Command, GatherCommand, InfraTier, MassGrams, OutcomeKind, Receipt,
-        RefusalReason, SiteId, Stamina, World, submit, validate_world_coherence,
+        RefusalReason, ResourceKind, SiteId, Stamina, World, submit, validate_world_coherence,
     };
     use crate::character::CharacterOwner;
     use crate::economy::EconomyOwner;
@@ -268,8 +268,13 @@ mod tests {
                 Stamina::new(start).expect("trial start is bounded"),
             )])
             .expect("one unique character"),
-            economy: EconomyOwner::seed_sites([(SiteId(1), tier, MassGrams::new(10_000))])
-                .expect("one unique site"),
+            economy: EconomyOwner::seed_sites([(
+                SiteId(1),
+                tier,
+                ResourceKind::Fodder,
+                MassGrams::new(10_000),
+            )])
+            .expect("one unique site"),
             social: SocialOwner::seed_claims([(ClaimId(1), CharacterId(1), SiteId(1), true)])
                 .expect("one coherent witnessed claim"),
         };

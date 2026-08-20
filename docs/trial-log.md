@@ -1387,3 +1387,52 @@ verb lands and the isolation claim survives it.
 - Mechanical verdict is green. F1/F10 remain unmeasured until an unbriefed
   human receives only “Try this short scene” and answers the dispatched
   questions verbatim. Question three is continuation evidence only.
+
+## Trial RES01 — closed resource-kind vocabulary (2026-08-18)
+
+Branch `trial/RES01-resource-kinds`, base `1f3cbc6`, tested_commit
+`7c30816`. Full report: `docs/trial-res01-resource-kinds-report.md`.
+
+**Authority.** The author licensed one grammar move and the first kind
+list on 2026-08-18: **fodder, food, timber — no generic catch-all**.
+The licence covers this list and this move only; no registry, schema, or
+persistence format was introduced.
+
+**Red (capability, verbatim).** Falsifiers written first against
+`1f3cbc6` (`ffdc44f`, falsifiers only):
+
+```text
+      1 error: could not compile `gra-rust-bevy-spike` (bin "gra-rust-bevy-spike" test) due to 17 previous errors
+     11 error[E0433]: cannot find type `ResourceKind` in this scope
+      2 error[E0599]: no method named `holding` found for struct `economy::EconomyOwner` in the current scope
+      1 error[E0599]: no method named `holdings_iter` found for struct `economy::EconomyOwner` in the current scope
+      1 error[E0599]: no method named `kind` found for struct `Extraction` in the current scope
+      2 error[E0599]: no method named `total_mass_of` found for struct `economy::EconomyOwner` in the current scope
+```
+
+**Green.** All four feature sets: 67 / 76 / 84 / 90 tests; every oracle
+and host probe green.
+
+```text
+oracle PASS mass_conserved (fodder=2000g/2000g food=5000g/5000g timber=1300g/1300g total=8300g/8300g)
+envelope baseline_commit=7c30816 grammar=0xc5d782ec145af0a5 fixture=0x13524a85dd14d068 receipts=0x392e759fb4238743 world=0x77100bd059984f29 oracles=10v5
+```
+
+**Identity move, pre-registered.** grammar `0x530003916889b952` ->
+`0xc5d782ec145af0a5`, predicted at `fc5e431` *before* the crate was
+touched by re-declaring the fingerprint's inputs in a standalone program
+whose control stage reproduces the old value exactly. Fixture, receipts
+and world identities moved as measured consequences. Runs across this
+commit are not cross-comparable.
+
+**Oracle suite v4 -> v5.** Oracle 2 checks conservation per kind and in
+aggregate — strictly stronger: `falsification_kind_swap_must_fail_
+conservation_at_equal_total` stages a swap the aggregate check cannot
+see. The shadow evaluator now recomputes the kind for every receipt,
+refusals included.
+
+**Open findings.** (1) RS01's scene says "turf", the kind list's nearest
+member is `timber` — recorded, not resolved. (2) Kinds have no
+behaviour; nothing yet forbids feeding cattle timber, because no
+consumption exists. (3) Zero-holding normalization is implemented and
+unit-tested; its reachable case arrives with V01's give-to-zero.

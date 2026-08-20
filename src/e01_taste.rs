@@ -24,7 +24,8 @@ use bevy::{
 use crate::{
     boundary::{
         CharacterId, ClaimId, Command, GatherCommand, InfraTier, MassGrams, OutcomeKind, Receipt,
-        RefusalReason, SiteId, Stamina, World as TruthWorld, validate_world_coherence,
+        RefusalReason, ResourceKind, SiteId, Stamina, World as TruthWorld,
+        validate_world_coherence,
     },
     character::CharacterOwner,
     economy::EconomyOwner,
@@ -35,6 +36,10 @@ use crate::{
 const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 800;
 const BLOCK_GRAMS: u64 = 200;
+/// The E01 scene is winter feed: both sites yield fodder under the
+/// licensed RES01 vocabulary. Grams, beats and outcomes are unchanged by
+/// RES01 — the kind names what was already moving.
+const SCENE_KIND: ResourceKind = ResourceKind::Fodder;
 const BELIEF_CONFIDENCE_FLOOR: u8 = 14;
 const WARMUP_FRAMES: u16 = 12;
 const CAPTURE_TIMEOUT_FRAMES: u16 = 600;
@@ -150,6 +155,12 @@ impl Beat {
         if hrafn_site.tier != "established" || egil_site.tier != "established" {
             return Err("E01 sites must remain Established".to_owned());
         }
+        // RES01: both scene sites must still yield the kind this scene
+        // reads and draws; a drifted kind makes every number below a
+        // statement about a different material.
+        if hrafn_site.kind != SCENE_KIND.code() || egil_site.kind != SCENE_KIND.code() {
+            return Err("E01 sites must remain Fodder".to_owned());
+        }
         if (hrafn_claim.holder, hrafn_claim.site) != (1, 1)
             || (egil_claim.holder, egil_claim.site) != (2, 2)
         {
@@ -170,9 +181,9 @@ impl Beat {
 
         Ok(SceneFacts {
             hrafn_stamina: hrafn.stamina,
-            hrafn_inventory_g: hrafn.inventory_g,
+            hrafn_inventory_g: hrafn.holding_g(SCENE_KIND),
             egil_stamina: egil.stamina,
-            egil_inventory_g: egil.inventory_g,
+            egil_inventory_g: egil.holding_g(SCENE_KIND),
             hrafn_site_g: hrafn_site.stock_g,
             egil_site_g: egil_site.stock_g,
             hrafn_claim_witnessed: hrafn_claim.witnessed,
@@ -196,8 +207,18 @@ fn fixture() -> TruthWorld {
         ])
         .expect("unique E01 characters"),
         economy: EconomyOwner::seed_sites([
-            (SiteId(1), InfraTier::Established, MassGrams::new(2_000)),
-            (SiteId(2), InfraTier::Established, MassGrams::new(2_000)),
+            (
+                SiteId(1),
+                InfraTier::Established,
+                SCENE_KIND,
+                MassGrams::new(2_000),
+            ),
+            (
+                SiteId(2),
+                InfraTier::Established,
+                SCENE_KIND,
+                MassGrams::new(2_000),
+            ),
         ])
         .expect("unique E01 sites"),
         social: SocialOwner::seed_claims([

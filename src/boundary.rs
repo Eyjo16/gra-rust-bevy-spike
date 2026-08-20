@@ -169,6 +169,50 @@ impl InfraTier {
     }
 }
 
+/// The closed resource-kind vocabulary (RES01). Three kinds, licensed by
+/// the author on 2026-08-18 as the first list: what the winter scene
+/// needs and nothing more. There is deliberately no generic catch-all
+/// member — a catch-all would absorb exactly the pressure that is
+/// supposed to force a named kind and a permissioned move, and it would
+/// make cross-kind leakage unfalsifiable. Kinds carry identity and
+/// conservation only; no kind has behaviour of its own yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ResourceKind {
+    Fodder,
+    Food,
+    Timber,
+}
+
+pub const KIND_COUNT: usize = 3;
+
+impl ResourceKind {
+    pub const ALL: [Self; KIND_COUNT] = [Self::Fodder, Self::Food, Self::Timber];
+
+    pub fn index(self) -> usize {
+        match self {
+            Self::Fodder => 0,
+            Self::Food => 1,
+            Self::Timber => 2,
+        }
+    }
+
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Fodder => "fodder",
+            Self::Food => "food",
+            Self::Timber => "timber",
+        }
+    }
+
+    /// Test-only, following the `parse_text_command` precedent: nothing
+    /// in the running truth layer parses a kind from text, and a code
+    /// path that could would be a language seam needing its own trial.
+    #[cfg(test)]
+    pub fn from_code(code: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.code() == code)
+    }
+}
+
 pub const CELL_ROWS: usize = 4;
 pub const CELL_COLS: usize = 4;
 
@@ -193,10 +237,19 @@ pub const STAMINA_COST_BY_BAND: [u8; CELL_ROWS] = [0, 15, 12, 10];
 pub const WITNESS_COST: u8 = 5;
 
 /// Fingerprint of the grammar that produced a receipt: the yield table,
-/// the cost table, the actual band mapping over the full stamina range,
-/// and every closed reason code. Change any of them and every subsequent
+/// the cost table, every resource-kind code, the actual band mapping over
+/// the full stamina range, and every closed reason code. Change any of them and every subsequent
 /// receipt carries a different fingerprint, so a trial record always says
 /// which grammar version produced it.
+/// The grammar identity this crate is licensed to carry. Moving it is a
+/// declared spec evolution: the author licenses the move, a trial
+/// pre-registers the new value from the declared inputs, and this
+/// constant is edited in the same commit that changes them.
+/// History: `0x530003916889b952` (two verbs, undifferentiated mass) ->
+/// `0xc5d782ec145af0a5` (RES01: fodder/food/timber).
+#[cfg(test)]
+pub const LICENSED_GRAMMAR_FINGERPRINT: u64 = 0xc5d7_82ec_145a_f0a5;
+
 pub fn grammar_fingerprint() -> u64 {
     let mut hasher = Fnv1a::default();
     for row in YIELD_TABLE_GRAMS {
@@ -206,6 +259,9 @@ pub fn grammar_fingerprint() -> u64 {
     }
     hasher.update(&STAMINA_COST_BY_BAND);
     hasher.update(&[WITNESS_COST]);
+    for kind in ResourceKind::ALL {
+        hasher.update(kind.code().as_bytes());
+    }
     for points in 0..=Stamina::MAX {
         let stamina = Stamina::new(points).expect("in range by construction");
         hasher.update(&[stamina.band().index() as u8]);
@@ -579,6 +635,11 @@ pub struct Receipt {
     pub stamina_before: Option<Stamina>,
     pub band: Option<StaminaBand>,
     pub tier: Option<InfraTier>,
+    /// The resource kind the addressed site yields. Informational on a
+    /// refusal, exactly like `band` and `tier`; on a mass-moving receipt
+    /// it is part of the audited claim, and the shadow oracles recompute
+    /// it from the fixture rather than reading it here.
+    pub kind: Option<ResourceKind>,
     pub stamina_spent: u8,
     pub mass_moved: MassGrams,
     pub grammar: u64,
@@ -593,12 +654,13 @@ impl Receipt {
             .map_or_else(|| "-".to_owned(), |s| s.points().to_string());
         let band = self.band.map_or("-", StaminaBand::code);
         let tier = self.tier.map_or("-", InfraTier::code);
+        let kind = self.kind.map_or("-", ResourceKind::code);
         let site = self
             .site
             .map_or_else(|| "-".to_owned(), |s| format!("S{}", s.0));
         format!(
             "seq={} verb={} actor=C{} claim=K{} site={} outcome={} reason={} witnessed={} \
-             stamina_before={} band={} tier={} spent={} mass_g={} \
+             stamina_before={} band={} tier={} kind={} spent={} mass_g={} \
              grammar=0x{:016x} world_before=0x{:016x} world=0x{:016x}",
             self.seq,
             self.verb.code(),
@@ -611,6 +673,7 @@ impl Receipt {
             stamina_before,
             band,
             tier,
+            kind,
             self.stamina_spent,
             self.mass_moved.grams(),
             self.grammar,
@@ -647,18 +710,25 @@ impl World {
     pub fn canonical_state(&self) -> Vec<String> {
         let mut lines = Vec::new();
         for (id, stamina) in self.characters.iter() {
-            lines.push(format!(
-                "character C{} stamina={} inventory_g={}",
-                id.0,
-                stamina.points(),
-                self.economy.inventory(id).grams()
-            ));
+            let mut line = format!("character C{} stamina={}", id.0, stamina.points());
+            // Every kind is printed, always, including zeros: the closed
+            // vocabulary drives the format, so a new kind cannot appear
+            // in truth without appearing here.
+            for kind in ResourceKind::ALL {
+                line.push_str(&format!(
+                    " {}_g={}",
+                    kind.code(),
+                    self.economy.holding(id, kind).grams()
+                ));
+            }
+            lines.push(line);
         }
-        for (id, tier, stock) in self.economy.sites_iter() {
+        for (id, tier, kind, stock) in self.economy.sites_iter() {
             lines.push(format!(
-                "site S{} tier={} stock_g={}",
+                "site S{} tier={} kind={} stock_g={}",
                 id.0,
                 tier.code(),
+                kind.code(),
                 stock.grams()
             ));
         }
@@ -692,6 +762,7 @@ struct GatherPlan {
     partial: Option<PartialReason>,
     band: StaminaBand,
     tier: InfraTier,
+    kind: ResourceKind,
 }
 
 impl GatherPlan {
@@ -741,6 +812,7 @@ fn plan_gather(world: &World, cmd: &GatherCommand) -> Result<GatherPlan, Refusal
         .economy
         .validate_extract(cmd.site, cmd.actor, requested)?;
     let partial = (extraction.granted() < requested).then_some(PartialReason::SiteNearlyDepleted);
+    let kind = extraction.kind();
     Ok(GatherPlan {
         witness,
         spend,
@@ -748,6 +820,7 @@ fn plan_gather(world: &World, cmd: &GatherCommand) -> Result<GatherPlan, Refusal
         partial,
         band,
         tier,
+        kind,
     })
 }
 
@@ -815,6 +888,7 @@ fn submit_gather(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
             stamina_before,
             band: stamina_before.map(Stamina::band),
             tier: world.economy.tier(cmd.site),
+            kind: world.economy.site_kind(cmd.site),
             stamina_spent: 0,
             mass_moved: MassGrams::ZERO,
             grammar,
@@ -828,7 +902,7 @@ fn submit_gather(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
             let stamina_spent = plan.spend.cost();
             let mass_moved = plan.extraction.granted();
             let claim = plan.witness.claim();
-            let (band, tier) = (plan.band, plan.tier);
+            let (band, tier, kind) = (plan.band, plan.tier, plan.kind);
             // The commit phase consumes the plan and its tokens by value.
             // The social owner's state is unchanged by a gather.
             plan.apply(world);
@@ -843,6 +917,7 @@ fn submit_gather(world: &mut World, seq: u64, cmd: GatherCommand) -> Receipt {
                 stamina_before,
                 band: Some(band),
                 tier: Some(tier),
+                kind: Some(kind),
                 stamina_spent,
                 mass_moved,
                 grammar,
@@ -872,6 +947,7 @@ fn submit_witness(world: &mut World, seq: u64, cmd: WitnessCommand) -> Receipt {
             stamina_before,
             band: stamina_before.map(Stamina::band),
             tier: None,
+            kind: None,
             stamina_spent: 0,
             mass_moved: MassGrams::ZERO,
             grammar,
@@ -895,6 +971,7 @@ fn submit_witness(world: &mut World, seq: u64, cmd: WitnessCommand) -> Receipt {
                 stamina_before,
                 band: stamina_before.map(Stamina::band),
                 tier: None,
+                kind: None,
                 stamina_spent,
                 mass_moved: MassGrams::ZERO,
                 grammar,
@@ -955,6 +1032,76 @@ mod tests {
     #[test]
     fn grammar_fingerprint_is_stable() {
         assert_eq!(grammar_fingerprint(), grammar_fingerprint());
+    }
+
+    /// The licensed grammar identity (RES01). `AGENTS.md` §4 freezes the
+    /// fingerprint; this pin makes a move a *declared* edit of one
+    /// constant rather than a side effect noticed in an envelope line.
+    /// It was pre-registered before the change: see
+    /// `docs/trial-res01-resource-kinds-report.md` §4.
+    #[test]
+    fn grammar_fingerprint_matches_the_licensed_value() {
+        assert_eq!(
+            grammar_fingerprint(),
+            LICENSED_GRAMMAR_FINGERPRINT,
+            "the grammar moved without a licensed, pre-registered move"
+        );
+    }
+
+    /// Falsifier F4 (RES01): the kind vocabulary is closed — every code
+    /// round-trips, codes are distinct, and `ALL` is exhaustive in the
+    /// sense that indexes cover `0..KIND_COUNT` exactly once.
+    #[test]
+    fn resource_kinds_are_a_closed_vocabulary() {
+        let mut seen = [false; KIND_COUNT];
+        for kind in ResourceKind::ALL {
+            assert_eq!(ResourceKind::from_code(kind.code()), Some(kind));
+            assert!(!kind.code().is_empty());
+            assert!(!seen[kind.index()], "two kinds share an index");
+            seen[kind.index()] = true;
+        }
+        assert!(seen.iter().all(|hit| *hit), "an index has no kind");
+        assert_eq!(ResourceKind::from_code("turf"), None);
+    }
+
+    /// Falsifier F3 (RES01): a gather receipt names the kind of the site
+    /// it drained — the actor cannot choose it, and a two-kind world
+    /// proves the binding is to the site rather than to a default.
+    #[test]
+    fn falsification_receipt_kind_is_bound_to_the_drained_site() {
+        let mut world = two_actor_world();
+        let fodder = submit(
+            &mut world,
+            1,
+            Command::Gather(GatherCommand {
+                actor: CharacterId(1),
+                claim: ClaimId(1),
+                site: SiteId(1),
+            }),
+        );
+        let timber = submit(
+            &mut world,
+            2,
+            Command::Gather(GatherCommand {
+                actor: CharacterId(2),
+                claim: ClaimId(2),
+                site: SiteId(2),
+            }),
+        );
+        assert_eq!(fodder.kind, Some(ResourceKind::Fodder));
+        assert_eq!(timber.kind, Some(ResourceKind::Timber));
+        assert!(fodder.canonical_line().contains(" kind=fodder "));
+        assert!(timber.canonical_line().contains(" kind=timber "));
+        assert_eq!(
+            world.economy.holding(CharacterId(1), ResourceKind::Timber),
+            MassGrams::ZERO,
+            "a fodder gather reached a timber holding"
+        );
+        assert_eq!(
+            world.economy.holding(CharacterId(2), ResourceKind::Fodder),
+            MassGrams::ZERO,
+            "a timber gather reached a fodder holding"
+        );
     }
 
     #[test]
@@ -1109,8 +1256,18 @@ mod tests {
             ])
             .unwrap(),
             economy: EconomyOwner::seed_sites([
-                (SiteId(1), InfraTier::Established, MassGrams::new(5000)),
-                (SiteId(2), InfraTier::Crude, MassGrams::new(3000)),
+                (
+                    SiteId(1),
+                    InfraTier::Established,
+                    ResourceKind::Fodder,
+                    MassGrams::new(5000),
+                ),
+                (
+                    SiteId(2),
+                    InfraTier::Crude,
+                    ResourceKind::Timber,
+                    MassGrams::new(3000),
+                ),
             ])
             .unwrap(),
             social: SocialOwner::seed_claims([
@@ -1132,8 +1289,18 @@ mod tests {
             characters: CharacterOwner::seed([(CharacterId(1), Stamina::new(90).unwrap())])
                 .unwrap(),
             economy: EconomyOwner::seed_sites([
-                (SiteId(1), InfraTier::Established, MassGrams::new(u64::MAX)),
-                (SiteId(2), InfraTier::Crude, MassGrams::new(1)),
+                (
+                    SiteId(1),
+                    InfraTier::Established,
+                    ResourceKind::Fodder,
+                    MassGrams::new(u64::MAX),
+                ),
+                (
+                    SiteId(2),
+                    InfraTier::Crude,
+                    ResourceKind::Fodder,
+                    MassGrams::new(1),
+                ),
             ])
             .unwrap(),
             social: SocialOwner::seed_claims([]).unwrap(),
@@ -1198,8 +1365,13 @@ mod tests {
                 Stamina::new(points).expect("representative stamina is in range"),
             )])
             .expect("one character is unique"),
-            economy: EconomyOwner::seed_sites([(SiteId(1), tier, MassGrams::new(stock))])
-                .expect("one site is unique"),
+            economy: EconomyOwner::seed_sites([(
+                SiteId(1),
+                tier,
+                ResourceKind::Fodder,
+                MassGrams::new(stock),
+            )])
+            .expect("one site is unique"),
             social: SocialOwner::seed_claims([(ClaimId(1), CharacterId(1), SiteId(1), true)])
                 .expect("one claim is unique"),
         };
@@ -1221,14 +1393,14 @@ mod tests {
 
     fn assert_cell_mass_state(world: &World, expected_inventory: u64, expected_stock: u64) {
         assert_eq!(
-            world.economy.inventory(CharacterId(1)),
+            world.economy.holding(CharacterId(1), ResourceKind::Fodder),
             MassGrams::new(expected_inventory)
         );
         let remaining_stock = world
             .economy
             .sites_iter()
             .next()
-            .map(|(_, _, stock)| stock)
+            .map(|(_, _, _, stock)| stock)
             .expect("the purpose-built site exists");
         assert_eq!(remaining_stock, MassGrams::new(expected_stock));
     }
@@ -1385,10 +1557,13 @@ mod tests {
             38
         );
         assert_eq!(
-            world.economy.inventory(CharacterId(1)),
+            world.economy.holding(CharacterId(1), ResourceKind::Fodder),
             MassGrams::new(1800)
         );
-        assert_eq!(world.economy.inventory(CharacterId(2)), MassGrams::new(800));
+        assert_eq!(
+            world.economy.holding(CharacterId(2), ResourceKind::Timber),
+            MassGrams::new(800)
+        );
     }
 
     /// Falsifier (trial/003, part 2): when a later owner's token in a
@@ -1507,6 +1682,7 @@ mod tests {
                 economy: EconomyOwner::seed_sites([(
                     SiteId(1),
                     InfraTier::Established,
+                    ResourceKind::Fodder,
                     MassGrams::new(10_000),
                 )])
                 .unwrap(),
