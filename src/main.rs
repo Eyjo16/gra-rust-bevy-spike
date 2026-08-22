@@ -17,6 +17,8 @@
 mod anticipation;
 mod boundary;
 mod character;
+#[cfg(test)]
+mod conformance;
 #[cfg(feature = "e01-taste")]
 mod e01_taste;
 mod economy;

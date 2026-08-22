@@ -136,3 +136,32 @@ Predicted, before the test exists: all three tests fail at `5884f27`.
 
 If any of the three unexpectedly passes at base, the drift table above
 is wrong, and that finding goes in the log before anything is repaired.
+
+---
+
+# Evidence (appended after pre-registration)
+
+## E1. The red, verbatim (against `5884f27` documents)
+
+All three tests failed at the pre-registration state of the live
+documents, exactly as predicted in §4, under
+`rustc 1.97.1 (8bab26f4f 2026-07-14)` / `cargo 1.97.1`:
+
+```text
+AGENTS.md is stale live law: it does not name 0x7dd8c6706e0b949f, 0xfa37eefa3594cfe3, 0x7e62152622bb9132, 0x93afba3f312bd89d
+HANDOUT.md is stale live law: it does not name 0x7dd8c6706e0b949f, 0xfa37eefa3594cfe3, 0x7e62152622bb9132, 0x93afba3f312bd89d, 0xc0b4da51744bcf19, 0xb500dee0e5d883d8, oracles=10v7
+runtime-target-map.md "Current position" is stale live law: it does not name 0x7dd8c6706e0b949f, 0xfa37eefa3594cfe3, 0x7e62152622bb9132, 0x93afba3f312bd89d, 0xc0b4da51744bcf19, 0xb500dee0e5d883d8, oracles=10v7
+
+failures:
+    conformance::agents_md_freezes_the_identities_the_code_enforces
+    conformance::handout_identity_block_is_the_current_envelope
+    conformance::target_map_current_position_quotes_the_current_envelope
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 87 filtered out; finished in 0.08s
+```
+
+Note what the red itself proves: the values the test recomputes through
+`submit` are byte-identical to the envelope recorded in the W01 §E10
+integration gate (`receipts=0xc0b4da51744bcf19`,
+`world=0xb500dee0e5d883d8`) — the recomputation is measuring the same
+trial the gate certified, not a private one.
