@@ -48,6 +48,8 @@ decision, migration account, and approval.
 | `environment-evidence-cold-repro-001.md` | Standalone environment evidence | Records an independent cold-machine gate reproduction and the observed `bevy-host` Rust floor |
 | `integration-consolidation-2026-08-14.md` | Integration record | Reconciles reachable RS01 identities, compute merges, held evidence, and the next safe boundary |
 | `trial-con01-live-law-conformance-report.md` | Standalone evidence | Records the live-law conformance pin: the pre-registered red on three stale live documents, the executable identity binding, and the repaired current position |
+| `decision-packet-2026-08-25.md` | Pending author ruling | Separates the three questions W01 exposed — time authority, execution visibility, stakes — plus the held-branch disposition annex; decides nothing itself |
+| `trial-o01-authority-preregistration-draft.md` | Draft — unlicensed | States the issuer/actor/seat/delegation question that must precede any consent vocabulary; a suggestion note until the author licenses it |
 
 ## Maintenance rule
 
