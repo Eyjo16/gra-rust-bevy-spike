@@ -1,9 +1,11 @@
 //! Economy owner: the single writer of mass — site stock and per-kind
 //! holdings.
 //!
-//! Internals are private. The only mutation path is `validate_extract`
-//! (fallible, read-only) followed by `apply_extract`, which consumes the
-//! proof token by value — one token, one apply. The token carries the
+//! Internals are private. The mutation paths are `validate_extract` /
+//! `apply_extract` (site -> holding) and `validate_transfer` /
+//! `apply_transfer` (holding -> holding, V01); each is a fallible
+//! read-only validation followed by an apply that consumes the proof
+//! token by value — one token, one apply. The token carries the
 //! entity revisions it was minted against — the site it drains and
 //! the (character, kind) holding it fills — so extractions touching
 //! disjoint entities never conflict. Applying a stale token panics, because that is a
@@ -41,6 +43,31 @@ pub struct EconomyOwner {
     site_revisions: BTreeMap<SiteId, u64>,
     holding_revisions: BTreeMap<(CharacterId, ResourceKind), u64>,
     revision: u64,
+}
+
+/// Proof that a transfer between two characters was validated against
+/// specific `(character, kind)` holding revisions, with
+/// `grams <= giver's holding` at validation time. Private fields: only
+/// the economy owner can construct one. The giver is named first and is
+/// the only holding that can decrease — the owner has no path that
+/// reduces a holding the actor does not own.
+pub struct Transfer {
+    from: CharacterId,
+    to: CharacterId,
+    kind: ResourceKind,
+    grams: MassGrams,
+    from_holding_revision: u64,
+    to_holding_revision: u64,
+}
+
+impl Transfer {
+    pub fn grams(&self) -> MassGrams {
+        self.grams
+    }
+
+    pub fn kind(&self) -> ResourceKind {
+        self.kind
+    }
 }
 
 /// Proof that an extraction was validated against specific entity
@@ -257,6 +284,66 @@ impl EconomyOwner {
             .stock = next_stock;
         self.set_holding(extraction.to, extraction.kind, next_holding);
         *self.site_revisions.entry(extraction.site).or_insert(0) += 1;
+        self.revision += 1;
+    }
+
+    /// True when the token still matches the revisions of both holdings
+    /// it touches.
+    pub fn transfer_is_fresh(&self, transfer: &Transfer) -> bool {
+        self.holding_revision(transfer.from, transfer.kind) == transfer.from_holding_revision
+            && self.holding_revision(transfer.to, transfer.kind) == transfer.to_holding_revision
+    }
+
+    /// Read-only validation of an attributed transfer (V01). The owner
+    /// debits only the named source and can express no other move; that
+    /// is attribution, not proof that the source willed it. Exact: a giver
+    /// short of `grams` is refused, never partially satisfied — a giver's
+    /// own store is not a fact they can be surprised by, unlike a site's
+    /// remaining stock. The owner enforces resource semantics only; who
+    /// may give, at what cost, and whether the parties are distinct is
+    /// verb policy and lives in the boundary.
+    pub fn validate_transfer(
+        &self,
+        from: CharacterId,
+        to: CharacterId,
+        kind: ResourceKind,
+        grams: MassGrams,
+    ) -> Result<Transfer, RefusalReason> {
+        let held = self.holding(from, kind);
+        if held.checked_sub(grams).is_none() {
+            return Err(RefusalReason::InsufficientHolding);
+        }
+        Ok(Transfer {
+            from,
+            to,
+            kind,
+            grams,
+            from_holding_revision: self.holding_revision(from, kind),
+            to_holding_revision: self.holding_revision(to, kind),
+        })
+    }
+
+    /// Consumes the token by value: reuse is a compile error. Panics on a
+    /// stale token — a boundary bug, never a game outcome. Both sides of
+    /// the transfer are computed before the first write, so the applied
+    /// move is all-or-nothing and the kind total is unchanged by
+    /// construction: the same grams leave one holding and enter the other.
+    pub fn apply_transfer(&mut self, transfer: Transfer) {
+        assert!(
+            self.transfer_is_fresh(&transfer),
+            "stale proof token (economy transfer) — boundary bug"
+        );
+        let next_from = self
+            .holding(transfer.from, transfer.kind)
+            .checked_sub(transfer.grams)
+            .expect("fresh token: validated grams <= holding");
+        let next_to = self
+            .holding(transfer.to, transfer.kind)
+            .checked_add(transfer.grams)
+            .expect("coherent world: transfer addition fits total-mass bound");
+
+        self.set_holding(transfer.from, transfer.kind, next_from);
+        self.set_holding(transfer.to, transfer.kind, next_to);
         self.revision += 1;
     }
 
@@ -540,6 +627,155 @@ mod tests {
         assert!(
             owner.holdings_iter().all(|(_, _, grams)| !grams.is_zero()),
             "a zero-valued holding entry was stored"
+        );
+    }
+
+    /// Falsifier G1 (V01): a transfer moves exactly one kind between
+    /// exactly two holdings and touches nothing else.
+    #[test]
+    fn falsification_transfer_conserves_the_kind_and_touches_nothing_else() {
+        let mut owner = EconomyOwner::seed_sites([
+            (
+                SiteId(1),
+                InfraTier::Established,
+                FODDER,
+                MassGrams::new(2000),
+            ),
+            (
+                SiteId(2),
+                InfraTier::Established,
+                ResourceKind::Timber,
+                MassGrams::new(2000),
+            ),
+        ])
+        .unwrap();
+        for (site, actor, grams) in [(1u64, 1u64, 500u64), (2, 1, 300), (1, 2, 100)] {
+            let extraction = owner
+                .validate_extract(SiteId(site), CharacterId(actor), MassGrams::new(grams))
+                .unwrap();
+            owner.apply_extract(extraction);
+        }
+        let before: Vec<MassGrams> = ResourceKind::ALL
+            .into_iter()
+            .map(|kind| owner.total_mass_of(kind))
+            .collect();
+
+        let transfer = owner
+            .validate_transfer(CharacterId(1), CharacterId(2), FODDER, MassGrams::new(200))
+            .unwrap();
+        assert_eq!(transfer.grams(), MassGrams::new(200));
+        owner.apply_transfer(transfer);
+
+        assert_eq!(owner.holding(CharacterId(1), FODDER), MassGrams::new(300));
+        assert_eq!(owner.holding(CharacterId(2), FODDER), MassGrams::new(300));
+        assert_eq!(
+            owner.holding(CharacterId(1), ResourceKind::Timber),
+            MassGrams::new(300),
+            "the giver's other kind moved"
+        );
+        assert_eq!(
+            owner.holding(CharacterId(2), ResourceKind::Timber),
+            MassGrams::ZERO,
+            "mass appeared in a kind nobody gave"
+        );
+        let after: Vec<MassGrams> = ResourceKind::ALL
+            .into_iter()
+            .map(|kind| owner.total_mass_of(kind))
+            .collect();
+        assert_eq!(before, after, "a transfer changed a kind total");
+    }
+
+    /// Falsifier G3 (V01): a giver short of the named mass is refused,
+    /// never partially satisfied — the giver's own store is not a fact
+    /// they can be surprised by.
+    #[test]
+    fn falsification_short_transfer_is_refused_not_clamped() {
+        let mut owner = EconomyOwner::seed_sites([(
+            SiteId(1),
+            InfraTier::Established,
+            FODDER,
+            MassGrams::new(2000),
+        )])
+        .unwrap();
+        let extraction = owner
+            .validate_extract(SiteId(1), CharacterId(1), MassGrams::new(500))
+            .unwrap();
+        owner.apply_extract(extraction);
+
+        assert_eq!(
+            owner
+                .validate_transfer(CharacterId(1), CharacterId(2), FODDER, MassGrams::new(501))
+                .err(),
+            Some(RefusalReason::InsufficientHolding)
+        );
+        assert_eq!(
+            owner
+                .validate_transfer(
+                    CharacterId(1),
+                    CharacterId(2),
+                    ResourceKind::Timber,
+                    MassGrams::new(1)
+                )
+                .err(),
+            Some(RefusalReason::InsufficientHolding),
+            "a kind the giver has never held is not a source of mass"
+        );
+        assert_eq!(owner.holding(CharacterId(1), FODDER), MassGrams::new(500));
+    }
+
+    /// Falsifier G6 (V01), owner half: giving everything of a kind
+    /// leaves no zero entry, so the hash equals that of a world where
+    /// the giver never held it.
+    #[test]
+    fn falsification_giving_everything_leaves_no_zero_entry() {
+        let mut owner = EconomyOwner::seed_sites([(
+            SiteId(1),
+            InfraTier::Established,
+            FODDER,
+            MassGrams::new(2000),
+        )])
+        .unwrap();
+        let extraction = owner
+            .validate_extract(SiteId(1), CharacterId(1), MassGrams::new(500))
+            .unwrap();
+        owner.apply_extract(extraction);
+        let transfer = owner
+            .validate_transfer(CharacterId(1), CharacterId(2), FODDER, MassGrams::new(500))
+            .unwrap();
+        owner.apply_transfer(transfer);
+
+        assert!(
+            owner
+                .holdings_iter()
+                .all(|(id, _, grams)| { id != CharacterId(1) && !grams.is_zero() }),
+            "an emptied holding stayed in the map"
+        );
+
+        // A reference world in which C1 never held anything, reached in
+        // the same number of applies so the hashed owner counter matches:
+        // same visible state must mean the same hash.
+        let mut reference = EconomyOwner::seed_sites([(
+            SiteId(1),
+            InfraTier::Established,
+            FODDER,
+            MassGrams::new(2000),
+        )])
+        .unwrap();
+        for _ in 0..2 {
+            let direct = reference
+                .validate_extract(SiteId(1), CharacterId(2), MassGrams::new(250))
+                .unwrap();
+            reference.apply_extract(direct);
+        }
+        let hash_of = |owner: &EconomyOwner| {
+            let mut hasher = Fnv1a::default();
+            owner.hash_into(&mut hasher);
+            hasher.finish()
+        };
+        assert_eq!(
+            hash_of(&owner),
+            hash_of(&reference),
+            "an emptied holding is still visible in the hash"
         );
     }
 }

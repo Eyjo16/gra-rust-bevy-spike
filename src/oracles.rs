@@ -17,8 +17,9 @@
 use std::collections::BTreeMap;
 
 use crate::boundary::{
-    Command, KIND_COUNT, MassGrams, OutcomeKind, Receipt, ResourceKind, STAMINA_COST_BY_BAND,
-    Stamina, StaminaBand, Verb, WITNESS_COST, World, YIELD_TABLE_GRAMS, submit,
+    Command, GIVE_COST, KIND_COUNT, MassGrams, OutcomeKind, Receipt, ResourceKind,
+    STAMINA_COST_BY_BAND, Stamina, StaminaBand, Verb, WITNESS_COST, World, YIELD_TABLE_GRAMS,
+    submit,
 };
 
 pub const ORACLE_COUNT: usize = 10;
@@ -38,7 +39,22 @@ pub const ORACLE_COUNT: usize = 10;
 /// v5 (RES01): oracle 2 checks conservation PER KIND as well as in
 /// aggregate. Strictly stronger — the aggregate check passes on a world
 /// where a gram of fodder became a gram of timber, and this one does not.
-pub const ORACLE_SUITE_VERSION: u32 = 5;
+/// v6 (V01): oracle 3 `witnessed_gate` becomes `mass_authority_gate` —
+/// its old clause is unchanged in force (no receipt moves mass out of a
+/// site without a witnessed claim) and it gains a transfer clause (a
+/// mass-moving receipt with no site must name a counterparty distinct
+/// from the actor, and a kind). Oracle 4 keys its exhausted gate on site
+/// extraction, which is the gather verb's policy made explicit rather
+/// than a weakening: give follows the witness policy of a flat cost with
+/// no exhausted gate.
+/// v7 (V01 repair): oracle 3's transfer count is renamed
+/// `unattributed_transfers` and its doc narrowed to what it proves — a
+/// mass-moving receipt with no site names a source, a distinct
+/// recipient and a kind. That is attribution, not consent (review
+/// finding 4). Oracles 3, 9 and 10 read the split receipt fields
+/// (`claim_witnessed`, `transfer_witness`), and oracle 9 gains the
+/// witness-identity comparison, which makes it strictly stronger.
+pub const ORACLE_SUITE_VERSION: u32 = 7;
 
 pub struct OracleVerdict {
     pub name: &'static str,
@@ -77,7 +93,7 @@ pub fn run_all(ctx: &OracleCtx<'_>) -> [OracleVerdict; ORACLE_COUNT] {
     [
         stamina_in_bounds(ctx),
         mass_conserved(ctx),
-        witnessed_gate(ctx),
+        mass_authority_gate(ctx),
         exhausted_gate(ctx),
         closed_reasons(ctx),
         cell_bounds(ctx),
@@ -143,37 +159,64 @@ fn mass_conserved(ctx: &OracleCtx<'_>) -> OracleVerdict {
     OracleVerdict::new("mass_conserved", pass, detail.join(" "))
 }
 
-/// 3. The witnessed claim is a boolean gate: no receipt moves mass without
-///    a witnessed claim. Keyed on actual mass movement, not outcome kind —
-///    the witness verb is Accepted with zero mass, which the second verb
-///    exposed as a distinct case.
-fn witnessed_gate(ctx: &OracleCtx<'_>) -> OracleVerdict {
-    let violations = ctx
+/// 3. Every mass movement had authority for it, of the kind its shape
+///    requires (V01; named `witnessed_gate` through v5).
+///    - Extraction (the receipt names a site): the claim must have been
+///      witnessed. Unchanged in force from v5.
+///    - Transfer (mass moved, no site): the receipt must be *attributed*
+///      — it names a source actor, a counterparty distinct from that
+///      actor, and a kind. This is a shape check on the ledger, and it
+///      is worth exactly that: it proves no mass moved without a named
+///      source and destination. It does **not** prove consent, which
+///      needs an issuer, a seat or an intent, none of which exists
+///      (review finding 4).
+///
+///    Keyed on actual mass movement, not outcome kind: the witness verb
+///    is Accepted with zero mass, which the second verb exposed as a
+///    distinct case.
+fn mass_authority_gate(ctx: &OracleCtx<'_>) -> OracleVerdict {
+    let unwitnessed_extractions = ctx
         .log
         .iter()
-        .filter(|r| !r.mass_moved.is_zero() && !r.witnessed)
+        .filter(|r| !r.mass_moved.is_zero() && r.site.is_some() && !r.claim_witnessed)
         .count();
+    let unattributed_transfers = ctx
+        .log
+        .iter()
+        .filter(|r| !r.mass_moved.is_zero() && r.site.is_none())
+        .filter(|r| match (r.recipient, r.kind) {
+            (Some(recipient), Some(_)) => recipient == r.actor,
+            _ => true,
+        })
+        .count();
+    let violations = unwitnessed_extractions + unattributed_transfers;
     OracleVerdict::new(
-        "witnessed_gate",
+        "mass_authority_gate",
         violations == 0,
-        format!("{violations} unwitnessed receipts moved mass"),
+        format!(
+            "{unwitnessed_extractions} unwitnessed extractions, {unattributed_transfers} unattributed transfers"
+        ),
     )
 }
 
-/// 4. An exhausted actor never yields mass: every mass-moving receipt sits
-///    in a non-exhausted stamina band. Keyed on actual mass movement — an
-///    exhausted character may still witness (zero mass) by verb policy.
+/// 4. An exhausted actor never *extracts* mass: every receipt that
+///    drains a site sits in a non-exhausted stamina band. Keyed on site
+///    extraction (V01): the exhausted gate has always been the gather
+///    verb's policy, and both other verbs deliberately lack it — an
+///    exhausted character may still witness a claim (zero mass) and may
+///    still hand over what they already hold, which moves mass between
+///    holdings and drains no site.
 fn exhausted_gate(ctx: &OracleCtx<'_>) -> OracleVerdict {
     let violations = ctx
         .log
         .iter()
-        .filter(|r| !r.mass_moved.is_zero())
+        .filter(|r| !r.mass_moved.is_zero() && r.site.is_some())
         .filter(|r| !matches!(r.band, Some(band) if band != StaminaBand::Exhausted))
         .count();
     OracleVerdict::new(
         "exhausted_gate",
         violations == 0,
-        format!("{violations} exhausted or band-less receipts moved mass"),
+        format!("{violations} exhausted or band-less receipts drained a site"),
     )
 }
 
@@ -339,7 +382,11 @@ struct ShadowExpectation {
     verb_code: &'static str,
     outcome_code: &'static str,
     reason_code: &'static str,
-    witnessed: bool,
+    claim_witnessed: bool,
+    /// The transfer witness the shadow expects, by identity — recomputed
+    /// from the command, never read from the receipt, so a receipt that
+    /// names the wrong attester diverges here (review finding 1).
+    transfer_witness: Option<u64>,
     spent: u8,
     mass_grams: u64,
     band_index: Option<usize>,
@@ -400,6 +447,7 @@ impl ShadowState {
         match cmd {
             Command::Gather(gather) => self.step_gather(gather),
             Command::Witness(witness) => self.step_witness(witness),
+            Command::Give(give) => self.step_give(give),
         }
     }
 
@@ -413,7 +461,8 @@ impl ShadowState {
             verb_code: "gather",
             outcome_code: "refused",
             reason_code: reason,
-            witnessed,
+            claim_witnessed: witnessed,
+            transfer_witness: None,
             spent: 0,
             mass_grams: 0,
             band_index: None,
@@ -470,7 +519,8 @@ impl ShadowState {
             verb_code: "gather",
             outcome_code,
             reason_code,
-            witnessed,
+            claim_witnessed: witnessed,
+            transfer_witness: None,
             spent: cost,
             mass_grams: granted,
             band_index: Some(band),
@@ -490,7 +540,8 @@ impl ShadowState {
             verb_code: "witness",
             outcome_code: "refused",
             reason_code: reason,
-            witnessed,
+            claim_witnessed: witnessed,
+            transfer_witness: None,
             spent: 0,
             mass_grams: 0,
             band_index: None,
@@ -522,12 +573,91 @@ impl ShadowState {
             verb_code: "witness",
             outcome_code: "accepted",
             reason_code: "-",
-            witnessed,
+            claim_witnessed: witnessed,
+            transfer_witness: None,
             spent: WITNESS_COST,
             mass_grams: 0,
             band_index: None,
             tier_index: None,
             kind_index: None,
+        }
+    }
+
+    /// Independent reimplementation of the give verb: parties gate, then
+    /// flat cost with no exhausted gate, then an exact holding check.
+    /// Uses its own literals and its own state — never the boundary's
+    /// plan, never a receipt field.
+    fn step_give(&mut self, cmd: &crate::boundary::GiveCommand) -> ShadowExpectation {
+        let attester = cmd.witness.map(|c| c.0);
+        let kind = cmd.kind.index();
+        let refuse = |reason: &'static str| ShadowExpectation {
+            verb_code: "give",
+            outcome_code: "refused",
+            reason_code: reason,
+            claim_witnessed: false,
+            transfer_witness: attester,
+            spent: 0,
+            mass_grams: 0,
+            band_index: None,
+            tier_index: None,
+            kind_index: Some(kind),
+        };
+
+        // Gate 1: parties.
+        if cmd.giver == cmd.recipient {
+            return refuse("cannot_give_to_self");
+        }
+        if !self.stamina.contains_key(&cmd.recipient.0) {
+            return refuse("unknown_recipient");
+        }
+        if let Some(witness) = cmd.witness {
+            if !self.stamina.contains_key(&witness.0) {
+                return refuse("unknown_witness");
+            }
+            if witness == cmd.giver || witness == cmd.recipient {
+                return refuse("witness_is_party");
+            }
+        }
+        if cmd.grams.grams() == 0 {
+            return refuse("empty_transfer");
+        }
+        // Gate 2: character — flat cost, no exhausted gate.
+        let Some(&points) = self.stamina.get(&cmd.giver.0) else {
+            return refuse("unknown_actor");
+        };
+        if points < GIVE_COST {
+            return refuse("insufficient_stamina");
+        }
+        // Gate 3: economy — exact, never partial.
+        let held = self
+            .holdings
+            .get(&(cmd.giver.0, kind))
+            .copied()
+            .unwrap_or(0);
+        let grams = cmd.grams.grams();
+        if held < grams {
+            return refuse("insufficient_holding");
+        }
+        // Apply to shadow state, with the same zero-normalization the
+        // owner uses, so oracle 10 compares two canonical maps.
+        self.stamina.insert(cmd.giver.0, points - GIVE_COST);
+        if held == grams {
+            self.holdings.remove(&(cmd.giver.0, kind));
+        } else {
+            self.holdings.insert((cmd.giver.0, kind), held - grams);
+        }
+        self.add_holding(cmd.recipient.0, kind, grams);
+        ShadowExpectation {
+            verb_code: "give",
+            outcome_code: "accepted",
+            reason_code: "-",
+            claim_witnessed: false,
+            transfer_witness: attester,
+            spent: GIVE_COST,
+            mass_grams: grams,
+            band_index: None,
+            tier_index: None,
+            kind_index: Some(kind),
         }
     }
 
@@ -568,7 +698,8 @@ impl ShadowExpectation {
         let codes_match = receipt.verb.code() == self.verb_code
             && receipt.outcome.code() == self.outcome_code
             && receipt.outcome.reason_code() == self.reason_code
-            && receipt.witnessed == self.witnessed
+            && receipt.claim_witnessed == self.claim_witnessed
+            && receipt.transfer_witness.map(|c| c.0) == self.transfer_witness
             && receipt.stamina_spent == self.spent
             && receipt.mass_moved.grams() == self.mass_grams;
         // Band/tier on refusals are informational; on yields they are part
@@ -669,6 +800,55 @@ mod tests {
         (world, cmds, log, baseline)
     }
 
+    /// A fixture whose trial contains a witnessed transfer, so the
+    /// oracle tests can doctor one. Mechanical numbers only.
+    fn give_fixture() -> World {
+        World {
+            characters: CharacterOwner::seed([
+                (CharacterId(1), Stamina::new(90).unwrap()),
+                (CharacterId(2), Stamina::new(50).unwrap()),
+                (CharacterId(3), Stamina::new(30).unwrap()),
+                (CharacterId(4), Stamina::new(30).unwrap()),
+            ])
+            .unwrap(),
+            economy: EconomyOwner::seed_sites([(
+                SiteId(1),
+                InfraTier::Established,
+                ResourceKind::Fodder,
+                MassGrams::new(4000),
+            )])
+            .unwrap(),
+            social: SocialOwner::seed_claims([(ClaimId(1), CharacterId(1), SiteId(1), true)])
+                .unwrap(),
+        }
+    }
+
+    fn run_give_fixture() -> (World, Vec<Command>, Vec<Receipt>, KindBaseline) {
+        let mut world = give_fixture();
+        validate_world_coherence(&world).unwrap();
+        let baseline = baseline_by_kind(&world);
+        let cmds = vec![
+            Command::Gather(GatherCommand {
+                actor: CharacterId(1),
+                claim: ClaimId(1),
+                site: SiteId(1),
+            }),
+            Command::Give(crate::boundary::GiveCommand {
+                giver: CharacterId(1),
+                recipient: CharacterId(2),
+                kind: ResourceKind::Fodder,
+                grams: MassGrams::new(500),
+                witness: Some(CharacterId(3)),
+            }),
+        ];
+        let log: Vec<Receipt> = cmds
+            .iter()
+            .enumerate()
+            .map(|(i, cmd)| submit(&mut world, i as u64 + 1, *cmd))
+            .collect();
+        (world, cmds, log, baseline)
+    }
+
     #[test]
     fn fixture_run_covers_accepted_partial_and_refused() {
         let (_, _, log, _) = run_fixture();
@@ -687,7 +867,10 @@ mod tests {
         );
         assert_eq!(log[4].verb, Verb::Witness);
         assert_eq!(log[4].outcome, OutcomeKind::Accepted);
-        assert!(!log[4].witnessed, "claim was unwitnessed before the verb");
+        assert!(
+            !log[4].claim_witnessed,
+            "claim was unwitnessed before the verb"
+        );
         assert_eq!(log[4].mass_moved, MassGrams::ZERO);
     }
 
@@ -763,6 +946,35 @@ mod tests {
         );
     }
 
+    /// Falsifier R2 (V01 repair): a receipt naming the wrong attester is
+    /// internally consistent — the mass, the parties, the kind and the
+    /// codes all agree — and only the independent recomputation refuses
+    /// it. Without the identity comparison, this doctored log passes
+    /// every oracle.
+    #[test]
+    fn falsification_shadow_oracle_catches_a_wrong_transfer_witness() {
+        let (world, cmds, mut log, baseline) = run_give_fixture();
+        let give_index = log
+            .iter()
+            .position(|r| r.verb == Verb::Give && r.transfer_witness.is_some())
+            .expect("the give fixture contains a witnessed transfer");
+        log[give_index].transfer_witness = Some(crate::boundary::CharacterId(4));
+        let ctx = OracleCtx {
+            world: &world,
+            baseline_by_kind: baseline,
+            build_fixture: give_fixture,
+            commands: &cmds,
+            log: &log,
+        };
+        assert!(mass_conserved(&ctx).pass);
+        assert!(mass_authority_gate(&ctx).pass);
+        assert!(closed_reasons(&ctx).pass);
+        assert!(
+            !shadow_expectation(&ctx).pass,
+            "a receipt naming the wrong attester survived the shadow evaluator"
+        );
+    }
+
     /// Falsifier F3 (RES01), shadow form: a receipt that names a kind its
     /// site does not yield is internally consistent — mass, band, tier
     /// and codes all agree — and only an independent recomputation
@@ -787,9 +999,9 @@ mod tests {
     }
 
     #[test]
-    fn witnessed_gate_oracle_catches_a_doctored_receipt() {
+    fn mass_authority_gate_oracle_catches_a_doctored_receipt() {
         let (world, cmds, mut log, baseline) = run_fixture();
-        log[0].witnessed = false;
+        log[0].claim_witnessed = false;
         let ctx = OracleCtx {
             world: &world,
             baseline_by_kind: baseline,
@@ -797,7 +1009,7 @@ mod tests {
             commands: &cmds,
             log: &log,
         };
-        assert!(!witnessed_gate(&ctx).pass);
+        assert!(!mass_authority_gate(&ctx).pass);
     }
 
     /// A consistent lie: the receipt claims the actor was in the Low band
@@ -817,7 +1029,7 @@ mod tests {
             commands: &cmds,
             log: &log,
         };
-        assert!(witnessed_gate(&ctx).pass);
+        assert!(mass_authority_gate(&ctx).pass);
         assert!(exhausted_gate(&ctx).pass);
         assert!(closed_reasons(&ctx).pass);
         assert!(cell_bounds(&ctx).pass);

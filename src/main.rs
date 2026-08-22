@@ -27,13 +27,15 @@ mod oracles;
 mod render_bevy;
 mod shapes;
 mod social;
+mod winter;
 
 use std::process::ExitCode;
 
 use boundary::{
-    CharacterId, ClaimId, Command, GatherCommand, InfraTier, MassGrams, Receipt, ResourceKind,
-    SiteId, Stamina, WitnessCommand, World, fixture_identity, grammar_fingerprint,
-    receipt_chain_digest, submit, validate_world_coherence,
+    CharacterId, ClaimId, Command, GatherCommand, GiveCommand, InfraTier, MassGrams, Receipt,
+    ResourceKind, SiteId, Stamina, WitnessCommand, World, command_encoding_fingerprint,
+    fixture_identity, grammar_fingerprint, receipt_chain_digest, receipt_format_fingerprint,
+    submit, validate_world_coherence,
 };
 use character::CharacterOwner;
 use economy::EconomyOwner;
@@ -97,7 +99,7 @@ fn fixture() -> World {
     }
 }
 
-/// A fixed two-verb sequence that exercises Accepted, Partial, and every
+/// A fixed three-verb sequence that exercises Accepted, Partial, and every
 /// reachable refusal in the fixture — including the witness verb's own
 /// refusals and the interplay between the verbs (a witnessed claim
 /// unlocking a gather gate, an exhausted character still allowed to
@@ -114,6 +116,15 @@ fn commands() -> Vec<Command> {
         Command::Witness(WitnessCommand {
             witness: CharacterId(witness),
             claim: ClaimId(claim),
+        })
+    };
+    let give = |giver, to, kind, grams, attested: Option<u64>| {
+        Command::Give(GiveCommand {
+            giver: CharacterId(giver),
+            recipient: CharacterId(to),
+            kind,
+            grams: MassGrams::new(grams),
+            witness: attested.map(CharacterId),
         })
     };
     vec![
@@ -133,6 +144,19 @@ fn commands() -> Vec<Command> {
         gather(2, 3, 1), // refused: claim now witnessed, but gatherer exhausted
         witness(3, 8),   // accepted: exhausted C3 may still witness (5 >= 5)
         witness(3, 9),   // refused: 0 points cannot cover the witness cost
+        // V01: the give verb. Every new refusal is reachable here, and
+        // the last accepted give empties a holding to nothing.
+        give(1, 2, ResourceKind::Fodder, 500, Some(4)), // accepted, witnessed by C4
+        give(1, 2, ResourceKind::Fodder, 500, None),    // accepted, unwitnessed
+        give(1, 1, ResourceKind::Fodder, 100, None),    // refused: cannot give to self
+        give(1, 9, ResourceKind::Fodder, 100, None),    // refused: unknown recipient
+        give(1, 2, ResourceKind::Fodder, 100, Some(9)), // refused: unknown witness
+        give(1, 2, ResourceKind::Fodder, 100, Some(2)), // refused: witness is a party
+        give(1, 2, ResourceKind::Fodder, 0, None),      // refused: empty transfer
+        give(1, 2, ResourceKind::Timber, 1, None),      // refused: C1 holds no timber
+        give(9, 2, ResourceKind::Fodder, 10, None),     // refused: unknown giver
+        give(3, 2, ResourceKind::Fodder, 10, None),     // refused: 0 points, flat cost 3
+        give(2, 1, ResourceKind::Timber, 550, None),    // accepted: gives all of it away
     ]
 }
 
@@ -156,6 +180,17 @@ fn main() -> ExitCode {
             }
             println!("truth_shapes emitted dir={dir} source_commit={source_commit}");
             return ExitCode::SUCCESS;
+        }
+        if command == "winter" {
+            // W01: the winter-crisis scene. A separate fixture and three
+            // command sequences through the same boundary and the same
+            // ten oracles; it adds no rule and touches no identity of
+            // the standard trial.
+            return if winter::run() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            };
         }
         if command == "rs01-render" {
             #[cfg(feature = "bevy-render")]
@@ -249,7 +284,12 @@ fn main() -> ExitCode {
 
     let mut world = fixture();
     validate_world_coherence(&world).expect("fixture is referentially coherent");
-    println!("grammar=0x{:016x}", grammar_fingerprint());
+    println!(
+        "grammar=0x{:016x} cmdfmt=0x{:016x} rcptfmt=0x{:016x}",
+        grammar_fingerprint(),
+        command_encoding_fingerprint(),
+        receipt_format_fingerprint()
+    );
     let fixture_hash = world.hash();
     let baseline_by_kind = oracles::baseline_by_kind(&world);
     let cmds = commands();
@@ -371,10 +411,12 @@ fn main() -> ExitCode {
     // comparison. baseline_commit is runner-supplied (git knows it, the
     // binary does not); everything else is recomputed from the run itself.
     println!(
-        "envelope baseline_commit={} grammar=0x{:016x} fixture=0x{:016x} \
-         receipts=0x{:016x} world=0x{:016x} oracles={}v{}",
+        "envelope baseline_commit={} grammar=0x{:016x} cmdfmt=0x{:016x} rcptfmt=0x{:016x} \
+         fixture=0x{:016x} receipts=0x{:016x} world=0x{:016x} oracles={}v{}",
         std::env::var("BASELINE_COMMIT").unwrap_or_else(|_| "-".to_owned()),
         grammar_fingerprint(),
+        command_encoding_fingerprint(),
+        receipt_format_fingerprint(),
         fixture_identity(fixture_hash, &cmds),
         receipt_chain_digest(&log),
         world.hash(),

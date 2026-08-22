@@ -1436,3 +1436,196 @@ member is `timber` — recorded, not resolved. (2) Kinds have no
 behaviour; nothing yet forbids feeding cattle timber, because no
 consumption exists. (3) Zero-holding normalization is implemented and
 unit-tested; its reachable case arrives with V01's give-to-zero.
+
+## Trial V01 — the give verb (2026-08-18)
+
+Branch `trial/V01-give`, base `4f2443c`, tested_commit `15e1bc7`.
+Full report: `docs/trial-v01-give-report.md`.
+
+**Shape.** `give giver=C_a to=C_b kind=K g=N [witness=C_c]` — voluntary,
+exact, flat-cost, no exhausted gate; a named witness must exist, must be
+neither party, and pays nothing. Consent is structural: no command shape
+moves another character's holding, so theft is unrepresentable rather
+than refused.
+
+**Red (capability, verbatim).** `c192b75`, falsifiers only: 24 compile
+errors — the verb, its six new refusal reasons, its receipt field and
+its owner path did not exist.
+
+**Green.** 76 / 85 / 93 / 99 tests across the four feature sets; ten
+oracles and every host probe green.
+
+```text
+oracle PASS mass_authority_gate (0 unwitnessed extractions, 0 unconsented transfers)
+oracle PASS exhausted_gate (0 exhausted or band-less receipts drained a site)
+transition_domain_parity ... command_space=375 unique_commands=375 receipts_match=true state_match=true world_match=true
+envelope baseline_commit=15e1bc7 grammar=0x7dd8c6706e0b949f fixture=0x93afba3f312bd89d receipts=0x2d52250d86f0638b world=0xb500dee0e5d883d8 oracles=10v6
+```
+
+**Identity move, pre-registered.** grammar `0xc5d782ec145af0a5` ->
+`0x7dd8c6706e0b949f` — the value registered in RES01 §4 at `fc5e431`,
+before either trial was implemented.
+
+**Oracle suite v5 -> v6.** Oracle 3 `witnessed_gate` -> `mass_authority_
+gate`: extraction clause unchanged in force, plus a transfer clause (a
+mass-moving receipt with no site must name a counterparty distinct from
+the actor, and a kind). Oracle 4 keys on site extraction — the gather
+verb's policy made explicit, since give follows the witness policy.
+
+**Scope limits stated in the bundle.** Host parity for `empty_transfer`
+and `unknown_witness` is argued from the shared `submit` path, not
+measured: the enumerated host space fixes the mass and draws witnesses
+from existing actors.
+
+**Open findings.** (1) `witnessed` now has two verb-local meanings.
+(2) A third party can be named as a witness without consenting — nothing
+is spent on their behalf, but the assertion is currently unrefusable.
+(3) A give leaves no memory outside the receipt ledger; debt and
+obligation wait on the E-layers.
+
+## Trial V01 — repair pass after review (2026-08-18)
+
+Branch `trial/V01-give`, repair base `605e32a`, repair tested_commit
+`cccbfcd`. Reviewer: Sol 5.6, verdict **hold**, five material findings.
+Full response: `docs/trial-v01-give-report.md` §E7–E9.
+
+**All four V01 findings accepted.** The two that mattered most:
+
+- The named witness never reached the receipt — two valid attesters
+  produced byte-identical receipts. `Receipt` now carries
+  `transfer_witness: Option<CharacterId>`, the overloaded boolean is
+  `claim_witnessed`, and the shadow evaluator compares the attester's
+  identity.
+- "Consent by construction" was an overclaim. Restated as attribution:
+  *no accepted transfer debits a holding other than the command's named
+  source*. Consent stays unproven until an issuer, seat, delegation or
+  actor intent exists.
+
+**Author licence, 2026-08-18**: the give language evolution, and a
+three-way split of canonical identity — grammar (semantics and policies)
+/ command encoding (canonical command bytes) / receipt format (canonical
+receipt fields and order). Both new fingerprints were predicted at
+`4d1cc65` before implementation and hit exactly:
+
+```text
+envelope baseline_commit=cccbfcd grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132 fixture=0x93afba3f312bd89d receipts=0xc0b4da51744bcf19 world=0xb500dee0e5d883d8 oracles=10v7
+```
+
+The grammar did not move (no policy or value changed) while the receipt
+format did — which is the distinction the split exists to make visible.
+
+**Oracle suite v6 → v7.** Oracle 3's transfer count is
+`unattributed_transfers`, documented as a ledger-shape check that does
+not prove consent. Oracle 9 gained the attester-identity comparison and
+is strictly stronger.
+
+**Host parity widened**: 375 → 900 enumerated inputs, 80 000 commands,
+all byte-identical, now reaching `empty_transfer` (2 743) and
+`unknown_witness` (4 274). Side effect recorded honestly: the incidental
+band×tier density in the trace thinned; cell reachability rests on the
+purpose-built trial/010 tests, and the trace count was not tuned to make
+a missing cell reappear.
+## Trial W01 — the winter-crisis vertical slice (2026-08-18)
+
+Branch `trial/W01-winter-crisis`, base `605e32a`, tested_commit
+`0672405`. Full report: `docs/trial-w01-winter-crisis-report.md`.
+
+**Instrument.** Measurement trial, `red_required: no` (Meaning Gate F3):
+the scene asks what the current rules produce, so staging a bug to fail
+first would measure the bug, not the winter.
+
+**Scene.** One household of four, a cut-over hayfield (4 000 g fodder),
+scrub wood (2 500 g timber), a shore (1 800 g food), and a stated winter
+need of 6 000 / 2 500 / 1 200. The world holds less fodder and less food
+than the need, so the scene is a triage, not a puzzle. Three plans —
+feed the cattle, save the roof, feed the people.
+
+**Result.** Thirty oracle verdicts green, `cargo run winter` exit 0, and
+every executed number equal to the prediction committed at `fa28712`
+before the module existed. Best achievable shortfall per kind:
+fodder 2 000 (plan A), food 900 (plan C), timber 0 (plan B) — each from
+a different plan.
+
+**No law changed.** The standard trial's envelope is byte-identical to
+V01's: `grammar=0x7dd8c6706e0b949f fixture=0x93afba3f312bd89d
+receipts=0x2d52250d86f0638b world=0xb500dee0e5d883d8 oracles=10v6`.
+
+**The finding.** The scene's value is what it proves inexpressible:
+nothing is consumed, so nothing is at stake; there is no time and no
+winter; there is no household and no herd; a plan is not a thing; nobody
+can refuse labour (`actor_unwilling` does not exist). Site stock is the
+only scarcity with texture today, and it comes from the existing gather
+verb. Stated bias: the kind list "survived" a scene written to fit it.
+
+## Trial W01 — repair pass after review (2026-08-18)
+
+Branch `trial/W01-winter-crisis`, rebased onto the repaired
+`trial/V01-give` (`f83796d`); repair tested_commit `333ce29`. Reviewer:
+Sol 5.6, *accept as pressure evidence, hold integration*. Full response:
+`docs/trial-w01-winter-crisis-report.md` §E7–E9.
+
+Rebase reference map (S2): `fa28712 → 1ff6dea`, `0672405 → 0725af5`,
+`a173383 → 6d8f6bd`; no content changed in the rebase.
+
+**Both findings accepted.**
+
+- *Language*: the plans now **stockpile fodder / building material /
+  food**. No consequence word survives in `src/winter.rs`: nothing feeds,
+  closes or eats, and the intents say so explicitly.
+- *Kind-list verdict*: downgraded to **inconclusive**. The scene was
+  written to fit the three-kind list, so it is pressure against the list,
+  not evidence for it.
+- *No-law proof*: `the_scene_adds_no_rule` compared a function to itself.
+  Replaced by `the_scene_moves_no_identity_of_the_standard_trial`, which
+  pins grammar, command encoding, receipt format, fixture identity,
+  receipt digest and world hash.
+- *Host parity*: each plan now replays byte-for-byte inside the Bevy host
+  — receipts, chain digest, exact canonical state, world hash — and each
+  is asserted to carry an attested transfer so the check cannot weaken
+  silently.
+- *Scope*: "best achievable" is now "best among the three registered
+  plans", in the test name, the assertion message and the claim.
+
+```text
+winter_host_parity plan=A receipts_match=true state_match=true world_match=true attested_transfers=1
+winter_host_parity plan=B receipts_match=true state_match=true world_match=true attested_transfers=1
+winter_host_parity plan=C receipts_match=true state_match=true world_match=true attested_transfers=1
+```
+
+Gate green at 87 / 97 / 105 / 111 tests, `cargo run winter` exit 0, and
+the three plans' world hashes are unchanged from the first pass — the
+V01 repair changed how receipts are written, not what happens.
+
+## 2026-08-22 — V01/W01 author integration ruling and post-rebase gate
+
+Author disposition: **LIFT HOLD → AMEND → ALLOW after rebase and gate.** The
+remaining defects were conformance claims, not unresolved gameplay meaning:
+README and W01 now say Give is attributed while consent remains unproven;
+V01 claim 8 and the host comment now bound the 900-command enumeration to
+every Give refusal plus accepted receipts bearing the one fixed attester
+identity `C3`, and explicitly exclude a hosted two-attester comparison.
+Pure R1 separately proves the receipt difference between two attesters. The
+stale 32,000-command report scope is corrected to the measured 80,000.
+
+The thirteen-commit V01/W01 stack rebased conflict-free from the old W01 tip
+`8656e73` onto master `ffdee2f`. The corresponding post-rebase W01 response is
+`34d59c0`; its only content addition is master's tightened RES01 report. The
+clean amendment/rebase `tested_commit` is **`28d4bba`**. Exact envelope,
+authoring envelope, rebase mapping, and limits: W01 report §E10.
+
+Full four-feature gate on `28d4bba`, every command exit 0:
+
+```text
+git status --porcelain                                  EMPTY
+cargo fmt --check                                       PASS
+cargo clippy -D warnings: default/host/render/taste     PASS/PASS/PASS/PASS
+cargo test: default/host/render/taste                   87/97/105/111 PASS
+hosted standard run                                     PASS, exact parity
+hosted winter run                                       PASS, 30 oracles + A/B/C parity
+standard envelope                                       fixture=0x93afba3f312bd89d receipts=0xc0b4da51744bcf19 world=0xb500dee0e5d883d8 oracles=10v7
+winter worlds A/B/C                                     0x8955528b452a8dde / 0xd2b2803a6c1b77d7 / 0xb898728c0ccd0b48
+```
+
+No runtime behavior, identity, contract, registry, schema, generator input,
+or value moved. V01 is accepted only as bounded mechanics; W01 is accepted
+only as pressure evidence. No gap named by W01 is licensed for implementation.

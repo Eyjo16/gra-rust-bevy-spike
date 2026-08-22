@@ -835,19 +835,47 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
     use crate::boundary::{
-        CharacterId, ClaimId, GatherCommand, OutcomeKind, RefusalReason, SiteId, Verb,
-        WitnessCommand,
+        CharacterId, ClaimId, GatherCommand, GiveCommand, MassGrams, OutcomeKind, RefusalReason,
+        SiteId, Verb, WitnessCommand,
     };
 
     const TRACE_SEED: u64 = 0x0070_0700_6d61_7065;
-    const TRACE_COUNT: usize = 1_000;
+    /// Widened with the command space (V01 repair): more give inputs
+    /// means fewer draws land on gather, and the 4x4 cell coverage is
+    /// evidence trial/010 depends on. Raised so the cells stay dense.
+    const TRACE_COUNT: usize = 2_500;
     const TRACE_DEPTH: usize = 32;
     const ACTORS: [u64; 5] = [1, 2, 3, 4, 9];
     const CLAIMS: [u64; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 99];
     const SITES: [u64; 5] = [1, 2, 3, 4, 9];
+    /// V01 (widened after review): give inputs enumerate
+    /// giver x recipient x kind x witness-slot x mass, so the host trace
+    /// reaches every give refusal — including `empty_transfer` (mass 0)
+    /// and `unknown_witness` (an id no character holds), which the first
+    /// enumeration could not produce. The witness slot includes one
+    /// fixed attester identity (`C3`), which is valid when `C3` is neither
+    /// giver nor recipient. This covers accepted witnessed receipts,
+    /// but does not compare otherwise identical transfers with two valid
+    /// attesters.
+    const GIVE_MASSES: [u64; 2] = [0, 500];
+    /// 0 = none, 1 = the giver (a party), 2 = an id no character holds,
+    /// 3 = a fixed third party. Indices, not ids: `witness_slot` maps
+    /// them against the enumerated giver.
+    const GIVE_WITNESS_SLOTS: usize = 4;
     const GATHER_COMMANDS: usize = ACTORS.len() * CLAIMS.len() * SITES.len();
     const WITNESS_COMMANDS: usize = ACTORS.len() * CLAIMS.len();
-    const COMMAND_SPACE: usize = GATHER_COMMANDS + WITNESS_COMMANDS;
+    const GIVE_COMMANDS: usize =
+        ACTORS.len() * ACTORS.len() * KIND_COUNT * GIVE_WITNESS_SLOTS * GIVE_MASSES.len();
+    const COMMAND_SPACE: usize = GATHER_COMMANDS + WITNESS_COMMANDS + GIVE_COMMANDS;
+
+    fn witness_slot(slot: usize, giver: u64) -> Option<CharacterId> {
+        match slot {
+            0 => None,
+            1 => Some(CharacterId(giver)),
+            2 => Some(CharacterId(97)),
+            _ => Some(CharacterId(3)),
+        }
+    }
 
     struct Lcg {
         state: u64,
@@ -902,6 +930,7 @@ mod tests {
         gather_cost_cells: BTreeMap<String, usize>,
         gather_yield_cells: BTreeMap<String, usize>,
         witness_flat_cost_uses: usize,
+        give_flat_cost_uses: usize,
     }
 
     impl Coverage {
@@ -972,6 +1001,22 @@ mod tests {
                         self.witness_flat_cost_uses += 1;
                     }
                 }
+                Verb::Give => {
+                    // The flat give cost was consulted exactly when the
+                    // parties gate passed: acceptance, or a refusal from
+                    // the character gate or later.
+                    if matches!(
+                        receipt.outcome,
+                        OutcomeKind::Accepted
+                            | OutcomeKind::Refused(
+                                RefusalReason::UnknownActor
+                                    | RefusalReason::InsufficientStamina
+                                    | RefusalReason::InsufficientHolding
+                            )
+                    ) {
+                        self.give_flat_cost_uses += 1;
+                    }
+                }
             }
         }
     }
@@ -991,13 +1036,31 @@ mod tests {
                 claim: ClaimId(CLAIMS[claim_index]),
                 site: SiteId(SITES[site_index]),
             })
-        } else {
+        } else if index < GATHER_COMMANDS + WITNESS_COMMANDS {
             let witness_index = index - GATHER_COMMANDS;
             let claim_index = witness_index % CLAIMS.len();
             let actor_index = witness_index / CLAIMS.len();
             Command::Witness(WitnessCommand {
                 witness: CharacterId(ACTORS[actor_index]),
                 claim: ClaimId(CLAIMS[claim_index]),
+            })
+        } else {
+            let give_index = index - GATHER_COMMANDS - WITNESS_COMMANDS;
+            let mass_index = give_index % GIVE_MASSES.len();
+            let remaining = give_index / GIVE_MASSES.len();
+            let slot = remaining % GIVE_WITNESS_SLOTS;
+            let remaining = remaining / GIVE_WITNESS_SLOTS;
+            let kind_index = remaining % KIND_COUNT;
+            let remaining = remaining / KIND_COUNT;
+            let recipient_index = remaining % ACTORS.len();
+            let giver_index = remaining / ACTORS.len();
+            let giver = ACTORS[giver_index];
+            Command::Give(GiveCommand {
+                giver: CharacterId(giver),
+                recipient: CharacterId(ACTORS[recipient_index]),
+                kind: ResourceKind::ALL[kind_index],
+                grams: MassGrams::new(GIVE_MASSES[mass_index]),
+                witness: witness_slot(slot, giver),
             })
         }
     }
@@ -1137,8 +1200,10 @@ mod tests {
         println!("transition_domain_bands {:?}", coverage.bands_observed);
         println!("transition_domain_tiers {:?}", coverage.tiers_observed);
         println!(
-            "transition_domain_cost_cells gather={:?} witness_flat_uses={}",
-            coverage.gather_cost_cells, coverage.witness_flat_cost_uses
+            "transition_domain_cost_cells gather={:?} witness_flat_uses={} give_flat_uses={}",
+            coverage.gather_cost_cells,
+            coverage.witness_flat_cost_uses,
+            coverage.give_flat_cost_uses
         );
         println!(
             "transition_domain_yield_cells {:?}",
