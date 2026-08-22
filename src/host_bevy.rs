@@ -852,9 +852,11 @@ mod tests {
     /// giver x recipient x kind x witness-slot x mass, so the host trace
     /// reaches every give refusal — including `empty_transfer` (mass 0)
     /// and `unknown_witness` (an id no character holds), which the first
-    /// enumeration could not produce. The witness slot deliberately
-    /// includes two DIFFERENT valid identities, so host parity covers
-    /// receipts that differ only in who attested.
+    /// enumeration could not produce. The witness slot includes one
+    /// fixed attester identity (`C3`), which is valid when `C3` is neither
+    /// giver nor recipient. This covers accepted witnessed receipts,
+    /// but does not compare otherwise identical transfers with two valid
+    /// attesters.
     const GIVE_MASSES: [u64; 2] = [0, 500];
     /// 0 = none, 1 = the giver (a party), 2 = an id no character holds,
     /// 3 = a fixed third party. Indices, not ids: `witness_slot` maps

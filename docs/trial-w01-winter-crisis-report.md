@@ -296,8 +296,8 @@ licence: none of them is implemented here.
    what O01's charter is for.
 5. **Nobody can refuse.** Auðr's attestation in plan A is unconditional:
    the head spends 5 points because the command says so. `actor_unwilling`
-   does not exist, so consent to *labour* is not modelled even though
-   consent to *give* now is.
+   does not exist, so consent to *labour* is not modelled. Give records an
+   attributed transfer, but whether the giver consented remains unproven.
 6. **Site stock is the only scarcity with texture.** The hayfield running
    out mid-work (partial, then `site_empty`) is the most alive moment in
    the scene, and it comes entirely from the existing gather verb. The

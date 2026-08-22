@@ -266,8 +266,8 @@ named a distinct counterparty.
 | 4b | Two transfers alike in everything but the attester's identity produce different receipts and identical world state (added in the repair) | the give path | behavioral-red | `falsification_two_witnesses_must_produce_two_different_receipts`; `claim_witnessing_and_transfer_witnessing_are_never_the_same_field` |
 | 5 | A giver short of the named mass is refused, never partially satisfied, and the refusal mutates nothing | all eight give refusals | behavioral-red | `falsification_short_transfer_is_refused_not_clamped`, `falsification_give_refusals_are_closed_and_byte_stable` (world hash identical across every refusal) |
 | 6 | Giving away all of a kind leaves the giver indistinguishable from someone who never held it, in state, text and hash | the owner and boundary paths | behavioral-red | `falsification_giving_everything_leaves_no_zero_entry` (equal hashes at equal apply counts), `falsification_giving_everything_erases_the_holding_completely`; standard trial receipt 27 |
-| 7 | The give verb is audited by a judge that trusts no receipt field | the standard trial and the 32 000-command host trace | oracle | `ShadowState::step_give` is an independent reimplementation; oracles 9 and 10 green |
-| 8 | The hosted run reproduces every give byte-for-byte, across **900** enumerated inputs including **every** give refusal and receipts that differ only in who attested | the widened space in §E7; no give refusal is now excluded | parity | `transition_domain_parity ... command_space=900 unique_commands=900 receipts_match=true state_match=true world_match=true`, with `empty_transfer` 2 743 and `unknown_witness` 4 274 occurrences |
+| 7 | The give verb is audited by a judge that trusts no receipt field | the standard trial and the 80 000-command host trace | oracle | `ShadowState::step_give` is an independent reimplementation; oracles 9 and 10 green |
+| 8 | The hosted trace reproduces pure receipts byte-for-byte and reaches all **900** enumerated commands, including **every** give refusal and accepted transfers bearing the fixed attester `C3`; it does not compare otherwise identical hosted transfers bearing two different valid attesters | the widened space in §E7; no give refusal is excluded, but attester-identity variation is outside this host enumeration | parity | `transition_domain_parity ... command_space=900 unique_commands=900 receipts_match=true state_match=true world_match=true`, with `empty_transfer` 2 743 and `unknown_witness` 4 274 occurrences; pure R1 separately proves two attesters produce different receipts |
 | 9 | The grammar moved exactly once, to the value pre-registered before either trial was implemented | this branch's history | measurement | prediction at `fc5e431` (RES01 §4); envelope at `15e1bc7`; `grammar_fingerprint_matches_the_licensed_value` |
 | 10 | Oracle 3's extraction clause is unchanged in force by the rename and re-scope | the extraction half of the oracle | derivation | `mass_authority_gate` still counts `site.is_some() && !claim_witnessed && mass != 0`; `mass_authority_gate_oracle_catches_a_doctored_receipt` is the v5 test, unchanged except for the name |
 | 11 | Oracle 3's transfer clause proves attribution and nothing more, and now says so | the transfer half of the oracle | derivation | the count is `unattributed_transfers`; its doc states it is a shape check on the ledger and does not prove consent |
@@ -335,8 +335,10 @@ seq=17 verb=give actor=C1 claim=- site=- to=C2 outcome=accepted reason=- claim_w
 ```
 
 Widened host parity — every give refusal now reached, and the enumerated
-space includes two different valid attesters so parity covers receipts
-that differ only in who attested:
+space includes one fixed attester identity (`C3`) that is valid when `C3` is
+neither giver nor recipient. The host therefore covers accepted witnessed
+receipts, but this 900-command space does **not** compare two otherwise identical
+hosted transfers that differ only in who attested:
 
 ```text
 transition_domain_parity seed=0x007007006d617065 traces=2500 depth=32 commands=80000 command_space=900 unique_commands=900 receipts_match=true state_match=true world_match=true
