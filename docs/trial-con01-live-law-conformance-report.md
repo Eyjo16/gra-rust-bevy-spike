@@ -75,7 +75,7 @@ limits:              no new dependencies; no CI; no gate script
 escalate_when:       any identity or runtime behavior would need to
                      move; a check cannot be expressed without giving
                      documents authority over code
-tested_commit:       <filled at completion>
+tested_commit:       2a93bfb
 ```
 
 ## 2. The drift, enumerated at base
@@ -204,3 +204,52 @@ test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 87 filtered out
   branch topology claims. The reviewer should re-derive the red on
   `5884f27`, the green at the tested commit, and claim 6's ancestry
   checks independently rather than trusting any pasted output here.
+
+## E3. The gate transcript (tested commit `2a93bfb`)
+
+`tested_commit`: **`2a93bfb`** — the clean-tree tip carrying the pin,
+the repaired live documents, the decision packet and the O01 draft.
+This section is appended by a documentation-only commit after the gate
+and is re-gated at exact tip before merge, per the W01 §E10 precedent.
+
+Toolchain: `rustc 1.97.1 (8bab26f4f 2026-07-14)`, `cargo 1.97.1`,
+every cargo step `--locked`. Every step judged by its own exit code;
+no gate command ran through a pipe:
+
+```text
+TREE CLEAN at 2a93bfb
+STEP fmt EXIT=0
+STEP clippy-default EXIT=0
+STEP clippy-host EXIT=0
+STEP clippy-render EXIT=0
+STEP clippy-taste EXIT=0
+STEP test-default EXIT=0    (90 passed)
+STEP test-host EXIT=0       (100 passed)
+STEP test-render EXIT=0     (108 passed)
+STEP test-taste EXIT=0      (114 passed)
+STEP run-standard EXIT=0
+STEP run-winter EXIT=0
+GATE OVERALL: GREEN
+```
+
+Hosted standard run:
+
+```text
+bevy_host_parity receipts_match=true state_match=true world_match=true receipts=0xc0b4da51744bcf19 world=0xb500dee0e5d883d8
+envelope baseline_commit=2a93bfb grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132 fixture=0x93afba3f312bd89d receipts=0xc0b4da51744bcf19 world=0xb500dee0e5d883d8 oracles=10v7
+```
+
+Hosted winter run:
+
+```text
+winter_host_parity plan=A receipts_match=true state_match=true world_match=true attested_transfers=1 receipts=0x260782d648ffef68 world=0x8955528b452a8dde
+envelope scene=W01 plan=A baseline_commit=2a93bfb grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132 fixture=0x288ef6dbfad7e800 receipts=0x260782d648ffef68 world=0x8955528b452a8dde oracles=10v7
+winter_host_parity plan=B receipts_match=true state_match=true world_match=true attested_transfers=1 receipts=0xb67361c3ef45ffca world=0xd2b2803a6c1b77d7
+envelope scene=W01 plan=B baseline_commit=2a93bfb grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132 fixture=0x1ac3857f928579d5 receipts=0xb67361c3ef45ffca world=0xd2b2803a6c1b77d7 oracles=10v7
+winter_host_parity plan=C receipts_match=true state_match=true world_match=true attested_transfers=1 receipts=0xf6528f6ae509bdb4 world=0xb898728c0ccd0b48
+envelope scene=W01 plan=C baseline_commit=2a93bfb grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132 fixture=0x209b45a394eddc4a receipts=0xf6528f6ae509bdb4 world=0xb898728c0ccd0b48 oracles=10v7
+```
+
+Every identity, parity and envelope value is byte-identical to the W01
+§E10.3 integration gate except `baseline_commit`, which names this
+tip. Nothing moved.

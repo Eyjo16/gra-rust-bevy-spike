@@ -1661,3 +1661,16 @@ integrated (`1f3cbc6`); held unmerged now exactly 011 (`5b52e81`) and
 012 (`ab45f40`), disposition the author's. No runtime behavior,
 identity, vocabulary or value moved; historical reports untouched.
 Gate transcript and `tested_commit` recorded at tip in the report.
+
+Gate at `tested_commit` **`2a93bfb`** (rustc 1.97.1, `--locked`, no
+pipes): fmt, strict clippy x4, tests 90 / 100 / 108 / 114, hosted
+standard and winter runs all exit 0; every envelope value byte-equal
+to W01 §E10.3. Transcript in the CON01 report §E3. Alongside CON01
+the branch carries two governance documents that decide nothing:
+`decision-packet-2026-08-25.md` (time / visibility / stakes as three
+separate rulings, plus the 011/012 disposition annex) and
+`trial-o01-authority-preregistration-draft.md` (UNLICENSED — the
+issuer/seat/delegation question that must precede any consent
+vocabulary). TOOL01 (pinned toolchain + gate entrypoint) is prepared
+as the next envelope, serial after CON01 ratification per Sol's
+review.
