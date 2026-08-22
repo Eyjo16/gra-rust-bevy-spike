@@ -36,16 +36,21 @@ those win; report the contradiction instead of resolving it silently.
 `docs/README.md` indexes this file as workflow authority (Evidence
 Factory Protocol v0.1, ratified 2026-08-12).
 
-## 3. The gate (both feature sets, hard exit checks)
+## 3. The gate (all four feature sets, hard exit checks)
 
 ```sh
 git status --porcelain   # must print nothing: clean tree, incl. untracked
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --features bevy-host -- -D warnings
+cargo clippy --all-targets --features bevy-render -- -D warnings
+cargo clippy --all-targets --features e01-taste -- -D warnings
 cargo test
 cargo test --features bevy-host
+cargo test --features bevy-render
+cargo test --features e01-taste
 BASELINE_COMMIT=$(git rev-parse --short HEAD) cargo run --features bevy-host
+BASELINE_COMMIT=$(git rev-parse --short HEAD) cargo run --features bevy-host winter
 ```
 
 Never judge a gate through a pipe that can mask its exit code. The run
@@ -55,9 +60,16 @@ and the commit it certifies is recorded as `tested_commit`.
 
 ## 4. Frozen unless explicitly licensed
 
-- Grammar fingerprint `0x530003916889b952` and standard fixture
-  identity `0x3805f1e20c001051` — value changes require a licensed
-  value-pressure envelope with a pre-registered red hypothesis.
+- The licensed canonical-language identities — grammar
+  `0x7dd8c6706e0b949f`, command encoding `0xfa37eefa3594cfe3`,
+  receipt format `0x7e62152622bb9132` — and the standard fixture
+  identity `0x93afba3f312bd89d`. Value changes require a licensed
+  value-pressure envelope with a pre-registered red hypothesis, and
+  the live documents move inside the same envelope: the CON01
+  conformance tests hold this file to the code's current values, so a
+  licensed identity move that leaves live law stale is a red gate,
+  not a review finding. (Identity history lives in the RES01 and V01
+  reports, not here.)
 - Closed vocabularies (outcomes, reasons, verbs, host faults, fixture
   faults) and receipt/envelope formats — changes are declared spec
   evolution, never side effects.

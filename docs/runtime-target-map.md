@@ -9,22 +9,31 @@ authority dependency. Branch IDs are provisional until author/lead ruling.
 
 ## Current position
 
-Integrated master now contains Meaning Gate v0.2, trials 007–010, R01–R03,
-D01, TS01, and the bounded RS01 live Publication renderer. RS01 arrived only
-after R01–R03 named the non-authoritative publication seam; its off-by-default
-`bevy-render` feature is the D04 slice's named X11/2D consumer. It does not
-promote `bevy-full`, persistence, a registry/schema, or gameplay meaning.
+Integrated master (`5884f27`, 2026-08-22) contains Meaning Gate v0.2, trials
+007–010, 013 (verdict preparation; the holdout stays sealed and unexecuted),
+014 (test-only anticipation ranking), R01–R03, D01, TS01, the bounded RS01
+live Publication renderer, E01 (belief-actionability taste, human verdict
+PASS), RES01 (the three-kind resource vocabulary, a licensed grammar move),
+V01 (give — attributed transfer, bounded mechanics, consent unproven), and
+W01 (the winter-crisis scene — pressure evidence only; no gap it names is
+licensed for implementation). RS01 arrived only after R01–R03 named the
+non-authoritative publication seam; its off-by-default `bevy-render` feature
+is the D04 slice's named X11/2D consumer. Nothing here promotes `bevy-full`,
+persistence, a registry/schema, or unlicensed gameplay meaning.
 
-The full default and `bevy-host` gates pass with exact Bevy parity and the
-frozen envelope below; the additional `bevy-render` gate passes 73 tests while
-the default and host sets pass 56 and 65 respectively:
+The full gate is four feature sets — default, `bevy-host`, `bevy-render`,
+`e01-taste` — passing 90 / 100 / 108 / 114 tests (CON01 included), plus hosted standard and
+winter runs with exact parity. The CON01 conformance tests hold this section
+to the code's current values:
 
 ```text
-grammar=0x530003916889b952
-fixture=0x3805f1e20c001051
-receipts=0x6c5b0e011471d985
-world=0x36221d3fdb8aed9a
-oracles=10v4
+grammar=0x7dd8c6706e0b949f
+cmdfmt=0xfa37eefa3594cfe3
+rcptfmt=0x7e62152622bb9132
+fixture=0x93afba3f312bd89d
+receipts=0xc0b4da51744bcf19
+world=0xb500dee0e5d883d8
+oracles=10v7
 ```
 
 Dependency surfaces currently visible:
@@ -178,9 +187,11 @@ ambiguous half-publication.
 
 ### Target T01 — degenerate-turn bridge
 
-Run the existing 16 commands as sixteen one-command turns. Exact receipts,
-canonical states, and envelope must remain byte-identical. This is the first
-falsifier because it preserves all existing evidence.
+Run the existing 27-command standard trial as twenty-seven one-command turns
+(the original 16 plus V01's 11 give commands). Exact receipts, canonical
+states, and envelope must remain byte-identical. Sol's 2026-08-22 review
+adds: bridge the three W01 traces as one-command turns the same way. This is
+the first falsifier because it preserves all existing evidence.
 
 ### Target T02 — composite joint feasibility
 
@@ -240,10 +251,12 @@ These branches should not be mistaken for dependency prerequisites:
 
 | Branch | Evidence | Current disposition |
 | --- | --- | --- |
-| trial/011 | Low dead interval and 39→40 / 79→80 dominance cliffs | Measurement evidence; needs rebase/review before any integration |
-| trial/012 | Active yield table is exactly rank one | Mathematical hypothesis falsified; direction still requires author meaning |
-| trial/013 | H-A descriptive band vs H-B action-affording band | Inconclusive; cost remains 15; holdout sealed and unexecuted |
-| trial/014 | Test-only anticipation ranking with cap 1 over two already-legal intents | Pushed at `bd2f8ca`; independent cross-review and author meaning verdict still required; no production integration |
+| trial/011 (`5b52e81`) | Low dead interval and 39→40 / 79→80 dominance cliffs | **HELD unmerged** — one unique commit behind master; the author chooses exactly one disposition: schedule rebase + cross-review, or archive by exact commit as historical evidence |
+| trial/012 (`ab45f40`) | Active yield table is exactly rank one — hypothesis falsified | **HELD unmerged** — same single-disposition choice as 011 |
+| trial/013 | H-A descriptive band vs H-B action-affording band | **INTEGRATED** (`9a766ca`); cost remains 15; the holdout stays sealed and unexecuted |
+| trial/014 | Test-only anticipation ranking with cap 1 over two already-legal intents | **INTEGRATED** (`8c81454`) after independent verification at `5fc8376`; no production semantics were added |
 
-None of them authorizes a dependency to decide gameplay meaning. Their next
-movement belongs to the Meaning Gate after runtime authority is clearer.
+None of them authorizes a dependency to decide gameplay meaning. The next
+movement of 011/012 belongs to the author's disposition choice; physical
+branch deletion is separate housekeeping and happens only under explicit
+instruction.

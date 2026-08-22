@@ -165,3 +165,42 @@ Note what the red itself proves: the values the test recomputes through
 integration gate (`receipts=0xc0b4da51744bcf19`,
 `world=0xb500dee0e5d883d8`) — the recomputation is measuring the same
 trial the gate certified, not a private one.
+
+## E2. The green
+
+After repairing exactly the three live documents (AGENTS §3 gate and
+§4 frozen identities; HANDOUT identity block, gate paragraph, and
+standing state; target-map Current position, T01 command count, and
+held/integrated evidence table):
+
+```text
+test conformance::agents_md_freezes_the_identities_the_code_enforces ... ok
+test conformance::handout_identity_block_is_the_current_envelope ... ok
+test conformance::target_map_current_position_quotes_the_current_envelope ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 87 filtered out
+```
+
+## E4. Claims table
+
+| # | Atomic claim | Scope | Evidence mode | Evidence reference |
+|---|---|---|---|---|
+| 1 | At `5884f27` no live document named any current canonical identity | the three live documents only | behavioral-red | E1 verbatim; the three pre-registered test names |
+| 2 | After repair, the three live documents name the exact identities the code enforces | presence of the seven strings; not sufficiency of surrounding prose | measurement | the three green tests, E2 |
+| 3 | The pinned values are recomputed through `submit` and equal the W01 §E10 integration envelope | standard trial only | derivation | `current_identities()` in `src/conformance.rs`; E1 closing note |
+| 4 | No runtime identity or behavior moved in this trial | full four-configuration gate | measurement | E3 gate transcript; envelope lines byte-equal to W01 §E10.3 |
+| 5 | Historical reports are untouched and unread by the pin | repo diff against `5884f27` | measurement | `git diff --stat 5884f27..tested_commit`; the three `include_str!` lines are the pin's whole read surface |
+| 6 | 013, 014 and E01 are integrated; only 011 and 012 remain unmerged of the held table | branch topology at origin | measurement | merges `9a766ca`, `8c81454` (verification `5fc8376`), `1f3cbc6`; `git merge-base --is-ancestor` negative for `5b52e81`, `ab45f40` |
+
+## E5. Bundle metadata
+
+- Author: lead (this session); dispatch: author 2026-08-22, as amended
+  by Sol's review (name, `red_required: yes`, full-drift scope,
+  historical reports untouched).
+- Toolchain: `rustc 1.97.1 (8bab26f4f 2026-07-14)`, `cargo 1.97.1`,
+  `--locked` throughout.
+- Shared-assumptions note: the agent that wrote this pin also wrote
+  the document repairs it certifies, and the same session verified the
+  branch topology claims. The reviewer should re-derive the red on
+  `5884f27`, the green at the tested commit, and claim 6's ancestry
+  checks independently rather than trusting any pasted output here.

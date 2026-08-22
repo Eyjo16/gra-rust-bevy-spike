@@ -1629,3 +1629,35 @@ winter worlds A/B/C                                     0x8955528b452a8dde / 0xd
 No runtime behavior, identity, contract, registry, schema, generator input,
 or value moved. V01 is accepted only as bounded mechanics; W01 is accepted
 only as pressure evidence. No gap named by W01 is licensed for implementation.
+
+## 2026-08-22 — CON01: the live-law conformance pin (red → green)
+
+Branch `claude/w01-winter-crisis-review-4d9i9e` (session-designated;
+would be `trial/CON01-live-law-conformance` under local convention —
+workflow note S3). Dispatch: author, as amended by Sol's 2026-08-22
+review. Full report: `docs/trial-con01-live-law-conformance-report.md`.
+
+Master moved through RES01/V01/W01 under licensed identity moves and
+the live law did not move with it — three documents drifted the same
+way in the same month. The pin: `src/conformance.rs`, test-only,
+holds `AGENTS.md`, `HANDOUT.md` and the target map's Current position
+to identities **recomputed through `submit`**, never hard-coded, so a
+future licensed identity move drags the live documents into the same
+envelope or stays red. Presence-only; historical reports unread.
+
+Red at base, verbatim (all three, as pre-registered):
+
+```text
+AGENTS.md is stale live law: it does not name 0x7dd8c6706e0b949f, 0xfa37eefa3594cfe3, 0x7e62152622bb9132, 0x93afba3f312bd89d
+HANDOUT.md is stale live law: it does not name 0x7dd8c6706e0b949f, 0xfa37eefa3594cfe3, 0x7e62152622bb9132, 0x93afba3f312bd89d, 0xc0b4da51744bcf19, 0xb500dee0e5d883d8, oracles=10v7
+runtime-target-map.md "Current position" is stale live law: it does not name 0x7dd8c6706e0b949f, 0xfa37eefa3594cfe3, 0x7e62152622bb9132, 0x93afba3f312bd89d, 0xc0b4da51744bcf19, 0xb500dee0e5d883d8, oracles=10v7
+```
+
+Green after repairing exactly the three live documents. Repairs also
+corrected the stale T01 count (16 → the 27-command standard trial,
+plus Sol's W01-trace bridging note) and the held table: 013 integrated
+(`9a766ca`), 014 integrated (`8c81454`, verified at `5fc8376`), E01
+integrated (`1f3cbc6`); held unmerged now exactly 011 (`5b52e81`) and
+012 (`ab45f40`), disposition the author's. No runtime behavior,
+identity, vocabulary or value moved; historical reports untouched.
+Gate transcript and `tested_commit` recorded at tip in the report.
