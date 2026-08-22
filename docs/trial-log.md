@@ -1595,3 +1595,37 @@ winter_host_parity plan=C receipts_match=true state_match=true world_match=true 
 Gate green at 87 / 97 / 105 / 111 tests, `cargo run winter` exit 0, and
 the three plans' world hashes are unchanged from the first pass — the
 V01 repair changed how receipts are written, not what happens.
+
+## 2026-08-22 — V01/W01 author integration ruling and post-rebase gate
+
+Author disposition: **LIFT HOLD → AMEND → ALLOW after rebase and gate.** The
+remaining defects were conformance claims, not unresolved gameplay meaning:
+README and W01 now say Give is attributed while consent remains unproven;
+V01 claim 8 and the host comment now bound the 900-command enumeration to
+every Give refusal plus accepted receipts bearing the one fixed attester
+identity `C3`, and explicitly exclude a hosted two-attester comparison.
+Pure R1 separately proves the receipt difference between two attesters. The
+stale 32,000-command report scope is corrected to the measured 80,000.
+
+The thirteen-commit V01/W01 stack rebased conflict-free from the old W01 tip
+`8656e73` onto master `ffdee2f`. The corresponding post-rebase W01 response is
+`34d59c0`; its only content addition is master's tightened RES01 report. The
+clean amendment/rebase `tested_commit` is **`28d4bba`**. Exact envelope,
+authoring envelope, rebase mapping, and limits: W01 report §E10.
+
+Full four-feature gate on `28d4bba`, every command exit 0:
+
+```text
+git status --porcelain                                  EMPTY
+cargo fmt --check                                       PASS
+cargo clippy -D warnings: default/host/render/taste     PASS/PASS/PASS/PASS
+cargo test: default/host/render/taste                   87/97/105/111 PASS
+hosted standard run                                     PASS, exact parity
+hosted winter run                                       PASS, 30 oracles + A/B/C parity
+standard envelope                                       fixture=0x93afba3f312bd89d receipts=0xc0b4da51744bcf19 world=0xb500dee0e5d883d8 oracles=10v7
+winter worlds A/B/C                                     0x8955528b452a8dde / 0xd2b2803a6c1b77d7 / 0xb898728c0ccd0b48
+```
+
+No runtime behavior, identity, contract, registry, schema, generator input,
+or value moved. V01 is accepted only as bounded mechanics; W01 is accepted
+only as pressure evidence. No gap named by W01 is licensed for implementation.

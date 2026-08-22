@@ -1,13 +1,12 @@
 # Trial V01 — the `Give` verb
 
-**Bundle status: REPAIRED — review-ready (second pass).** Sol 5.6
-returned **hold** on 2026-08-18 with five material findings; findings 1–4
-are answered in §E7 and in the code at `cccbfcd`, under an author licence
-recorded in `docs/trial-v01-repair-preregistration.md` §0. Findings 5–6
-belong to W01 and are answered there.
-
-`tested_commit`: **`cccbfcd`** (code); later commits on this branch touch
-`docs/` only — see the RES01 report for the rule.
+**Bundle status: AUTHOR-ACCEPTED AS BOUNDED MECHANICS; integration gate
+green.** The 2026-08-22 author ruling lifted the prior substantive hold after
+the exact consent and host-coverage amendments recorded in W01 §E10. Sol
+5.6's 2026-08-18 hold and its findings remain recorded in §E7; findings 1–4
+are answered there and 5–6 in W01. `tested_commit`: **`28d4bba`** (the
+rebased V01/W01 stack plus conformance amendments); the later status/evidence
+commit is documentation-only and is re-gated at exact tip before merge.
 
 Status of the original text below: **pre-registration**, as first
 committed. It is left as written, with corrections marked, because a

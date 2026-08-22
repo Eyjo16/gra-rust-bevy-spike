@@ -1,9 +1,11 @@
 # Trial W01 — the winter-crisis vertical slice
 
-**Bundle status: REPAIRED — review-ready (second pass).** Sol 5.6:
-*accept as pressure evidence, hold integration*, with findings 5 and 6.
-Both are answered in §E7. `tested_commit`: **`333ce29`** (code); later
-commits touch `docs/` only.
+**Bundle status: AUTHOR-ACCEPTED AS PRESSURE EVIDENCE; integration gate
+green.** The 2026-08-22 author ruling lifted the prior substantive hold,
+required the exact conformance amendments recorded in §E10, and allowed
+integration after the clean post-master gate. `tested_commit`: **`28d4bba`**
+(rebased runtime plus amendments); the later status/evidence commit is
+documentation-only and is re-gated at exact tip before merge.
 
 Rebase reference map (workflow note S2): this branch was rebased onto the
 repaired `trial/V01-give` tip `f83796d`. Old → new:
@@ -389,3 +391,80 @@ household, plans, refusal of labour, and names for turf and fuel. It
 does not show that the kind list is sufficient, that these numbers are
 balance, that the strategy space was searched, or that anything is at
 stake.
+
+---
+
+# E10. Author amendment, serial rebase, and integration gate (2026-08-22)
+
+Author disposition: **LIFT HOLD → AMEND → ALLOW after rebase and gate.**
+V01 is accepted only as bounded mechanics and W01 only as pressure evidence;
+none of the unproven meanings in §E9 are promoted or licensed for
+implementation.
+
+## E10.1 Authoring envelope (as run)
+
+```text
+base_commit:         ffdee2f (current master, including RES01 review response)
+objective:           Remove the remaining consent and host-coverage
+                     overclaims, rebase the complete V01/W01 stack onto
+                     current master, and stop only when the complete
+                     four-feature gate plus standard and winter hosted runs
+                     are green on a clean tree.
+authoritative_files: 2026-08-22 author ruling; AGENTS.md; docs/README.md;
+                     docs/development-workflow.md; the V01 and W01 reports
+write_scope:         docs/README.md; docs/trial-v01-give-report.md;
+                     docs/trial-w01-winter-crisis-report.md;
+                     docs/trial-log.md; src/host_bevy.rs comment only
+frozen:              registry/schema; runtime types and behavior; grammar,
+                     command, receipt, fixture and oracle identities; the
+                     900-command generator and deterministic trace
+red_required:        no — documentation/conformance repair; no honest
+                     behavioral red exists without changing the runtime
+verification:        clean tree; fmt; strict clippy and tests for default,
+                     bevy-host, bevy-render and e01-taste; standard and
+                     winter hosted runs
+evidence:            exact amendment/rebase diffs, test counts, standard
+                     envelope, three winter parity and envelope lines
+limits:              no meaning ruling beyond the author's bounded acceptance;
+                     no runtime, contract, registry, schema or value change
+escalate_when:       rebase conflict; identity move; runtime delta; gate failure
+tested_commit:       28d4bba
+```
+
+## E10.2 Rebase and amendment proof
+
+The thirteen-commit stack rebased conflict-free onto `ffdee2f`. The old W01
+response `8656e73` maps to `34d59c0`; their only content difference is the
+tightened RES01 report already present on master (one file, `+35/-5`). The
+W01 repair code maps `333ce29 → 2060231`. The pre-rebase amendment
+`eb1d2b0` maps to tested commit `28d4bba`.
+
+At `28d4bba`, `34d59c0..28d4bba` changes exactly the three named live
+documents and the `host_bevy.rs` comment (`+14/-10`). Give is described as an
+attributed transfer with consent unproven. Host claim 8 now says that the
+900-command enumeration reaches every Give refusal and accepted transfers
+bearing its one fixed attester identity, `C3`; it explicitly does not claim a
+hosted pair differing only by attester. Pure R1 remains the evidence for that
+separate identity-difference property. The stale 32,000-command claim was
+also corrected to the measured 80,000 commands. No generator input changed.
+
+## E10.3 Clean post-rebase gate
+
+Toolchain: `rustc 1.97.1 (8bab26f4f 2026-07-14)`; `cargo 1.97.1
+(c980f4866 2026-06-30)`. Clean-tree check, `cargo fmt --check`, and strict
+clippy for all four feature sets passed. Tests passed at **87 / 97 / 105 /
+111** for default / `bevy-host` / `bevy-render` / `e01-taste`.
+
+```text
+bevy_host_parity receipts_match=true state_match=true world_match=true receipts=0xc0b4da51744bcf19 world=0xb500dee0e5d883d8
+envelope baseline_commit=28d4bba grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132 fixture=0x93afba3f312bd89d receipts=0xc0b4da51744bcf19 world=0xb500dee0e5d883d8 oracles=10v7
+winter_host_parity plan=A receipts_match=true state_match=true world_match=true attested_transfers=1 receipts=0x260782d648ffef68 world=0x8955528b452a8dde
+envelope scene=W01 plan=A baseline_commit=28d4bba grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132 fixture=0x288ef6dbfad7e800 receipts=0x260782d648ffef68 world=0x8955528b452a8dde oracles=10v7
+winter_host_parity plan=B receipts_match=true state_match=true world_match=true attested_transfers=1 receipts=0xb67361c3ef45ffca world=0xd2b2803a6c1b77d7
+envelope scene=W01 plan=B baseline_commit=28d4bba grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132 fixture=0x1ac3857f928579d5 receipts=0xb67361c3ef45ffca world=0xd2b2803a6c1b77d7 oracles=10v7
+winter_host_parity plan=C receipts_match=true state_match=true world_match=true attested_transfers=1 receipts=0xf6528f6ae509bdb4 world=0xb898728c0ccd0b48
+envelope scene=W01 plan=C baseline_commit=28d4bba grammar=0x7dd8c6706e0b949f cmdfmt=0xfa37eefa3594cfe3 rcptfmt=0x7e62152622bb9132 fixture=0x209b45a394eddc4a receipts=0xf6528f6ae509bdb4 world=0xb898728c0ccd0b48 oracles=10v7
+```
+
+Result: the amendment gate is green. The author-ratified integration
+condition is satisfied without changing or enlarging V01/W01's meaning.
